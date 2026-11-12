@@ -9,6 +9,7 @@ import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
 import { splitAtSharedVertices } from "./graph.mjs";
+import { buildRoadGraph } from "./osm-roads.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -115,7 +116,9 @@ function centroidPoint(parts) {
   return [sx / ring.length, sy / ring.length];
 }
 
-export async function buildArea({ name, bbox, zoom, version, log = console.log }) {
+// osmRoads (optional): { ways, coords, relations } from load-osm.mjs. When given, routable roads
+// come from OpenStreetMap (names, speed limits, lanes, restrictions) instead of the tiles.
+export async function buildArea({ name, bbox, zoom, version, osmRoads = null, log = console.log }) {
   const cacheRoot = join(ROOT, "data", "cache", version);
   const tiles = tilesForBbox(bbox, zoom);
   const nodes = new NodeIndex();
@@ -267,9 +270,19 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   }
 
   const bboxFixed = [toFixed7(bbox[1]), toFixed7(bbox[0]), toFixed7(bbox[3]), toFixed7(bbox[2])];
-  // Make every junction a node, so roads that meet mid-line can be routed across.
-  const repaired = splitAtSharedVertices(edges);
-  const bytes = writeDmap({ bbox: bboxFixed, nodes: repaired.nodes, edges: repaired.edges, lines, polygons, labels });
+  // Roads: from OpenStreetMap when an extract is given, otherwise from the tiles. Tile roads are
+  // split wherever two roads share a point, so roads that meet mid-line can be routed across.
+  const repaired = osmRoads ? buildRoadGraph({ ...osmRoads, bbox }) : { ...splitAtSharedVertices(edges), restrictions: [], strings: [""] };
+  const bytes = writeDmap({
+    bbox: bboxFixed,
+    nodes: repaired.nodes,
+    edges: repaired.edges,
+    lines,
+    polygons,
+    labels,
+    strings: repaired.strings,
+    restrictions: repaired.restrictions,
+  });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, `${name}.dmap`);
@@ -284,6 +297,8 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     bytes: size,
     nodes: repaired.nodes.length,
     routableEdges: repaired.edges.length,
+    roadSource: osmRoads ? "openstreetmap" : "tiles",
+    restrictions: repaired.restrictions.length,
     lines: lines.length,
     polygons: polygons.length,
     labels: labels.length,

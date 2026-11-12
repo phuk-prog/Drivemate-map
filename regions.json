@@ -20,7 +20,8 @@
         -2.07,
         53.46
       ],
-      "zoom": 14
+      "zoom": 14,
+      "osm": "https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf"
     },
     {
       "id": "london",
@@ -30,7 +31,8 @@
         0.3,
         51.7
       ],
-      "zoom": 14
+      "zoom": 14,
+      "osm": "https://download.geofabrik.de/europe/great-britain/england/greater-london-latest.osm.pbf"
     }
   ]
 }

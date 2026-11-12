@@ -9,12 +9,14 @@ import { fileURLToPath } from "node:url";
 import { sourceVersion, fetchTiles } from "./fetch-tiles.mjs";
 import { buildArea } from "./build-area.mjs";
 import { buildSquares } from "./build-squares.mjs";
+import { loadOsmRoads } from "./load-osm.mjs";
+import { writeFile as writeFileFs } from "node:fs/promises";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
 const MAX_REGIONS_PER_RUN = Number(process.env.MAX_REGIONS_PER_RUN ?? 2);
 // Change this when the builder changes output, so existing regions are rebuilt.
-const BUILDER_VERSION = "graph-repair-1";
+const BUILDER_VERSION = "osm-roads-1";
 
 const config = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
 const regions = Array.isArray(config) ? config : config.regions;
@@ -69,5 +71,16 @@ console.log(`built ${built} region(s)`);
 // Grid squares for drawn-area downloads. Each square is rebuilt only when the source or builder changes.
 for (const area of squareAreas) {
   const bbox = [area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3]];
-  await buildSquares({ bbox, zoom: area.zoom, log: console.log });
+  let osmRoads = null;
+  if (area.osm) {
+    const file = join(ROOT, "data", "cache", `${area.id}.osm.pbf`);
+    console.log(`${area.id}: downloading ${area.osm}`);
+    const res = await fetch(area.osm);
+    if (!res.ok) throw new Error(`OSM extract download failed: HTTP ${res.status}`);
+    await mkdir(join(ROOT, "data", "cache"), { recursive: true });
+    await writeFileFs(file, Buffer.from(await res.arrayBuffer()));
+    osmRoads = loadOsmRoads(file);
+    console.log(`${area.id}: ${osmRoads.ways.length} OSM roads, ${osmRoads.relations.length} restrictions`);
+  }
+  await buildSquares({ bbox, zoom: area.zoom, osmRoads, log: console.log });
 }

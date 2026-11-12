@@ -12,10 +12,10 @@ import { squaresTouching, squareBbox, squareId } from "./grid.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const SQUARES_DIR = join(ROOT, "data", "published", "squares");
-const BUILDER_VERSION = "graph-repair-1";
+const BUILDER_VERSION = "osm-roads-1";
 
 // Builds every square touching a bounding box given in lon-first order (as build-area uses).
-export async function buildSquares({ bbox, zoom, log = console.log }) {
+export async function buildSquares({ bbox, zoom, osmRoads = null, log = console.log }) {
   const [minLon, minLat, maxLon, maxLat] = bbox;
   await mkdir(SQUARES_DIR, { recursive: true });
   const indexFile = join(SQUARES_DIR, "index.json");
@@ -38,7 +38,7 @@ export async function buildSquares({ bbox, zoom, log = console.log }) {
     const out = join(SQUARES_DIR, `${id}.dmap`);
     const exists = await stat(out).then(() => true, () => false);
     if (index[id] && index[id].version === version && index[id].builder === BUILDER_VERSION && exists) continue;
-    await buildArea({ name: id, bbox: sqBbox, zoom, version, log: () => {} });
+    await buildArea({ name: id, bbox: sqBbox, zoom, version, osmRoads, log: () => {} });
     await copyFile(join(ROOT, "data", "out", `${id}.dmap`), out);
     index[id] = { version, builder: BUILDER_VERSION, zoom, bbox: sqBbox, bytes: (await stat(out)).size, builtAt: new Date().toISOString() };
     built++;

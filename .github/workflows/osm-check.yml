@@ -1,0 +1,57 @@
+name: OSM roads check
+
+# Builds the Stockport squares with roads from a real OpenStreetMap extract and tests them.
+# Runs on pushes to work branches, so the OSM pipeline is checked before it reaches main.
+# It publishes nothing.
+
+on:
+  push:
+    branches-ignore: [main]
+    paths: ["tools/**", "regions.json", ".github/workflows/osm-check.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test the OSM reader with public sample files
+        run: |
+          mkdir -p "$RUNNER_TEMP/fixtures" && cd "$RUNNER_TEMP/fixtures"
+          npm pack tiny-osmpbf@1.0.0-beta.1 --silent
+          tar -xzf tiny-osmpbf-1.0.0-beta.1.tgz package/test
+          cd "$GITHUB_WORKSPACE"
+          node tools/test-osmpbf.mjs "$RUNNER_TEMP/fixtures/package/test"
+          node tools/test-osm-roads.mjs "$RUNNER_TEMP/fixtures/package/test"
+
+      - name: Build Stockport squares with OSM roads
+        run: |
+          node --input-type=module -e '
+            import { buildSquares } from "./tools/build-squares.mjs";
+            import { loadOsmRoads } from "./tools/load-osm.mjs";
+            import { writeFile, mkdir } from "node:fs/promises";
+            const url = "https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf";
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("download failed: HTTP " + res.status);
+            await mkdir("data/cache", { recursive: true });
+            await writeFile("data/cache/gm.osm.pbf", Buffer.from(await res.arrayBuffer()));
+            console.time("load OSM roads");
+            const osmRoads = loadOsmRoads("data/cache/gm.osm.pbf");
+            console.timeEnd("load OSM roads");
+            console.log("OSM roads", osmRoads.ways.length, "restrictions", osmRoads.relations.length, "nodes", osmRoads.coords.size);
+            await buildSquares({ bbox: [-2.25, 53.34, -2.07, 53.46], zoom: 14, osmRoads });
+          '
+
+      - name: Test the squares and report OSM detail
+        run: |
+          node --max-old-space-size=6000 tools/test-squares.mjs
+          node tools/osm-report.mjs
