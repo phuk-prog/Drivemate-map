@@ -33,6 +33,7 @@ for (const region of regions) {
   const previous = index[region.id];
 
   if (previous && previous.version === version && exists) {
+    index[region.id].url = `https://github.com/${process.env.GITHUB_REPOSITORY ?? "phuk-prog/Drivemate-map"}/releases/download/maps-latest/${region.id}.dmap`;
     console.log(`${region.id}: up to date`);
     continue;
   }
@@ -49,6 +50,7 @@ for (const region of regions) {
     version,
     zoom: region.zoom,
     bbox: region.bbox,
+    url: `https://github.com/${process.env.GITHUB_REPOSITORY ?? "phuk-prog/Drivemate-map"}/releases/download/maps-latest/${region.id}.dmap`,
     bytes: (await stat(out)).size,
     builtAt: new Date().toISOString(),
   };
