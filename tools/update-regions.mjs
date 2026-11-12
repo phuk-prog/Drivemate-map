@@ -12,6 +12,8 @@ import { buildArea } from "./build-area.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
 const MAX_REGIONS_PER_RUN = Number(process.env.MAX_REGIONS_PER_RUN ?? 2);
+// Change this when the builder changes output, so existing regions are rebuilt.
+const BUILDER_VERSION = "graph-repair-1";
 
 const regions = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
 const indexFile = join(PUBLISHED, "index.json");
@@ -32,7 +34,7 @@ for (const region of regions) {
   const exists = await stat(out).then(() => true, () => false);
   const previous = index[region.id];
 
-  if (previous && previous.version === version && exists) {
+  if (previous && previous.version === version && previous.builder === BUILDER_VERSION && exists) {
     index[region.id].url = `https://github.com/${process.env.GITHUB_REPOSITORY ?? "phuk-prog/Drivemate-map"}/releases/download/maps-latest/${region.id}.dmap`;
     console.log(`${region.id}: up to date`);
     continue;
@@ -48,6 +50,7 @@ for (const region of regions) {
   await copyFile(join(ROOT, "data", "out", `${region.id}.dmap`), out);
   index[region.id] = {
     version,
+    builder: BUILDER_VERSION,
     zoom: region.zoom,
     bbox: region.bbox,
     url: `https://github.com/${process.env.GITHUB_REPOSITORY ?? "phuk-prog/Drivemate-map"}/releases/download/maps-latest/${region.id}.dmap`,

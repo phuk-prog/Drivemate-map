@@ -75,14 +75,38 @@ export function buildGraph(map) {
     adj[e.from].push({ to: e.to, edge: idx });
     if (!(e.flags & ONEWAY_FLAG)) adj[e.to].push({ to: e.from, edge: idx });
   });
-  return { adj, lengths };
+  // Connected components over routable roads. The router only uses the largest one.
+  const comp = new Int32Array(n).fill(-1);
+  const sizes = [];
+  for (let s = 0; s < n; s++) {
+    if (comp[s] >= 0 || adj[s].length === 0) continue;
+    const id = sizes.length;
+    const stack = [s];
+    comp[s] = id;
+    let size = 0;
+    while (stack.length) {
+      const v = stack.pop();
+      size++;
+      for (const { to } of adj[v]) {
+        if (comp[to] < 0) {
+          comp[to] = id;
+          stack.push(to);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  const main = sizes.length ? sizes.indexOf(Math.max(...sizes)) : -1;
+  return { adj, lengths, comp, main, components: sizes.length };
 }
 
-// Nearest road junction to a point. Brute force, fine for a single query.
-export function snapToNode(map, lat, lon) {
+// Nearest junction in the largest connected road network, to a point.
+// Brute force, fine for a single query.
+export function snapToNode(map, lat, lon, graph) {
   let best = -1;
   let bestD = Infinity;
   for (let i = 0; i < map.nodes.length; i++) {
+    if (graph && graph.comp[i] !== graph.main) continue;
     const d = haversine(lat, lon, fromFixed7(map.nodes[i].lat), fromFixed7(map.nodes[i].lon));
     if (d < bestD) {
       bestD = d;
@@ -157,8 +181,8 @@ if (process.argv[1] && process.argv[1].endsWith("route.mjs")) {
   const t0 = Date.now();
   const graph = buildGraph(map);
   const built = Date.now() - t0;
-  const s = snapToNode(map, lat1, lon1);
-  const e = snapToNode(map, lat2, lon2);
+  const s = snapToNode(map, lat1, lon1, graph);
+  const e = snapToNode(map, lat2, lon2, graph);
   const t1 = Date.now();
   const result = route(map, graph, s.node, e.node);
   const searched = Date.now() - t1;
