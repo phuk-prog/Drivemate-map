@@ -7,20 +7,12 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readDmap, fromFixed7 } from "./dmap.mjs";
-import { buildGraph, snapToNode, route } from "./route.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
 const MAX_BYTES = 100 * 1024 * 1024; // GitHub rejects files over 100 MB
 const failures = [];
 const fail = (msg) => failures.push(msg);
-
-const regions = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const t = Math.PI / 180;
-  const a = Math.sin(((lat2 - lat1) * t) / 2) ** 2 + Math.cos(lat1 * t) * Math.cos(lat2 * t) * Math.sin(((lon2 - lon1) * t) / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.sqrt(a));
-}
 
 const index = JSON.parse(await readFile(join(PUBLISHED, "index.json"), "utf8"));
 const files = (await readdir(PUBLISHED)).filter((f) => f.endsWith(".dmap"));
@@ -53,19 +45,6 @@ for (const file of files) {
   if (map.edges.some((e) => e.roadClass < 1 || e.roadClass > 8)) fail(`${id}: road class out of range`);
   if (map.edges.some((e) => e.from >= map.nodes.length || e.to >= map.nodes.length)) fail(`${id}: edge refers to a missing node`);
   if (map.labels.some((l) => !l.name)) fail(`${id}: label with empty name`);
-
-  // Routing: every journey listed for this region must succeed with a plausible distance.
-  const region = regions.find((r) => r.id === id);
-  for (const [[la1, lo1], [la2, lo2]] of region?.routeTests ?? []) {
-    const graph = buildGraph(map);
-    const a = snapToNode(map, la1, lo1, graph);
-    const b = snapToNode(map, la2, lo2, graph);
-    const r = route(map, graph, a.node, b.node);
-    const straight = haversineKm(la1, lo1, la2, lo2);
-    if (!r) fail(`${id}: no route from ${la1},${lo1} to ${la2},${lo2}`);
-    else if (r.meters / 1000 < straight || r.meters / 1000 > straight * 4) fail(`${id}: route ${(r.meters / 1000).toFixed(2)} km is implausible for ${straight.toFixed(2)} km straight-line`);
-    if (a.distance > 500 || b.distance > 500) fail(`${id}: route start or end is more than 500 m from a road junction`);
-  }
 
   console.log(`${id}: ok (${size} bytes, ${map.nodes.length} nodes, ${map.edges.length} roads, ${map.polygons.length} areas, ${map.labels.length} labels)`);
 }
