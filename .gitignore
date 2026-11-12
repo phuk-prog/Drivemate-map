@@ -1,3 +1,6 @@
 data/cache/
 data/out/
 node_modules/
+
+# Published map areas (built output, committed on purpose)
+!data/published/
