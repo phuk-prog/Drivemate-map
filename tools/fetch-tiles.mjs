@@ -29,7 +29,7 @@ export function tilesForBbox([minLon, minLat, maxLon, maxLat], z) {
   return tiles;
 }
 
-async function sourceVersion() {
+export async function sourceVersion() {
   const res = await fetch(SOURCE);
   if (!res.ok) throw new Error("TileJSON request failed: " + res.status);
   const json = await res.json();
