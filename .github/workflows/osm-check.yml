@@ -37,20 +37,13 @@ jobs:
         run: |
           node --input-type=module -e '
             import { buildSquares } from "./tools/build-squares.mjs";
-            import { loadOsmRoads } from "./tools/load-osm.mjs";
-            import { writeFile, mkdir } from "node:fs/promises";
-            import { extractUrl } from "./tools/geofabrik.mjs";
-            const url = await extractUrl("greater-manchester");
-            console.log("extract", url);
-            const res = await fetch(url);
-            if (!res.ok) throw new Error("download failed: HTTP " + res.status);
-            await mkdir("data/cache", { recursive: true });
-            await writeFile("data/cache/gm.osm.pbf", Buffer.from(await res.arrayBuffer()));
+            import { loadAreaRoads } from "./tools/osm-area.mjs";
+            import { readFileSync } from "node:fs";
+            const area = JSON.parse(readFileSync("regions.json", "utf8")).squareAreas.find((a) => a.id === "stockport");
             console.time("load OSM roads");
-            const osmRoads = loadOsmRoads("data/cache/gm.osm.pbf");
+            const osmRoads = await loadAreaRoads(area.osm, "data/cache/osm");
             console.timeEnd("load OSM roads");
-            console.log("OSM roads", osmRoads.ways.length, "restrictions", osmRoads.relations.length, "nodes", osmRoads.coords.size);
-            await buildSquares({ bbox: [-2.25, 53.34, -2.07, 53.46], zoom: 14, osmRoads });
+            await buildSquares({ bbox: area.bbox, zoom: area.zoom, osmRoads });
           '
 
       - name: Test the squares and report OSM detail

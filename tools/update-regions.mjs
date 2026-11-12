@@ -9,9 +9,7 @@ import { fileURLToPath } from "node:url";
 import { sourceVersion, fetchTiles } from "./fetch-tiles.mjs";
 import { buildArea } from "./build-area.mjs";
 import { buildSquares } from "./build-squares.mjs";
-import { loadOsmRoads } from "./load-osm.mjs";
-import { extractUrl } from "./geofabrik.mjs";
-import { writeFile as writeFileFs } from "node:fs/promises";
+import { loadAreaRoads } from "./osm-area.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
@@ -73,16 +71,6 @@ console.log(`built ${built} region(s)`);
 for (const area of squareAreas) {
   const bbox = [area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3]];
   let osmRoads = null;
-  if (area.osm) {
-    const file = join(ROOT, "data", "cache", `${area.id}.osm.pbf`);
-    const url = await extractUrl(area.osm);
-    console.log(`${area.id}: downloading ${url}`);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`OSM extract download failed: HTTP ${res.status}`);
-    await mkdir(join(ROOT, "data", "cache"), { recursive: true });
-    await writeFileFs(file, Buffer.from(await res.arrayBuffer()));
-    osmRoads = loadOsmRoads(file);
-    console.log(`${area.id}: ${osmRoads.ways.length} OSM roads, ${osmRoads.relations.length} restrictions, ${osmRoads.cameras.length} speed cameras`);
-  }
+  if (area.osm) osmRoads = await loadAreaRoads(area.osm, join(ROOT, "data", "cache", "osm"));
   await buildSquares({ bbox, zoom: area.zoom, osmRoads, log: console.log });
 }

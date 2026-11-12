@@ -21,7 +21,11 @@
         53.46
       ],
       "zoom": 14,
-      "osm": "greater-manchester"
+      "osm": [
+        "greater-manchester",
+        "cheshire",
+        "derbyshire"
+      ]
     },
     {
       "id": "london",
@@ -32,7 +36,15 @@
         51.7
       ],
       "zoom": 14,
-      "osm": "greater-london"
+      "osm": [
+        "greater-london",
+        "surrey",
+        "kent",
+        "essex",
+        "hertfordshire",
+        "buckinghamshire",
+        "berkshire"
+      ]
     }
   ]
 }
