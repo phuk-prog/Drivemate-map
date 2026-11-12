@@ -1,8 +1,8 @@
-// Reader and writer for the DMAP map format (see format/FORMAT.md).
+// Reader and writer for the DMAP map format, version 2 (see format/FORMAT.md).
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 1;
+const VERSION = 2;
 const COORD_SCALE = 1e7;
 
 export function toFixed7(deg) {
@@ -63,8 +63,15 @@ export class ByteWriter {
   }
 }
 
+function writePoints(w, points) {
+  for (const [lat, lon] of points) {
+    w.i32(lat);
+    w.i32(lon);
+  }
+}
+
 export function writeDmap(model) {
-  const { bbox, nodes, edges, polygons, labels } = model;
+  const { bbox, nodes, edges, lines, polygons, labels } = model;
   const w = new ByteWriter();
   w.bytes(Buffer.from(MAGIC, "ascii"));
   w.u16(VERSION);
@@ -72,6 +79,7 @@ export function writeDmap(model) {
   for (const v of bbox) w.i32(v);
   w.u32(nodes.length);
   w.u32(edges.length);
+  w.u32(lines.length);
   w.u32(polygons.length);
   w.u32(labels.length);
 
@@ -86,10 +94,14 @@ export function writeDmap(model) {
     w.u8(e.roadClass);
     w.u8(e.flags);
     w.u16(e.points.length);
-    for (const [lat, lon] of e.points) {
-      w.i32(lat);
-      w.i32(lon);
-    }
+    writePoints(w, e.points);
+  }
+
+  for (const l of lines) {
+    w.u8(l.kind);
+    w.u8(l.level);
+    w.u32(l.points.length);
+    writePoints(w, l.points);
   }
 
   for (const p of polygons) {
@@ -97,16 +109,14 @@ export function writeDmap(model) {
     w.u16(p.rings.length);
     for (const ring of p.rings) {
       w.u32(ring.length);
-      for (const [lat, lon] of ring) {
-        w.i32(lat);
-        w.i32(lon);
-      }
+      writePoints(w, ring);
     }
   }
 
   for (const l of labels) {
     const name = Buffer.from(l.name, "utf8").subarray(0, 255);
     w.u8(l.kind);
+    w.u8(l.category);
     w.i32(l.lat);
     w.i32(l.lon);
     w.u8(name.length);
@@ -145,6 +155,12 @@ export function readDmap(buf) {
     pos += 4;
     return v;
   };
+  const points = (n) => {
+    need(n * 8);
+    const out = new Array(n);
+    for (let k = 0; k < n; k++) out[k] = [i32(), i32()];
+    return out;
+  };
 
   if (buf.toString("ascii", 0, 4) !== MAGIC) throw new Error("DMAP: bad magic");
   pos = 4;
@@ -154,6 +170,7 @@ export function readDmap(buf) {
   const bbox = [i32(), i32(), i32(), i32()];
   const nodeCount = u32();
   const edgeCount = u32();
+  const lineCount = u32();
   const polygonCount = u32();
   const labelCount = u32();
 
@@ -167,9 +184,15 @@ export function readDmap(buf) {
     const roadClass = u8();
     const flags = u8();
     const n = u16();
-    const points = new Array(n);
-    for (let k = 0; k < n; k++) points[k] = [i32(), i32()];
-    edges[i] = { from, to, roadClass, flags, points };
+    edges[i] = { from, to, roadClass, flags, points: points(n) };
+  }
+
+  const lines = new Array(lineCount);
+  for (let i = 0; i < lineCount; i++) {
+    const kind = u8();
+    const level = u8();
+    const n = u32();
+    lines[i] = { kind, level, points: points(n) };
   }
 
   const polygons = new Array(polygonCount);
@@ -177,26 +200,22 @@ export function readDmap(buf) {
     const kind = u8();
     const ringCount = u16();
     const rings = new Array(ringCount);
-    for (let r = 0; r < ringCount; r++) {
-      const n = u32();
-      const ring = new Array(n);
-      for (let k = 0; k < n; k++) ring[k] = [i32(), i32()];
-      rings[r] = ring;
-    }
+    for (let r = 0; r < ringCount; r++) rings[r] = points(u32());
     polygons[i] = { kind, rings };
   }
 
   const labels = new Array(labelCount);
   for (let i = 0; i < labelCount; i++) {
     const kind = u8();
+    const category = u8();
     const lat = i32();
     const lon = i32();
     const len = u8();
     need(len);
     const name = buf.toString("utf8", pos, pos + len);
     pos += len;
-    labels[i] = { kind, lat, lon, name };
+    labels[i] = { kind, category, lat, lon, name };
   }
 
-  return { bbox, nodes, edges, polygons, labels };
+  return { bbox, nodes, edges, lines, polygons, labels };
 }

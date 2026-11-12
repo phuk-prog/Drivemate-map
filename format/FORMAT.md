@@ -1,24 +1,27 @@
-# Drivemate map file format (DMAP), version 1
+# Drivemate map file format (DMAP), version 2
 
 Our own binary format for one downloadable map area. All numbers are little-endian.
 Coordinates are stored as signed 32-bit integers in units of 1e-7 degree
 (about 1.1 cm). Latitude and longitude are both stored, in that order.
 
 The app's Kotlin reader must follow this document exactly. The JavaScript
-reference reader is `tools/dmap.mjs`.
+reference reader is `tools/dmap.mjs`. Class-to-code tables are in `tools/classes.mjs`.
 
-## Header (fixed, 40 bytes)
+## Header (fixed, 44 bytes)
 
 | Offset | Type      | Field        | Meaning                              |
 |--------|-----------|--------------|--------------------------------------|
 | 0      | 4 bytes   | magic        | ASCII `DMAP`                         |
-| 4      | u16       | version      | `1`                                  |
+| 4      | u16       | version      | `2`                                  |
 | 6      | u16       | reserved     | `0`                                  |
 | 8      | i32 x 4   | bbox         | minLat, minLon, maxLat, maxLon       |
 | 24     | u32       | nodeCount    | number of road nodes                 |
-| 28     | u32       | edgeCount    | number of road edges                 |
-| 32     | u32       | polygonCount | number of area features              |
-| 36     | u32       | labelCount   | number of named places               |
+| 28     | u32       | edgeCount    | number of routable road edges        |
+| 32     | u32       | lineCount    | number of non-routed lines           |
+| 36     | u32       | polygonCount | number of area features              |
+| 40     | u32       | labelCount   | number of names and places           |
+
+Sections follow in this order: nodes, edges, lines, polygons, labels.
 
 ## Nodes (nodeCount records, 8 bytes each)
 
@@ -30,7 +33,7 @@ reference reader is `tools/dmap.mjs`.
 Nodes are road junctions and road ends. Two road ends closer than about 2 m
 share one node. Node IDs are the record index (0-based).
 
-## Edges (edgeCount records)
+## Edges (edgeCount records): routable roads
 
 | Type      | Field       | Meaning |
 |-----------|-------------|---------|
@@ -54,25 +57,59 @@ Edge flags (bit set = true):
 | 3   | toll |
 | 4   | no motor access (access tag `no` or `private`). Drawn, never routed. |
 
+## Lines (lineCount records): drawn, not routed
+
+| Type | Field      | Meaning |
+|------|------------|---------|
+| u8   | kind       | see line kinds below |
+| u8   | level      | boundaries: admin level (2 country, 4 region, 6 county, 8 borough, and others). Otherwise 0. |
+| u32  | pointCount | number of points, at least 2 |
+| i32 x 2 x pointCount | points | lat, lon pairs |
+
+Line kinds: 1 rail, 2 Underground and other transit, 3 ferry, 4 river,
+5 canal, 6 stream, drain or ditch, 7 footpath, bridleway or cycleway,
+9 pier, 11 administrative boundary.
+
 ## Polygons (polygonCount records)
 
 | Type | Field      | Meaning |
 |------|------------|---------|
-| u8   | kind       | 1 water, 2 building, 3 park |
+| u8   | kind       | see polygon kinds below |
 | u16  | ringCount  | number of rings in the feature |
 | per ring: u32 pointCount, then pointCount x (i32 lat, i32 lon) | rings | closed rings |
 
 Draw with the even-odd fill rule so holes are cut out.
 
+Polygon kinds: 1 water, 2 building, 3 park or nature reserve, 4 wood,
+5 grass and green space, 6 farmland or orchard, 7 sand or beach, 8 wetland,
+9 residential land, 10 industrial, 11 commercial or retail,
+12 institutional (school, hospital, university, library), 13 sports and recreation,
+14 cemetery, 15 rock or quarry, 16 pier.
+
+Land use is only as complete as the source. Many suburban areas have no land-use
+polygon, so they are blank in the file.
+
 ## Labels (labelCount records)
 
-| Type | Field    | Meaning |
-|------|----------|---------|
-| u8   | kind     | 1 city, 2 town, 3 village, 4 suburb, 5 other place |
-| i32  | lat      | |
-| i32  | lon      | |
-| u8   | nameLen  | byte length of the name, at most 255 |
-| bytes | name    | UTF-8 name |
+| Type  | Field    | Meaning |
+|-------|----------|---------|
+| u8    | kind     | 1 place, 2 road name, 3 water name, 4 park name, 5 point of interest |
+| u8    | category | depends on kind (below) |
+| i32   | lat      | anchor point |
+| i32   | lon      | anchor point |
+| u8    | nameLen  | byte length of the name, at most 255 |
+| bytes | name     | UTF-8 name |
+
+Categories:
+- place: 1 city, 2 town, 3 village, 4 hamlet, 5 suburb, 6 quarter, 7 neighbourhood, 8 isolated dwelling, 9 island.
+- road name: road class 1 to 8 as above, 9 footpath or cycleway, 0 unknown.
+- water name: 1 lake or water body, 2 bay.
+- park name: 0.
+- point of interest: 1 food and drink, 2 shops, 3 transport, 4 health, 5 education,
+  6 parking and fuel, 7 lodging, 8 place of worship, 9 leisure and culture,
+  10 public services, 11 other.
+
+Only named features produce labels. Labels are drawn by the app, not stored as images.
 
 ## Source and licence
 

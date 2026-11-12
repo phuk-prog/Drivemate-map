@@ -1,6 +1,6 @@
 // Renders a DMAP file to a PNG with our own rasteriser and PNG encoder (no libraries).
 // Usage: node tools/preview.mjs data/out/london.dmap out.png [width] [height] [--crop=minLon,minLat,maxLon,maxLat]
-// Development check only. Not part of the app.
+// Development check only. Not part of the app. Labels are stored in the file but not drawn here (no font).
 
 import { readFile, writeFile } from "node:fs/promises";
 import { deflateSync } from "node:zlib";
@@ -32,7 +32,6 @@ const project = (latF, lonF) => {
 };
 
 const img = new Uint8Array(W * H * 3);
-img.fill(0);
 for (let i = 0; i < img.length; i += 3) {
   img[i] = 242;
   img[i + 1] = 239;
@@ -79,12 +78,13 @@ function fillRings(rings, color) {
   }
 }
 
-// Thick line by stamping discs along a Bresenham-style walk.
-function drawLine(x0, y0, x1, y1, half, color) {
+// Thick line by stamping discs along a walk. dash > 0 draws a dashed line.
+function drawLine(x0, y0, x1, y1, half, color, dash = 0) {
   const dx = x1 - x0;
   const dy = y1 - y0;
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
   for (let s = 0; s <= steps; s++) {
+    if (dash && Math.floor(s / dash) % 2 === 1) continue;
     const x = x0 + (dx * s) / steps;
     const y = y0 + (dy * s) / steps;
     for (let oy = -half; oy <= half; oy++) {
@@ -95,12 +95,55 @@ function drawLine(x0, y0, x1, y1, half, color) {
   }
 }
 
-const POLY_COLORS = { 1: [170, 211, 223], 2: [218, 208, 196], 3: [205, 230, 190] };
-for (const p of map.polygons) {
-  fillRings(p.rings, POLY_COLORS[p.kind] || [200, 200, 200]);
+function drawPolyline(points, style) {
+  const pts = points.map(([lat, lon]) => project(lat, lon));
+  for (let i = 0; i < pts.length - 1; i++) {
+    drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], style.half, style.color, style.dash || 0);
+  }
 }
 
-// Road style: colour and half-width in pixels, by road class.
+// Areas, drawn from the back: land cover first, then parks, water, buildings, piers.
+const AREA_STYLE = {
+  4: [168, 208, 160], // wood
+  5: [212, 234, 196], // grass and green space
+  6: [236, 232, 204], // farmland
+  7: [246, 234, 200], // sand
+  8: [200, 222, 210], // wetland
+  9: [236, 228, 220], // residential
+  10: [224, 218, 228], // industrial
+  11: [242, 222, 216], // commercial
+  12: [230, 224, 240], // institutional
+  13: [196, 232, 204], // sports and recreation
+  14: [204, 228, 204], // cemetery
+  15: [216, 210, 204], // rock and quarry
+  3: [205, 230, 190], // park
+  1: [170, 211, 223], // water
+  2: [218, 208, 196], // building
+  16: [190, 180, 170], // pier
+};
+const AREA_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 3, 1, 2, 16];
+for (const kind of AREA_ORDER) {
+  for (const p of map.polygons) if (p.kind === kind) fillRings(p.rings, AREA_STYLE[kind]);
+}
+
+// Lines that are not routed.
+const LINE_STYLE = {
+  1: { color: [150, 150, 150], half: 1 }, // rail
+  2: { color: [170, 130, 190], half: 1, dash: 4 }, // transit
+  3: { color: [120, 160, 210], half: 1, dash: 3 }, // ferry
+  4: { color: [150, 200, 230], half: 2 }, // river
+  5: { color: [150, 200, 230], half: 1 }, // canal
+  6: { color: [170, 215, 240], half: 0 }, // stream
+  7: { color: [200, 190, 180], half: 0, dash: 2 }, // footpath and cycleway
+  9: { color: [160, 150, 140], half: 1 }, // pier
+  11: { color: [200, 90, 150], half: 0, dash: 6 }, // boundary
+};
+for (const l of map.lines) {
+  const style = LINE_STYLE[l.kind];
+  if (style) drawPolyline(l.points, style);
+}
+
+// Roads, drawn from minor to major.
 const ROAD_STYLE = {
   1: { color: [233, 120, 120], half: 2 },
   2: { color: [240, 160, 110], half: 2 },
@@ -115,13 +158,7 @@ const drawOrder = [8, 7, 6, 5, 4, 3, 2, 1];
 const byClass = Object.fromEntries(drawOrder.map((c) => [c, []]));
 for (const e of map.edges) byClass[e.roadClass].push(e);
 for (const c of drawOrder) {
-  const style = ROAD_STYLE[c];
-  for (const e of byClass[c]) {
-    const pts = e.points.map(([lat, lon]) => project(lat, lon));
-    for (let i = 0; i < pts.length - 1; i++) {
-      drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], style.half, style.color);
-    }
-  }
+  for (const e of byClass[c]) drawPolyline(e.points, ROAD_STYLE[c]);
 }
 
 // PNG encoder: 8-bit RGB, filter type 0 per scanline.
@@ -161,4 +198,10 @@ const png = Buffer.concat([
   chunk("IEND", Buffer.alloc(0)),
 ]);
 await writeFile(outFile, png);
-console.log(`wrote ${outFile} ${W}x${H}, edges ${map.edges.length}, polygons ${map.polygons.length}`);
+const counts = {
+  roads: map.edges.length,
+  lines: map.lines.length,
+  areas: map.polygons.length,
+  labels: map.labels.length,
+};
+console.log(`wrote ${outFile} ${W}x${H} ${JSON.stringify(counts)}`);

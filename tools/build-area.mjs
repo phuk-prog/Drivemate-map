@@ -1,4 +1,4 @@
-// Builds one DMAP area file from cached OpenStreetMap vector tiles.
+// Builds one DMAP (version 2) area file from cached OpenStreetMap vector tiles.
 // Usage: node tools/build-area.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14
 // Output: data/out/<name>.dmap (not committed; published to static hosting later)
 
@@ -8,32 +8,13 @@ import { fileURLToPath } from "node:url";
 import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
+import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-// Road classes we route on, from OpenMapTiles transportation.class.
-const ROAD_CLASS = {
-  motorway: 1,
-  trunk: 2,
-  primary: 3,
-  secondary: 4,
-  tertiary: 5,
-  minor: 6,
-  service: 7,
-  track: 8,
-};
-
-const PLACE_KIND = { city: 1, town: 2, village: 3, suburb: 4, quarter: 4, neighbourhood: 4 };
-const POLYGON_LAYERS = [
-  { layer: "water", kind: 1 },
-  { layer: "building", kind: 2 },
-  { layer: "park", kind: 3 },
-];
-
 const SNAP_TOLERANCE = 200; // in 1e-7 degree units: about 2 m
 
-// Tile-space point to lon/lat in degrees.
-function tileToLonLat(z, tx, ty, px, py, extent) {
+// Tile-space point to [lat, lon] in 1e-7 degree units.
+function tileToFixed(z, tx, ty, px, py, extent) {
   const n = 2 ** z;
   const x = tx + px / extent;
   const y = ty + py / extent;
@@ -46,8 +27,8 @@ function insideTile(px, py, extent) {
   return px >= 0 && px <= extent && py >= 0 && py <= extent;
 }
 
-// Split a line into runs of points inside the tile. Each run also keeps the
-// neighbouring point just outside the tile, so roads join across tile seams.
+// Split a line into runs of points inside the tile. Each run keeps the
+// neighbouring point just outside the tile, so features join across tile seams.
 function ownedRuns(points, extent) {
   const runs = [];
   let current = null;
@@ -100,120 +81,189 @@ class NodeIndex {
   }
 }
 
+// Representative point of a feature in tile space: the middle vertex of its longest part.
+function anchorPoint(parts) {
+  let best = null;
+  for (const part of parts) if (!best || part.length > best.length) best = part;
+  if (!best || best.length === 0) return null;
+  return best[Math.floor(best.length / 2)];
+}
+
+// Average of the first ring's vertices, used to place a name inside an area.
+function centroidPoint(parts) {
+  const ring = parts[0];
+  if (!ring || ring.length === 0) return null;
+  let sx = 0;
+  let sy = 0;
+  for (const [x, y] of ring) {
+    sx += x;
+    sy += y;
+  }
+  return [sx / ring.length, sy / ring.length];
+}
+
 export async function buildArea({ name, bbox, zoom, version, log = console.log }) {
   const cacheRoot = join(ROOT, "data", "cache", version);
   const tiles = tilesForBbox(bbox, zoom);
   const nodes = new NodeIndex();
   const edges = [];
+  const lines = [];
   const polygons = [];
+  const polygonKeys = new Set();
   const labels = [];
   const labelKeys = new Set();
-  const stats = {
-    tiles: tiles.length,
-    tilesWithData: 0,
-    edgesByClass: {},
-    oneway: 0,
-    twoway: 0,
-    dropped: 0,
-    polygons: 0,
-    labels: 0,
-    oneWayValues: {},
+  const counts = { edges: {}, lines: {}, polygons: {}, labels: {} };
+  let dropped = 0;
+
+  const addLabel = (kind, category, [lat, lon], text) => {
+    const key = `${kind}|${text}|${lat}|${lon}`;
+    if (labelKeys.has(key)) return;
+    labelKeys.add(key);
+    labels.push({ kind, category, lat, lon, name: text });
+    counts.labels[kind] = (counts.labels[kind] || 0) + 1;
   };
 
   for (const t of tiles) {
     const buf = await readCachedTile(cacheRoot, t.z, t.x, t.y);
     if (!buf || buf.length === 0) continue;
-    stats.tilesWithData++;
-    const layers = decodeTile(buf);
-    const byName = Object.fromEntries(layers.map((l) => [l.name, l]));
+    const byName = Object.fromEntries(decodeTile(buf).map((l) => [l.name, l]));
+    const toFixed = (px, py, extent) => tileToFixed(t.z, t.x, t.y, px, py, extent);
 
-    // Roads
+    // Roads: routable edges.
     const transport = byName.transportation;
     if (transport) {
       for (const f of transport.features) {
-        if (f.type !== 2) continue; // lines only
+        if (f.type !== 2) continue;
         const roadClass = ROAD_CLASS[f.tags.class];
         if (!roadClass) continue;
-        const extent = transport.extent;
-
         let flags = 0;
-        const brunnel = f.tags.brunnel;
-        if (brunnel === "bridge") flags |= 2;
-        if (brunnel === "tunnel") flags |= 4;
+        if (f.tags.brunnel === "bridge") flags |= 2;
+        if (f.tags.brunnel === "tunnel") flags |= 4;
         if (f.tags.toll) flags |= 8;
         if (f.tags.access === "no" || f.tags.access === "private") flags |= 16;
-
         const ow = f.tags.oneway;
-        stats.oneWayValues[String(ow)] = (stats.oneWayValues[String(ow)] || 0) + 1;
-        let reverse = false;
-        if (ow === 1 || ow === -1) {
-          flags |= 1;
-          reverse = ow === -1;
-          stats.oneway++;
-        } else {
-          stats.twoway++;
-        }
+        const reverse = ow === -1;
+        if (ow === 1 || ow === -1) flags |= 1;
 
         for (const part of f.parts) {
-          for (const run of ownedRuns(part, extent)) {
+          for (const run of ownedRuns(part, transport.extent)) {
             const ordered = reverse ? run.slice().reverse() : run;
-            const points = ordered.map(([x, y]) => tileToLonLat(t.z, t.x, t.y, x, y, extent));
+            const points = ordered.map(([x, y]) => toFixed(x, y, transport.extent));
             const from = nodes.get(points[0]);
             const to = nodes.get(points[points.length - 1]);
             if (from === to && points.length < 3) {
-              stats.dropped++;
+              dropped++;
               continue;
             }
             edges.push({ from, to, roadClass, flags, points });
-            stats.edgesByClass[f.tags.class] = (stats.edgesByClass[f.tags.class] || 0) + 1;
+            counts.edges[f.tags.class] = (counts.edges[f.tags.class] || 0) + 1;
           }
         }
       }
     }
 
-    // Areas
-    for (const { layer, kind } of POLYGON_LAYERS) {
-      const l = byName[layer];
+    // Lines that are not routed: rail, transit, ferries, piers, footpaths, waterways, boundaries.
+    const lineSources = [
+      { layer: "transportation", kindOf: (f) => (f.type === 2 ? roadLineKind(f.tags.class, f.tags.subclass) : null), level: () => 0 },
+      { layer: "waterway", kindOf: (f) => (f.type === 2 ? LINE_KIND.waterway[f.tags.class] ?? null : null), level: () => 0 },
+      { layer: "boundary", kindOf: (f) => (f.type === 2 ? LINE_KIND.boundary : null), level: (f) => Math.min(255, Number(f.tags.admin_level) || 0) },
+    ];
+    for (const src of lineSources) {
+      const l = byName[src.layer];
       if (!l) continue;
       for (const f of l.features) {
-        if (f.type !== 3) continue;
-        const inside = f.parts.some((ring) => ring.some(([x, y]) => insideTile(x, y, l.extent)));
-        if (!inside) continue;
-        const rings = f.parts
-          .map((ring) => ring.map(([x, y]) => tileToLonLat(t.z, t.x, t.y, x, y, l.extent)))
-          .filter((ring) => ring.length >= 4);
-        if (rings.length === 0) continue;
-        polygons.push({ kind, rings });
-        stats.polygons++;
+        const kind = src.kindOf(f);
+        if (!kind || ROAD_CLASS[f.tags.class] && src.layer === "transportation") continue;
+        const level = src.level(f);
+        for (const part of f.parts) {
+          for (const run of ownedRuns(part, l.extent)) {
+            lines.push({ kind, level, points: run.map(([x, y]) => toFixed(x, y, l.extent)) });
+            counts.lines[kind] = (counts.lines[kind] || 0) + 1;
+          }
+        }
       }
     }
 
-    // Place names
-    const places = byName.place;
-    if (places) {
-      for (const f of places.features) {
-        if (f.type !== 1 || !f.tags.name) continue;
-        const kind = PLACE_KIND[f.tags.class] || 5;
-        const [px, py] = f.parts[0]?.[0] ?? [];
-        if (px === undefined || !insideTile(px, py, places.extent)) continue;
-        const [lat, lon] = tileToLonLat(t.z, t.x, t.y, px, py, places.extent);
-        const key = `${f.tags.name}|${lat}|${lon}`;
-        if (labelKeys.has(key)) continue;
-        labelKeys.add(key);
-        labels.push({ kind, lat, lon, name: f.tags.name });
-        stats.labels++;
+    // Areas: landcover, landuse, parks, water, buildings, piers.
+    for (const layerName of ["landcover", "landuse", "park", "water", "building", "transportation"]) {
+      const l = byName[layerName];
+      if (!l) continue;
+      for (const f of l.features) {
+        if (f.type !== 3) continue;
+        const kind = POLYGON_KIND.area(layerName, f.tags);
+        if (!kind) continue;
+        const inside = f.parts.some((ring) => ring.some(([x, y]) => insideTile(x, y, l.extent)));
+        if (!inside) continue;
+        const rings = f.parts
+          .map((ring) => ring.map(([x, y]) => toFixed(x, y, l.extent)))
+          .filter((ring) => ring.length >= 4);
+        if (rings.length === 0) continue;
+        // Seam duplicates: the same ring can appear in two neighbouring tiles.
+        const key = `${kind}|${rings[0][0]}|${rings[0][1]}|${rings[0].length}|${rings.length}`;
+        if (polygonKeys.has(key)) continue;
+        polygonKeys.add(key);
+        polygons.push({ kind, rings });
+        counts.polygons[kind] = (counts.polygons[kind] || 0) + 1;
       }
+    }
+
+    // Names. Each name is kept only if its anchor lies inside this tile.
+    const named = (layerName, types) => {
+      const l = byName[layerName];
+      if (!l) return [];
+      return l.features.filter((f) => types.includes(f.type) && f.tags.name).map((f) => ({ f, extent: l.extent }));
+    };
+
+    for (const { f, extent } of named("place", [1])) {
+      const a = anchorPoint(f.parts);
+      if (!a || !insideTile(a[0], a[1], extent)) continue;
+      addLabel(LABEL_KIND.place, PLACE_CATEGORY[f.tags.class] ?? 0, toFixed(a[0], a[1], extent), f.tags.name);
+    }
+    for (const { f, extent } of named("transportation_name", [2])) {
+      const a = anchorPoint(f.parts);
+      if (!a || !insideTile(a[0], a[1], extent)) continue;
+      const category = ROAD_CLASS[f.tags.class] ?? (f.tags.class === "path" ? 9 : 0);
+      addLabel(LABEL_KIND.road, category, toFixed(a[0], a[1], extent), f.tags.name);
+    }
+    for (const { f, extent } of named("water_name", [1, 2])) {
+      const a = anchorPoint(f.parts);
+      if (!a || !insideTile(a[0], a[1], extent)) continue;
+      addLabel(LABEL_KIND.water, f.tags.class === "bay" ? 2 : 1, toFixed(a[0], a[1], extent), f.tags.name);
+    }
+    for (const { f, extent } of named("park", [3])) {
+      const c = centroidPoint(f.parts);
+      if (!c || !insideTile(c[0], c[1], extent)) continue;
+      addLabel(LABEL_KIND.park, 0, toFixed(c[0], c[1], extent), f.tags.name);
+    }
+    for (const { f, extent } of named("poi", [1])) {
+      const a = f.parts[0]?.[0];
+      if (!a || !insideTile(a[0], a[1], extent)) continue;
+      addLabel(LABEL_KIND.poi, POI_CATEGORY[f.tags.class] ?? POI_CATEGORY.other, toFixed(a[0], a[1], extent), f.tags.name);
     }
   }
 
   const bboxFixed = [toFixed7(bbox[1]), toFixed7(bbox[0]), toFixed7(bbox[3]), toFixed7(bbox[2])];
-  const bytes = writeDmap({ bbox: bboxFixed, nodes: nodes.nodes, edges, polygons, labels });
+  const bytes = writeDmap({ bbox: bboxFixed, nodes: nodes.nodes, edges, lines, polygons, labels });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, `${name}.dmap`);
   await writeFile(outFile, bytes);
   const size = (await stat(outFile)).size;
-  const report = { name, version, zoom, bbox, outFile, bytes: size, nodes: nodes.nodes.length, edges: edges.length, polygons: polygons.length, labels: labels.length, ...stats };
+  const report = {
+    name,
+    version,
+    zoom,
+    bbox,
+    outFile,
+    bytes: size,
+    nodes: nodes.nodes.length,
+    routableEdges: edges.length,
+    lines: lines.length,
+    polygons: polygons.length,
+    labels: labels.length,
+    dropped,
+    counts,
+  };
   log(JSON.stringify(report, null, 2));
   return { outFile, report };
 }
