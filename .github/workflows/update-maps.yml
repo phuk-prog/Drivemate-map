@@ -47,6 +47,10 @@ jobs:
           git push origin HEAD:${GITHUB_REF_NAME}
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
+      - name: Compress square files for faster phone downloads
+        run: |
+          for f in data/published/squares/*.dmap; do gzip -9 -c "$f" > "$f.gz"; done
+
       - name: Publish map files to the maps-latest release
         if: steps.commit.outputs.changed == 'true'
         env:
@@ -55,4 +59,4 @@ jobs:
           gh release view maps-latest >/dev/null 2>&1 || \
             gh release create maps-latest --title "Drivemate map regions (latest)" \
               --notes "Automatically updated map regions. Each file replaces the previous version." --latest=false
-          gh release upload maps-latest data/published/*.dmap data/published/squares/*.dmap --clobber
+          gh release upload maps-latest data/published/*.dmap data/published/squares/*.dmap data/published/squares/*.dmap.gz --clobber
