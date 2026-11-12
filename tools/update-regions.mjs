@@ -8,6 +8,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sourceVersion, fetchTiles } from "./fetch-tiles.mjs";
 import { buildArea } from "./build-area.mjs";
+import { buildSquares } from "./build-squares.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
@@ -15,7 +16,9 @@ const MAX_REGIONS_PER_RUN = Number(process.env.MAX_REGIONS_PER_RUN ?? 2);
 // Change this when the builder changes output, so existing regions are rebuilt.
 const BUILDER_VERSION = "graph-repair-1";
 
-const regions = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
+const config = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
+const regions = Array.isArray(config) ? config : config.regions;
+const squareAreas = Array.isArray(config) ? [] : config.squareAreas ?? [];
 const indexFile = join(PUBLISHED, "index.json");
 let index = {};
 try {
@@ -62,3 +65,9 @@ for (const region of regions) {
 
 await writeFile(indexFile, JSON.stringify(index, null, 2) + "\n");
 console.log(`built ${built} region(s)`);
+
+// Grid squares for drawn-area downloads. Each square is rebuilt only when the source or builder changes.
+for (const area of squareAreas) {
+  const bbox = [area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3]];
+  await buildSquares({ bbox, zoom: area.zoom, log: console.log });
+}
