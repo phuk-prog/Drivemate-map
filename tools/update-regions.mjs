@@ -10,6 +10,7 @@ import { sourceVersion, fetchTiles } from "./fetch-tiles.mjs";
 import { buildArea } from "./build-area.mjs";
 import { buildSquares } from "./build-squares.mjs";
 import { loadOsmRoads } from "./load-osm.mjs";
+import { extractUrl } from "./geofabrik.mjs";
 import { writeFile as writeFileFs } from "node:fs/promises";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -74,8 +75,9 @@ for (const area of squareAreas) {
   let osmRoads = null;
   if (area.osm) {
     const file = join(ROOT, "data", "cache", `${area.id}.osm.pbf`);
-    console.log(`${area.id}: downloading ${area.osm}`);
-    const res = await fetch(area.osm);
+    const url = await extractUrl(area.osm);
+    console.log(`${area.id}: downloading ${url}`);
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`OSM extract download failed: HTTP ${res.status}`);
     await mkdir(join(ROOT, "data", "cache"), { recursive: true });
     await writeFileFs(file, Buffer.from(await res.arrayBuffer()));

@@ -39,7 +39,9 @@ jobs:
             import { buildSquares } from "./tools/build-squares.mjs";
             import { loadOsmRoads } from "./tools/load-osm.mjs";
             import { writeFile, mkdir } from "node:fs/promises";
-            const url = "https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf";
+            import { extractUrl } from "./tools/geofabrik.mjs";
+            const url = await extractUrl("greater-manchester");
+            console.log("extract", url);
             const res = await fetch(url);
             if (!res.ok) throw new Error("download failed: HTTP " + res.status);
             await mkdir("data/cache", { recursive: true });
