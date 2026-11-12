@@ -82,7 +82,7 @@ for (const area of squareAreas) {
     await mkdir(join(ROOT, "data", "cache"), { recursive: true });
     await writeFileFs(file, Buffer.from(await res.arrayBuffer()));
     osmRoads = loadOsmRoads(file);
-    console.log(`${area.id}: ${osmRoads.ways.length} OSM roads, ${osmRoads.relations.length} restrictions`);
+    console.log(`${area.id}: ${osmRoads.ways.length} OSM roads, ${osmRoads.relations.length} restrictions, ${osmRoads.cameras.length} speed cameras`);
   }
   await buildSquares({ bbox, zoom: area.zoom, osmRoads, log: console.log });
 }

@@ -113,4 +113,5 @@ export const LABEL_KIND = {
   park: 4,
   poi: 5,
   housenumber: 6,
+  speedCamera: 7,
 };

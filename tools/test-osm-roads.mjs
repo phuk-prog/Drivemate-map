@@ -1,10 +1,16 @@
-// Tests the OSM road graph builder with small hand-made road networks, and the loader with a
-// real sample file. Usage: node tools/test-osm-roads.mjs [fixtures folder with test.pbf]
+// Tests the OSM road graph builder and speed cameras with small hand-made data, and the loader
+// with a real sample file. Usage: node tools/test-osm-roads.mjs [fixtures folder with test.pbf]
 
 import { join } from "node:path";
-import { buildRoadGraph, parseMaxspeed, onewayOf, EDGE_FLAG, RESTRICTION_KIND } from "./osm-roads.mjs";
+import { readFile, rm } from "node:fs/promises";
+import {
+  buildRoadGraph, parseMaxspeed, onewayOf, EDGE_FLAG, RESTRICTION_KIND,
+  parseDirection, isSpeedCamera, enforcementDevices, speedCameraOf, speedCameraLabels,
+} from "./osm-roads.mjs";
 import { loadOsmRoads } from "./load-osm.mjs";
-import { writeDmap, readDmap } from "./dmap.mjs";
+import { writeDmap, readDmap, toFixed7 } from "./dmap.mjs";
+import { buildArea } from "./build-area.mjs";
+import { LABEL_KIND } from "./classes.mjs";
 
 const failures = [];
 const check = (ok, msg) => {
@@ -141,7 +147,69 @@ check(parseMaxspeed(undefined) === 0, "missing maxspeed is unknown");
   check(back.restrictions.length === 1 && back.restrictions[0].kind === RESTRICTION_KIND.ONLY, "round trip: only-turn restriction");
 }
 
-// 10. Loader on a real sample file (central London): the one service road named "üßé€".
+// 10. Speed cameras: tags, enforcement relations, labels, and a DMAP round trip.
+check(parseDirection("90") === 90, "direction 90");
+check(parseDirection("370") === 10 && parseDirection("-90") === 270, "direction wraps to 0..359");
+check(parseDirection("45.6") === 46, "direction rounds to whole degrees");
+check(parseDirection("forward") === -1 && parseDirection("90-270") === -1 && parseDirection(undefined) === -1, "non-numeric direction is unknown");
+check(isSpeedCamera({ highway: "speed_camera" }) && !isSpeedCamera({ highway: "traffic_signals" }), "speed camera tag");
+check(
+  enforcementDevices({ tags: { type: "enforcement", enforcement: "maxspeed" }, members: [
+    { type: "node", ref: 5, role: "device" }, { type: "node", ref: 6, role: "from" }, { type: "way", ref: 7, role: "device" }] }).join() === "5",
+  "enforcement relation: only device nodes",
+);
+check(enforcementDevices({ tags: { type: "enforcement", enforcement: "traffic_signals" }, members: [{ type: "node", ref: 5, role: "device" }] }).length === 0,
+  "enforcement relation for red lights is not a speed camera");
+{
+  const tagged = speedCameraOf({ lat: 51.001, lon: 0.001, tags: { highway: "speed_camera", maxspeed: "30 mph", direction: "180" } });
+  check(tagged.maxspeed === 48 && tagged.direction === 180, "camera node: maxspeed and direction from its tags");
+  const fromRelation = speedCameraOf({ lat: 51.002, lon: 0.002, tags: {} }, { type: "enforcement", enforcement: "maxspeed", maxspeed: "50" });
+  check(fromRelation.maxspeed === 50 && fromRelation.direction === -1, "enforcement device: maxspeed from the relation, direction unknown");
+  const cameras = [
+    tagged,
+    fromRelation,
+    { lat: 51.003, lon: 0.003, maxspeed: 300, direction: 5 }, // limit clamped to 255
+    { lat: 60.0, lon: 10.0, maxspeed: 50, direction: 0 }, // outside the area
+    { ...tagged }, // same camera twice
+  ];
+  const area = [0, 51, 0.01, 51.01];
+  const labels = speedCameraLabels(cameras, area);
+  check(labels.length === 3, `camera labels: ${labels.length}, expected 3`);
+  check(labels.every((l) => l.kind === LABEL_KIND.speedCamera && l.kind === 7), "camera labels are kind 7");
+
+  const bytes = writeDmap({ bbox: [0, 0, 1, 1], nodes: [], edges: [], lines: [], polygons: [], labels, strings: [""], restrictions: [] });
+  const back = readDmap(bytes).labels;
+  check(back.length === 3, "camera round trip: label count");
+  check(back[0].category === 48 && back[0].name === "180" && back[0].lat === toFixed7(51.001) && back[0].lon === toFixed7(0.001),
+    "camera round trip: 30 mph camera facing 180");
+  check(back[1].category === 50 && back[1].name === "", "camera round trip: unknown direction is an empty name");
+  check(back[2].category === 255 && back[2].name === "5", "camera round trip: limit clamped to 255");
+
+  // Through build-area: cameras inside the area become labels in the written file. No tiles are
+  // cached for this made-up version, so the file holds only the OSM roads and cameras.
+  const name = `test-cameras-${process.pid}`;
+  const { outFile } = await buildArea({
+    name,
+    bbox: area,
+    zoom: 14,
+    version: "no-such-version",
+    osmRoads: { ways: [{ id: 1, tags: { highway: "residential" }, nodes: [11, 12] }], coords: new Map([[11, [51.004, 0.004]], [12, [51.005, 0.004]]]), relations: [], cameras },
+    log: () => {},
+  });
+  const file = readDmap(await readFile(outFile));
+  await rm(outFile, { force: true });
+  const cams = file.labels.filter((l) => l.kind === 7);
+  check(cams.length === 3, `build-area: ${cams.length} camera labels, expected 3`);
+  check(cams.some((l) => l.category === 48 && l.name === "180"), "build-area: tagged camera kept with limit and direction");
+  check(!cams.some((l) => l.lat === toFixed7(60.0)), "build-area: camera outside the area dropped");
+  check(file.edges.length === 1, "build-area: OSM road still written");
+}
+{
+  // Without cameras (older loader output) nothing breaks.
+  check(speedCameraLabels(undefined, [0, 51, 1, 52]).length === 0, "no cameras given: no labels");
+}
+
+// 11. Loader on a real sample file (central London): the one service road named "üßé€".
 const fixtures = process.argv[2];
 if (fixtures) {
   const data = loadOsmRoads(join(fixtures, "test.pbf"));
@@ -149,7 +217,8 @@ if (fixtures) {
   check(data.ways.length === 1, `loader: ${data.ways.length} roads, expected 1`);
   check(g.edges.length >= 1, "loader: the road became at least one edge");
   check(g.strings.includes("üßé€"), "loader: non-ASCII street name kept");
-  console.log(`loader: ${data.ways.length} road, ${g.edges.length} edge(s), ${data.relations.length} restriction relation(s)`);
+  check(Array.isArray(data.cameras), "loader: returns a cameras list");
+  console.log(`loader: ${data.ways.length} road, ${g.edges.length} edge(s), ${data.relations.length} restriction relation(s), ${data.cameras.length} speed camera(s)`);
 } else {
   console.log("loader check skipped (no fixtures folder given)");
 }
@@ -158,4 +227,4 @@ if (failures.length) {
   console.error("FAILED:\n  " + failures.join("\n  "));
   process.exit(1);
 }
-console.log("all OSM road graph checks passed");
+console.log("all OSM road graph and speed camera checks passed");

@@ -59,4 +59,17 @@ jobs:
           gh release view maps-latest >/dev/null 2>&1 || \
             gh release create maps-latest --title "Drivemate map regions (latest)" \
               --notes "Automatically updated map regions. Each file replaces the previous version." --latest=false
-          gh release upload maps-latest data/published/*.dmap data/published/squares/*.dmap data/published/squares/*.dmap.gz --clobber
+          # Squares are published only compressed (.dmap.gz); the app reads those. Regions stay plain.
+          gh release upload maps-latest data/published/*.dmap data/published/squares/*.dmap.gz --clobber
+
+      - name: Remove old uncompressed square files from the release
+        # Runs on every run (not only when something changed), so old plain squares are cleared once.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view maps-latest >/dev/null 2>&1 || { echo "No maps-latest release yet."; exit 0; }
+          names=$(gh release view maps-latest --json assets --jq '.assets[].name' | grep -E '^lat-?[0-9]+_lon-?[0-9]+\.dmap$' || true)
+          for name in $names; do
+            echo "Deleting $name"
+            gh release delete-asset maps-latest "$name" --yes
+          done

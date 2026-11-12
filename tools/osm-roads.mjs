@@ -1,10 +1,11 @@
 // Builds Drivemate's road graph from raw OpenStreetMap data: real junctions, street names,
-// speed limits, lanes, turn lanes and turn restrictions. Our own code.
+// speed limits, lanes, turn lanes and turn restrictions. Also reads fixed speed cameras. Our own code.
 //
 // Unlike the tile source, OSM gives every road its node ids, so a junction is simply a node
 // shared by two or more roads. Roads are split at junctions into edges.
 
 import { toFixed7 } from "./dmap.mjs";
+import { LABEL_KIND } from "./classes.mjs";
 
 // OSM highway values we route on, mapped to DMAP road classes (format/FORMAT.md).
 const HIGHWAY_CLASS = {
@@ -51,6 +52,64 @@ export function parseMaxspeed(value) {
   const n = Number(m[1]);
   const kmh = m[2] === "mph" ? n * 1.609344 : n;
   return Math.max(0, Math.min(255, Math.round(kmh)));
+}
+
+// Compass direction in whole degrees (0 to 359) from a numeric direction tag, or -1 when the tag
+// is missing or not a number (for example "forward" or "90-270").
+export function parseDirection(value) {
+  if (value === undefined || value === null) return -1;
+  const v = String(value).trim();
+  if (!/^-?\d+(?:\.\d+)?$/.test(v)) return -1;
+  return ((Math.round(Number(v)) % 360) + 360) % 360;
+}
+
+// A fixed speed camera node: highway=speed_camera.
+export function isSpeedCamera(tags) {
+  return tags?.highway === "speed_camera";
+}
+
+// Node ids of the camera devices in an enforcement relation (type=enforcement,
+// enforcement=maxspeed, members with role "device"). Other relations give none.
+export function enforcementDevices(relation) {
+  const t = relation.tags;
+  if (t.type !== "enforcement" || t.enforcement !== "maxspeed") return [];
+  return relation.members.filter((m) => m.role === "device" && m.type === "node").map((m) => m.ref);
+}
+
+// node: { lat, lon, tags }. relationTags (optional): tags of the enforcement relation that names
+// it. Returns { lat, lon, maxspeed (km/h, 0 unknown), direction (degrees, -1 unknown) }.
+export function speedCameraOf(node, relationTags = null) {
+  const tags = node.tags ?? {};
+  return {
+    lat: node.lat,
+    lon: node.lon,
+    maxspeed: parseMaxspeed(tags.maxspeed) || parseMaxspeed(relationTags?.maxspeed),
+    direction: parseDirection(tags.direction ?? tags["camera:direction"]),
+  };
+}
+
+// Speed cameras inside bbox ([minLon, minLat, maxLon, maxLat]) as DMAP labels of kind 7:
+// category = speed limit in km/h (0 unknown), name = direction in degrees as text ("" unknown).
+// A camera listed twice at the same point (node tag and enforcement relation) is kept once.
+export function speedCameraLabels(cameras = [], bbox) {
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+  const seen = new Set();
+  const labels = [];
+  for (const c of cameras) {
+    if (!(c.lat >= minLat && c.lat <= maxLat && c.lon >= minLon && c.lon <= maxLon)) continue;
+    const label = {
+      kind: LABEL_KIND.speedCamera,
+      category: Math.max(0, Math.min(255, Math.round(c.maxspeed || 0))),
+      lat: toFixed7(c.lat),
+      lon: toFixed7(c.lon),
+      name: c.direction >= 0 ? String(c.direction) : "",
+    };
+    const key = `${label.lat}|${label.lon}|${label.category}|${label.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    labels.push(label);
+  }
+  return labels;
 }
 
 // Direction of travel: 1 forward only, -1 reverse only, 0 both ways.
