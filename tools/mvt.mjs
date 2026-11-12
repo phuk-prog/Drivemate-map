@@ -59,7 +59,10 @@ class Reader {
   skip(wire) {
     if (wire === WIRE_VARINT) this.varint();
     else if (wire === WIRE_FIXED64) this.pos += 8;
-    else if (wire === WIRE_BYTES) this.pos += this.varint();
+    else if (wire === WIRE_BYTES) {
+      const len = this.varint(); // read the length first: "pos += varint()" would lose the length bytes
+      this.pos += len;
+    }
     else if (wire === WIRE_FIXED32) this.pos += 4;
     else throw new Error("MVT: unknown wire type " + wire);
   }
