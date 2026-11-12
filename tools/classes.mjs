@@ -23,6 +23,7 @@ export const LINE_KIND = {
   footpath: 7,
   pier: 9,
   boundary: 11,
+  aeroway: 10,
   waterway: { river: 4, canal: 5, stream: 6, drain: 6, ditch: 6 },
   boundaryKind: 11,
 };
@@ -68,6 +69,8 @@ export const POLYGON_KIND = {
         return null;
       case "transportation":
         return c === "pier" ? 16 : null;
+      case "aeroway":
+        return 17;
       default:
         return null;
     }
@@ -109,4 +112,5 @@ export const LABEL_KIND = {
   water: 3,
   park: 4,
   poi: 5,
+  housenumber: 6,
 };

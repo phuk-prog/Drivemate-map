@@ -2,7 +2,7 @@
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 2;
+const VERSION = 3;
 const COORD_SCALE = 1e7;
 
 export function toFixed7(deg) {
@@ -106,6 +106,12 @@ export function writeDmap(model) {
 
   for (const p of polygons) {
     w.u8(p.kind);
+    w.u16(p.height ?? 0);
+    w.u16(p.minHeight ?? 0);
+    const c = p.colour ?? 0;
+    w.u8((c >> 16) & 255);
+    w.u8((c >> 8) & 255);
+    w.u8(c & 255);
     w.u16(p.rings.length);
     for (const ring of p.rings) {
       w.u32(ring.length);
@@ -198,10 +204,13 @@ export function readDmap(buf) {
   const polygons = new Array(polygonCount);
   for (let i = 0; i < polygonCount; i++) {
     const kind = u8();
+    const height = u16();
+    const minHeight = u16();
+    const colour = (u8() << 16) | (u8() << 8) | u8();
     const ringCount = u16();
     const rings = new Array(ringCount);
     for (let r = 0; r < ringCount; r++) rings[r] = points(u32());
-    polygons[i] = { kind, rings };
+    polygons[i] = { kind, height, minHeight, colour, rings };
   }
 
   const labels = new Array(labelCount);

@@ -81,6 +81,18 @@ class NodeIndex {
   }
 }
 
+// 3D attributes from OpenMapTiles building tags. Heights are stored in decimetres; 0 means unknown.
+function buildingAttrs(tags) {
+  const h = Number(tags.render_height);
+  const m = Number(tags.render_min_height);
+  const hex = typeof tags.colour === "string" && /^#[0-9a-f]{6}$/i.test(tags.colour) ? parseInt(tags.colour.slice(1), 16) : 0;
+  return {
+    height: h > 0 ? Math.min(65535, Math.round(h * 10)) : 0,
+    minHeight: m > 0 ? Math.min(65535, Math.round(m * 10)) : 0,
+    colour: hex,
+  };
+}
+
 // Representative point of a feature in tile space: the middle vertex of its longest part.
 function anchorPoint(parts) {
   let best = null;
@@ -167,6 +179,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
       { layer: "transportation", kindOf: (f) => (f.type === 2 ? roadLineKind(f.tags.class, f.tags.subclass) : null), level: () => 0 },
       { layer: "waterway", kindOf: (f) => (f.type === 2 ? LINE_KIND.waterway[f.tags.class] ?? null : null), level: () => 0 },
       { layer: "boundary", kindOf: (f) => (f.type === 2 ? LINE_KIND.boundary : null), level: (f) => Math.min(255, Number(f.tags.admin_level) || 0) },
+      { layer: "aeroway", kindOf: (f) => (f.type === 2 ? LINE_KIND.aeroway : null), level: () => 0 },
     ];
     for (const src of lineSources) {
       const l = byName[src.layer];
@@ -185,7 +198,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     }
 
     // Areas: landcover, landuse, parks, water, buildings, piers.
-    for (const layerName of ["landcover", "landuse", "park", "water", "building", "transportation"]) {
+    for (const layerName of ["landcover", "landuse", "park", "water", "building", "transportation", "aeroway"]) {
       const l = byName[layerName];
       if (!l) continue;
       for (const f of l.features) {
@@ -202,7 +215,8 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
         const key = `${kind}|${rings[0][0]}|${rings[0][1]}|${rings[0].length}|${rings.length}`;
         if (polygonKeys.has(key)) continue;
         polygonKeys.add(key);
-        polygons.push({ kind, rings });
+        const attrs = layerName === "building" ? buildingAttrs(f.tags) : {};
+        polygons.push({ kind, rings, height: attrs.height ?? 0, minHeight: attrs.minHeight ?? 0, colour: attrs.colour ?? 0 });
         counts.polygons[kind] = (counts.polygons[kind] || 0) + 1;
       }
     }
@@ -234,6 +248,15 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
       const c = centroidPoint(f.parts);
       if (!c || !insideTile(c[0], c[1], extent)) continue;
       addLabel(LABEL_KIND.park, 0, toFixed(c[0], c[1], extent), f.tags.name);
+    }
+    const housenumbers = byName.housenumber;
+    if (housenumbers) {
+      for (const f of housenumbers.features) {
+        const a = f.parts[0]?.[0];
+        const text = f.tags.housenumber;
+        if (!a || !text || !insideTile(a[0], a[1], housenumbers.extent)) continue;
+        addLabel(LABEL_KIND.housenumber, 0, toFixed(a[0], a[1], housenumbers.extent), String(text));
+      }
     }
     for (const { f, extent } of named("poi", [1])) {
       const a = f.parts[0]?.[0];

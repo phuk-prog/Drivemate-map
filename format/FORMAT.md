@@ -1,4 +1,4 @@
-# Drivemate map file format (DMAP), version 2
+# Drivemate map file format (DMAP), version 3
 
 Our own binary format for one downloadable map area. All numbers are little-endian.
 Coordinates are stored as signed 32-bit integers in units of 1e-7 degree
@@ -12,7 +12,7 @@ reference reader is `tools/dmap.mjs`. Class-to-code tables are in `tools/classes
 | Offset | Type      | Field        | Meaning                              |
 |--------|-----------|--------------|--------------------------------------|
 | 0      | 4 bytes   | magic        | ASCII `DMAP`                         |
-| 4      | u16       | version      | `2`                                  |
+| 4      | u16       | version      | `3`                                  |
 | 6      | u16       | reserved     | `0`                                  |
 | 8      | i32 x 4   | bbox         | minLat, minLon, maxLat, maxLon       |
 | 24     | u32       | nodeCount    | number of road nodes                 |
@@ -68,13 +68,16 @@ Edge flags (bit set = true):
 
 Line kinds: 1 rail, 2 Underground and other transit, 3 ferry, 4 river,
 5 canal, 6 stream, drain or ditch, 7 footpath, bridleway or cycleway,
-9 pier, 11 administrative boundary.
+9 pier, 10 airport taxiway or runway, 11 administrative boundary.
 
 ## Polygons (polygonCount records)
 
 | Type | Field      | Meaning |
 |------|------------|---------|
 | u8   | kind       | see polygon kinds below |
+| u16  | height     | building height in decimetres (metres x 10). 0 = unknown. Other kinds: 0. |
+| u16  | minHeight  | building base height in decimetres (for parts raised above ground). 0 = ground. |
+| u24  | colour     | RGB, three bytes (red, green, blue). 0 = no colour given. |
 | u16  | ringCount  | number of rings in the feature |
 | per ring: u32 pointCount, then pointCount x (i32 lat, i32 lon) | rings | closed rings |
 
@@ -84,7 +87,7 @@ Polygon kinds: 1 water, 2 building, 3 park or nature reserve, 4 wood,
 5 grass and green space, 6 farmland or orchard, 7 sand or beach, 8 wetland,
 9 residential land, 10 industrial, 11 commercial or retail,
 12 institutional (school, hospital, university, library), 13 sports and recreation,
-14 cemetery, 15 rock or quarry, 16 pier.
+14 cemetery, 15 rock or quarry, 16 pier, 17 airport apron, runway area or helipad.
 
 Land use is only as complete as the source. Many suburban areas have no land-use
 polygon, so they are blank in the file.
@@ -93,7 +96,7 @@ polygon, so they are blank in the file.
 
 | Type  | Field    | Meaning |
 |-------|----------|---------|
-| u8    | kind     | 1 place, 2 road name, 3 water name, 4 park name, 5 point of interest |
+| u8    | kind     | 1 place, 2 road name, 3 water name, 4 park name, 5 point of interest, 6 house number |
 | u8    | category | depends on kind (below) |
 | i32   | lat      | anchor point |
 | i32   | lon      | anchor point |
