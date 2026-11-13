@@ -1,6 +1,7 @@
-// Tests the road graph repair: roads that cross in the middle become junctions, and road ends
-// that stop within 2 m of another road's middle are joined to it, while parallel roads, bridges,
-// tunnels and roads at different OSM layers do not. Exits with code 1 on any failure.
+// Tests the road graph repair: roads that cross in the middle become junctions, road ends that
+// stop within 2 m of another road's middle are joined to it, and a road that comes back to itself
+// meets itself there, while parallel roads, bridges, tunnels and roads at different OSM layers do
+// not join. Exits with code 1 on any failure.
 // Usage: node tools/test-graph.mjs
 
 import { joinCrossings, joinRoadEnds, splitAtSharedVertices, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
@@ -406,6 +407,35 @@ const repair = (edges) => {
   const r = repair([road([[0, 0], [0, 0], [0, 5000], [0, 5000], [0, 10000]])]);
   const repeats = r.edges.reduce((n, e) => n + e.points.reduce((k, p, i) => k + (i > 0 && p[0] === e.points[i - 1][0] && p[1] === e.points[i - 1][1] ? 1 : 0), 0), 0);
   check("repeated vertices are dropped from the repaired roads", repeats === 0 && r.edges.length === 1 && r.edges[0].points.length === 3, `repeats=${repeats} points=${JSON.stringify(r.edges.map((e) => e.points))}`);
+}
+
+// 17. A road that comes back to itself meets itself there: one tile line can run along a street, round a
+//     loop and end on its own middle. At Stockport's latitude 90 units north-south is 1 m.
+{
+  const L = 534000000;
+  const O = -22000000;
+  const box = [L - 5000, O - 5000, L + 5000, O + 5000];
+  const valid = (r) => validateDmap({ bbox: box, nodes: r.nodes, edges: r.edges, lines: [], polygons: [], labels: [], restrictions: [], lanes: [], warnings: [] });
+  // Output order: the stem up to the meeting point, then the loop back to it.
+  const stemAndLoop = (r) => r.edges.length === 2 && r.edges[1].from === r.edges[1].to && r.edges[0].to === r.edges[1].from;
+
+  // It ends exactly on one of its own middle points.
+  const onPoint = repair([road([[L - 2000, O], [L, O], [L, O + 2000], [L + 2000, O + 2000], [L + 2000, O], [L, O]])]);
+  check("a road that ends on its own middle point is split there, into its stem and a loop", stemAndLoop(onPoint) && onPoint.nodes.length === 2, JSON.stringify(onPoint.edges.map((e) => [e.from, e.to])));
+  check("the stem and loop pass the validator", valid(onPoint).length === 0, JSON.stringify(valid(onPoint)));
+
+  // It ends 1 m short of its own first segment, about 100 m further back along the road, where that segment has no point.
+  const short = repair([road([[L, O - 3000], [L, O + 3000], [L + 2000, O + 3000], [L + 2000, O], [L + 90, O]])]);
+  check("a road end 1 m short of its own middle is joined to it", short.ends === 1 && stemAndLoop(short) && short.nodes.length === 2, `ends=${short.ends} edges=${JSON.stringify(short.edges.map((e) => [e.from, e.to]))}`);
+  check("the joined stem and loop pass the validator", valid(short).length === 0, JSON.stringify(valid(short)));
+
+  // Its own first 1.5 m is near its end, but that is the road leaving its end, not coming back to it.
+  const start = repair([road([[L, O], [L + 135, O], [L + 135, O + 3000]])]);
+  check("a road end is not joined to its own first few metres", start.ends === 0 && start.edges.length === 1 && start.edges[0].from !== start.edges[0].to, `ends=${start.ends} edges=${JSON.stringify(start.edges.map((e) => [e.from, e.to]))}`);
+
+  // A closed loop with no other road (a roundabout drawn as one line) stays one loop.
+  const ring = repair([road([[L, O], [L, O + 2000], [L + 2000, O + 2000], [L + 2000, O], [L, O]])]);
+  check("a closed loop with no other road stays one loop", ring.ends === 0 && ring.edges.length === 1 && ring.edges[0].from === ring.edges[0].to && ring.nodes.length === 1, `ends=${ring.ends} edges=${ring.edges.length} nodes=${ring.nodes.length}`);
 }
 
 if (failures.length) {

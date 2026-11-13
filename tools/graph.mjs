@@ -1,6 +1,7 @@
-// Road graph repair: splits roads wherever another road shares a point with them,
-// so that every junction becomes a node the router can turn at. Also joins roads
-// that cross in the middle, and road ends that stop short of another road's middle.
+// Road graph repair: splits roads wherever another road shares a point with them, or
+// where a road comes back to one of its own points, so that every junction becomes a node
+// the router can turn at. Also joins roads that cross in the middle, and road ends that
+// stop short of another road's middle (or of their own road's middle further along).
 // Our own code.
 
 // Points within SNAP_M metres of each other are the same junction. Points are in 1e-7 degree
@@ -107,9 +108,17 @@ export function splitAtSharedVertices(edges) {
   const pieces = [];
   edges.forEach((e, ei) => {
     const ids = pointIds[ei];
+    // How many times this road reaches each vertex, a run of repeated points counting once. A road that
+    // comes back to one of its own points (a loop, or an end on its own middle) meets itself there, which
+    // is a junction too, although no other road uses the point.
+    const visits = new Map();
+    for (let k = 0; k < ids.length; k++) {
+      if (k === 0 || ids[k] !== ids[k - 1]) visits.set(ids[k], (visits.get(ids[k]) || 0) + 1);
+    }
     const cuts = [0];
     for (let k = 1; k < ids.length - 1; k++) {
-      if (index.verts[ids[k]].uses.size > 1) cuts.push(k);
+      const selfMeet = visits.get(ids[k]) > 1 && ids[k] !== ids[k - 1];
+      if (index.verts[ids[k]].uses.size > 1 || selfMeet) cuts.push(k);
     }
     cuts.push(ids.length - 1);
     for (let c = 0; c + 1 < cuts.length; c++) {
@@ -306,9 +315,24 @@ function nearestOnSegment(p, a, b) {
 // within SNAP_M is shared already, so it is left alone. Bridges and tunnels are skipped, and roads
 // with different OSM layer values are not joined, as for crossings. Returns { edges, joins, layerSkipped }
 // where joins is the number of road ends joined and layerSkipped the number left apart by layer.
+// A road that loops back counts as another road for its own end, but only its part more than
+// END_GAP_M along the road from that end, so an end never joins the segments it starts on.
+const END_GAP_M = 2 * SNAP_M;
+
+// Distance along a road from its first point to each of its points, in metres.
+function alongRoad(points) {
+  const out = [0];
+  for (let i = 1; i < points.length; i++) {
+    const [a, b] = [points[i - 1], points[i]];
+    out.push(out[i - 1] + Math.sqrt(dist2(a[0], a[1], b[0], b[1])));
+  }
+  return out;
+}
+
 export function joinRoadEnds(edges) {
   const pointCells = new Map(); // "ci,cj" -> [point ids], every point of every road
   const pointEdge = [];
+  const pointIndex = []; // position of the point in its road
   const pointAt = [];
   const segCells = new Map(); // "ci,cj" -> [segment ids], at-grade segments by bounding box
   const segEdge = [];
@@ -320,9 +344,11 @@ export function joinRoadEnds(edges) {
   };
   edges.forEach((e, ei) => {
     const pts = e.points;
-    for (const p of pts) {
+    for (let j = 0; j < pts.length; j++) {
+      const p = pts[j];
       const id = pointEdge.length;
       pointEdge.push(ei);
+      pointIndex.push(j);
       pointAt.push(p);
       addTo(pointCells, `${Math.floor(p[0] / CELL)},${Math.floor(p[1] / CELL)}`, id);
     }
@@ -363,19 +389,27 @@ export function joinRoadEnds(edges) {
     if (e.flags & BRIDGE_OR_TUNNEL) return;
     const last = e.points.length - 1;
     if (last < 1) return;
+    let along = null; // this road's alongRoad, made only when one of its own points or segments is near an end
     for (const k of [0, last]) {
       const p = e.points[k];
-      if (around(pointCells, p).some((id) => pointEdge[id] !== ei && nearPoint(pointAt[id], p))) continue; // already shared
+      // True when this road's own point j is more than END_GAP_M along the road from the end at k.
+      const farOwn = (j) => {
+        if (j === k) return false;
+        if (!along) along = alongRoad(e.points);
+        return Math.abs(along[j] - along[k]) > END_GAP_M;
+      };
+      const shares = (id) => nearPoint(pointAt[id], p) && (pointEdge[id] !== ei || farOwn(pointIndex[id]));
+      if (around(pointCells, p).some(shares)) continue; // already shared
 
       let best = null;
       let otherLayer = false;
       for (const sid of around(segCells, p)) {
         const te = segEdge[sid];
-        if (te === ei) continue;
         const i = segIndex[sid];
         const q = edges[te].points;
         const hit = nearestOnSegment(p, q[i], q[i + 1]);
         if (!nearPoint(hit.point, p)) continue; // the nearest point is more than SNAP_M from the end
+        if (te === ei && !(farOwn(i) && farOwn(i + 1))) continue; // the end's own stretch of road
         // Roads at different layers pass over or under each other, so the end is not joined to them.
         if (layerOf(edges[te]) !== layerOf(e)) {
           otherLayer = true;
