@@ -1,6 +1,7 @@
-// Tests every published map file before it can be committed.
+// Tests every published map file before it can be committed: the region files and the grid squares.
 // Checks the file decodes, the index matches the files, coordinates are valid,
-// and the content is in the expected ranges. Exits with code 1 on any failure.
+// and the content is in the expected ranges. For squares, the index's bytes and gzBytes must match
+// the file and gzip -9 (the workflow's compress step). Exits with code 1 on any failure.
 // Usage: node tools/test-map.mjs
 
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -8,9 +9,11 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readDmap, fromFixed7 } from "./dmap.mjs";
 import { validateDmap } from "./validate-dmap.mjs";
+import { gzipBytes } from "./build-squares.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
+const SQUARES = join(PUBLISHED, "squares");
 // Map files are release assets (limit 2 GB), never committed (repo limit 100 MB). Greater London alone is 173 MB.
 const MAX_BYTES = 1900 * 1024 * 1024;
 const failures = [];
@@ -23,7 +26,7 @@ for (const file of files) {
   const id = file.replace(/\.dmap$/, "");
   const path = join(PUBLISHED, file);
   const size = (await stat(path)).size;
-  if (size > MAX_BYTES) fail(`${id}: ${size} bytes is over the 100 MB limit`);
+  if (size > MAX_BYTES) fail(`${id}: ${size} bytes is over the ${MAX_BYTES} byte release limit`);
   if (!index[id]) fail(`${id}: file has no index entry`);
 
   let map;
@@ -65,8 +68,39 @@ for (const [id, entry] of Object.entries(index)) {
   }
 }
 
+// Square files. A square's index entry records bytes (the .dmap) and gzBytes (the .dmap.gz the release
+// serves). A square with no local file is a release asset and is not checked here.
+const squareIndex = JSON.parse(await readFile(join(SQUARES, "index.json"), "utf8"));
+const squareFiles = (await readdir(SQUARES)).filter((f) => f.endsWith(".dmap"));
+for (const file of squareFiles) {
+  const id = file.replace(/\.dmap$/, "");
+  const path = join(SQUARES, file);
+  const size = (await stat(path)).size;
+  const entry = squareIndex[id];
+  if (size > MAX_BYTES) fail(`squares/${id}: ${size} bytes is over the ${MAX_BYTES} byte release limit`);
+  if (!entry) {
+    fail(`squares/${id}: file has no index entry`);
+    continue;
+  }
+  if (entry.bytes !== size) fail(`squares/${id}: index bytes ${entry.bytes} is not the file size ${size}`);
+  const gz = gzipBytes(path);
+  if (entry.gzBytes !== gz) fail(`squares/${id}: index gzBytes ${entry.gzBytes} is not the gzip -9 size ${gz}`);
+
+  let map;
+  try {
+    map = readDmap(await readFile(path));
+  } catch (err) {
+    fail(`squares/${id}: does not decode: ${err.message}`);
+    continue;
+  }
+  if (map.edges.length === 0) fail(`squares/${id}: no routable roads`);
+  for (const problem of validateDmap(map)) fail(`squares/${id}: ${problem}`);
+
+  console.log(`squares/${id}: ok (${size} bytes, gzip ${gz} bytes, ${map.edges.length} roads)`);
+}
+
 if (failures.length) {
   console.error("FAILED:\n  " + failures.join("\n  "));
   process.exit(1);
 }
-console.log(`all ${files.length} map file(s) passed`);
+console.log(`all ${files.length} map file(s) and ${squareFiles.length} square file(s) passed`);

@@ -2,7 +2,19 @@
 // so that every junction becomes a node the router can turn at. Also joins roads
 // that cross in the middle. Our own code.
 
-const SNAP = 200; // 1e-7 degree units: about 2 m, same as the builder
+// Points within SNAP_M metres of each other are the same junction. Points are in 1e-7 degree
+// units: one unit is about 1.11 cm north-south, and about 1.11 cm * cos(latitude) east-west.
+const SNAP_M = 2;
+const METRES_PER_UNIT = ((6371000 * Math.PI) / 180) * 1e-7; // Earth radius 6371 km
+const RADIANS_PER_UNIT = (1e-7 * Math.PI) / 180;
+const INDEX_CELL = 400; // grid cell for the vertex index, in 1e-7 degree units: about 4.4 m north-south
+
+// True when two points are within SNAP_M metres of each other on the ground.
+function near(lat1, lon1, lat2, lon2) {
+  const dy = (lat1 - lat2) * METRES_PER_UNIT;
+  const dx = (lon1 - lon2) * METRES_PER_UNIT * Math.cos(((lat1 + lat2) / 2) * RADIANS_PER_UNIT);
+  return dx * dx + dy * dy <= SNAP_M * SNAP_M;
+}
 
 class VertexIndex {
   constructor() {
@@ -10,17 +22,19 @@ class VertexIndex {
     this.cells = new Map();
   }
 
-  // Returns the vertex id for a point, creating one if no vertex is within SNAP.
+  // Returns the vertex id for a point, creating one if no vertex is within SNAP_M metres.
   id(lat, lon) {
-    const ci = Math.floor(lat / SNAP);
-    const cj = Math.floor(lon / SNAP);
-    for (let di = -1; di <= 1; di++) {
-      for (let dj = -1; dj <= 1; dj++) {
+    const ci = Math.floor(lat / INDEX_CELL);
+    const cj = Math.floor(lon / INDEX_CELL);
+    // Cells to search each way. East-west distance per unit grows as 1/cos(latitude), so this can be more than 1.
+    const reach = Math.ceil(SNAP_M / (METRES_PER_UNIT * Math.cos(lat * RADIANS_PER_UNIT)) / INDEX_CELL);
+    for (let di = -reach; di <= reach; di++) {
+      for (let dj = -reach; dj <= reach; dj++) {
         const ids = this.cells.get(`${ci + di},${cj + dj}`);
         if (!ids) continue;
         for (const v of ids) {
           const w = this.verts[v];
-          if (Math.abs(w.lat - lat) <= SNAP && Math.abs(w.lon - lon) <= SNAP) return v;
+          if (near(w.lat, w.lon, lat, lon)) return v;
         }
       }
     }
@@ -56,12 +70,19 @@ export function splitAtSharedVertices(edges) {
     for (let c = 0; c + 1 < cuts.length; c++) {
       const a = cuts[c];
       const b = cuts[c + 1];
+      const points = e.points.slice(a, b + 1);
+      // Each piece starts and ends exactly on its junction node. A road end joined from up to
+      // SNAP_M away would otherwise sit too far from its node for the validator's EDGE_END_TOLERANCE.
+      const from = index.verts[ids[a]];
+      const to = index.verts[ids[b]];
+      points[0] = [from.lat, from.lon];
+      points[points.length - 1] = [to.lat, to.lon];
       pieces.push({
         from: ids[a],
         to: ids[b],
         roadClass: e.roadClass,
         flags: e.flags,
-        points: e.points.slice(a, b + 1),
+        points,
       });
     }
   });
@@ -111,9 +132,9 @@ function segmentCrossing(p, q, r, s) {
   return { t, u, point: [Math.round(p[0] + t * rx), Math.round(p[1] + t * ry)] };
 }
 
-// True when two points are within SNAP of each other, the same rule as the vertex index.
+// True when two points are within SNAP_M metres of each other, the same rule as the vertex index.
 function nearPoint(a, b) {
-  return Math.abs(a[0] - b[0]) <= SNAP && Math.abs(a[1] - b[1]) <= SNAP;
+  return near(a[0], a[1], b[0], b[1]);
 }
 
 export function joinCrossings(edges) {
@@ -206,9 +227,11 @@ export function joinCrossings(edges) {
 }
 
 // Seam duplicates: a tile edge can give the same area twice, from two neighbouring
-// tiles. Keeps the first of each group of areas that have the same kind, the same
-// place (bounding box to about 11 m) and the same size (area within 1%). Areas with the
-// same place but a different shape are kept. Returns the kept areas.
+// tiles. Keeps one area from each group of areas that have the same kind, the same
+// place (bounding box to about 11 m) and the same outer boundary (first ring, area within
+// 1%). Areas with the same place but a different shape are kept. Only the outer ring is
+// compared: a tile can drop a small hole that the neighbouring tile keeps, so the copy with
+// more rings is the one kept. Returns the kept areas.
 const DUP_BOX = 1000; // 1e-7 degree units: about 1.1 cm grid for the place key
 const DUP_AREA = 0.01;
 
@@ -227,25 +250,66 @@ function ringsArea(rings) {
 }
 
 export function dropSeamDuplicates(polygons) {
-  const seen = new Map(); // place key -> [areas already kept]
+  const seen = new Map(); // place key -> [{ area, index in kept }]
   const kept = [];
   for (const p of polygons) {
     let minA = Infinity, minB = Infinity, maxA = -Infinity, maxB = -Infinity;
-    for (const ring of p.rings) {
-      for (const [a, b] of ring) {
-        if (a < minA) minA = a;
-        if (a > maxA) maxA = a;
-        if (b < minB) minB = b;
-        if (b > maxB) maxB = b;
-      }
+    // The place is the outer ring's box: a copy with an extra part can have a larger box.
+    for (const [a, b] of p.rings[0] || []) {
+      if (a < minA) minA = a;
+      if (a > maxA) maxA = a;
+      if (b < minB) minB = b;
+      if (b > maxB) maxB = b;
     }
     const key = [p.kind, Math.round(minA / DUP_BOX), Math.round(minB / DUP_BOX), Math.round(maxA / DUP_BOX), Math.round(maxB / DUP_BOX)].join("|");
-    const area = ringsArea(p.rings);
+    const area = ringsArea(p.rings.slice(0, 1));
     const list = seen.get(key) || [];
-    if (list.some((a) => Math.abs(a - area) <= DUP_AREA * Math.max(area, 1))) continue;
-    list.push(area);
+    const hit = list.find((h) => Math.abs(h.area - area) <= DUP_AREA * Math.max(area, 1));
+    if (hit) {
+      // Same outer boundary: keep the copy with more rings (holes), as the other may have lost one.
+      if (p.rings.length > kept[hit.index].rings.length) kept[hit.index] = p;
+      continue;
+    }
+    list.push({ area, index: kept.length });
     seen.set(key, list);
     kept.push(p);
   }
   return kept;
+}
+
+// Road duplicates and loops left after the split. A road can come through twice when a tile
+// edge or two overlapping OSM ways cover the same stretch. Drops a road when another road
+// with the same class and flags has the same points in the same order (or reversed, if the
+// road is not one-way). Also drops two-point loops, which have no length. Renumbers the nodes
+// so that only junctions still used by a road remain. Takes and returns { nodes, edges }.
+const keyOf = (e) => `${e.roadClass}:${e.flags}`;
+const pointsKey = (pts) => pts.map(([a, b]) => `${a},${b}`).join(";");
+
+export function dropDuplicateEdges({ nodes, edges }) {
+  const seen = new Set();
+  const kept = [];
+  for (const e of edges) {
+    if (e.from === e.to && e.points.length < 3) continue; // two-point loop
+    const forward = `${e.from}>${e.to}|${keyOf(e)}|${pointsKey(e.points)}`;
+    if (seen.has(forward)) continue;
+    if (!(e.flags & 1)) {
+      const reversed = `${e.to}>${e.from}|${keyOf(e)}|${pointsKey([...e.points].reverse())}`;
+      if (seen.has(reversed)) continue;
+    }
+    seen.add(forward);
+    kept.push(e);
+  }
+
+  // Renumber nodes so that only the ones still used remain.
+  const newId = new Map();
+  const outNodes = [];
+  const idOf = (v) => {
+    if (!newId.has(v)) {
+      newId.set(v, outNodes.length);
+      outNodes.push(nodes[v]);
+    }
+    return newId.get(v);
+  };
+  const outEdges = kept.map((e) => ({ ...e, from: idOf(e.from), to: idOf(e.to) }));
+  return { nodes: outNodes, edges: outEdges };
 }

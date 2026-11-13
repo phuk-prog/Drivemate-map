@@ -27,7 +27,7 @@ Source: OpenStreetMap, read as OpenFreeMap's vector tiles (OpenMapTiles schema).
 
 Known limits of this first version:
 - Road topology is built from tile line ends snapped within about 2 m. Roads that cross in the middle, with no shared point, are joined at the crossing (`tools/graph.mjs`, `joinCrossings`). Bridges and tunnels are skipped, using the OSM `brunnel` tag only. Roads that cross at a different height without that tag (for example, `layer` tags) are still joined, so this can create false junctions. Run `node tools/test-graph.mjs` to check the rules.
-- Some very short loop roads (two points, same start and end) are kept from the builder. They are harmless for drawing and can be removed later.
+- Two-point loop roads (same start and end, two points) are dropped by the builder. Longer loops, such as roundabouts, are kept on purpose.
 - Turn restrictions are not stored yet.
-- Area features near tile seams can appear twice. This is harmless for drawing and costs some size.
+- Roads that cross a tile seam are kept once. Area features near a seam are kept once when their outer boundary matches. Areas that differ in shape at a seam are not checked, and can still appear twice.
 - Labels are stored in the file. The preview tool does not draw text; the app will draw labels.
