@@ -388,6 +388,19 @@ const repair = (edges) => {
   check("a point between two junction vertices joins the nearer one, so the road end is connected", r.edges.length === 4 && partnerNodes.has(endNode), JSON.stringify(r.edges.map((e) => [e.from, e.to])));
 }
 
+// 15. A road end just beyond another road's corner joins it. The end is 2.15 m from the corner (not
+//     shared, since that is over 2 m), and 1.0 m from the road's segment, whose nearest point is 1.9 m from the corner.
+{
+  const L = 534000000;
+  const O = -22000000;
+  const bar = { roadClass: 6, flags: 0, layer: 0, points: [[L, O], [L, O + 3000]] }; // its corner is at (L, O)
+  const endRoad = { roadClass: 6, flags: 0, layer: 0, points: [[L + 2000, O + 287], [L + 90, O + 287]] }; // ends 1 m north of the bar, 1.9 m along
+  const r = repair([bar, endRoad]);
+  // Output order: bar (2 pieces, cut at the joined point), then the end road.
+  const barNodes = new Set([r.edges[0].from, r.edges[0].to, r.edges[1].from, r.edges[1].to]);
+  check("a road end just beyond another road's corner is joined", r.ends === 1 && r.edges.length === 3 && barNodes.has(r.edges[2].to), `ends=${r.ends} edges=${r.edges.length}`);
+}
+
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed`);
   process.exit(1);

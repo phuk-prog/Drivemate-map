@@ -364,8 +364,6 @@ export function joinRoadEnds(edges) {
         const q = edges[te].points;
         const hit = nearestOnSegment(p, q[i], q[i + 1]);
         if (!nearPoint(hit.point, p)) continue; // the nearest point is more than SNAP_M from the end
-        // A point at a segment's end would be a junction already: the end is not joined there.
-        if (nearPoint(hit.point, q[i]) || nearPoint(hit.point, q[i + 1])) continue;
         // Roads at different layers pass over or under each other, so the end is not joined to them.
         if (layerOf(edges[te]) !== layerOf(e)) {
           otherLayer = true;
