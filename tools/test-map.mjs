@@ -10,7 +10,8 @@ import { readDmap, fromFixed7 } from "./dmap.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
-const MAX_BYTES = 100 * 1024 * 1024; // GitHub rejects files over 100 MB
+// Map files are release assets (limit 2 GB), never committed (repo limit 100 MB). Greater London alone is 173 MB.
+const MAX_BYTES = 1900 * 1024 * 1024;
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
