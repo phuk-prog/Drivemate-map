@@ -1,14 +1,15 @@
 // Adds new map regions and rebuilds regions whose source has changed.
 // Each run builds at most MAX_REGIONS_PER_RUN regions, so runs stay short.
 // A region is skipped when its index entry already matches the current source version.
+// Then grid squares: the fixed square areas, and the map growing outwards (regions.json "grow").
 // Usage: node tools/update-regions.mjs
 
 import { readFile, writeFile, copyFile, mkdir, stat } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sourceVersion, fetchTiles } from "./fetch-tiles.mjs";
 import { buildArea } from "./build-area.mjs";
-import { buildSquares } from "./build-squares.mjs";
+import { buildSquares, growSquares } from "./build-squares.mjs";
 import { prepareOsm } from "./osm-prepare.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,7 +22,13 @@ const TRUST_INDEX = process.env.TRUST_INDEX === "1";
 // Change this when the builder changes output, so existing regions are rebuilt.
 const BUILDER_VERSION = "graph-repair-5";
 
-const config = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
+// New squares one run may look at while growing outwards (see regions.json "grow"); squares with no roads count too.
+const MAX_SQUARES_CHECKED_PER_RUN = Number(process.env.MAX_SQUARES_CHECKED_PER_RUN ?? 400);
+// Every file this run builds, with the release it belongs in. Written to data/out/uploads.tsv for the workflow.
+const uploads = [];
+
+const configFile = join(ROOT, "regions.json");
+const config = JSON.parse(await readFile(configFile, "utf8"));
 const regions = Array.isArray(config) ? config : config.regions;
 const squareAreas = Array.isArray(config) ? [] : config.squareAreas ?? [];
 const indexFile = join(PUBLISHED, "index.json");
@@ -66,6 +73,7 @@ for (const region of regions) {
   await fetchTiles(region.bbox, region.zoom, { log: () => {} });
   await buildArea({ name: region.id, bbox: region.bbox, zoom: region.zoom, version, log: () => {} });
   await copyFile(join(ROOT, "data", "out", `${region.id}.dmap`), out);
+  uploads.push(["maps-latest", out]);
   index[region.id] = {
     version,
     builder,
@@ -88,6 +96,23 @@ for (const area of squareAreas) {
     continue;
   }
   const bbox = [area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3]];
-  const r = await buildSquares({ bbox, zoom: area.zoom, osm: area.osm ? area.id : undefined, maxBuild: squaresLeft, beforeBuild: area.osm ? () => prepareOsm({ geofabrik: area.osm.geofabrik, name: area.id, bbox: area.bbox }) : undefined, log: console.log });
+  const r = await buildSquares({ bbox, zoom: area.zoom, osm: area.osm ? area.id : undefined, maxBuild: squaresLeft, uploads, beforeBuild: area.osm ? () => prepareOsm({ geofabrik: area.osm.geofabrik, name: area.id, bbox: area.bbox }) : undefined, log: console.log });
   squaresLeft -= r.built;
 }
+
+// Growing outwards: the squares this run has left go to the nearest squares not published yet. How far it got
+// is kept in regions.json ("after"), which the workflow commits with the indexes.
+const grow = Array.isArray(config) ? null : config.grow;
+if (grow && grow.enabled !== false && squaresLeft > 0) {
+  const g = await growSquares({ grow, maxBuild: squaresLeft, maxCheck: MAX_SQUARES_CHECKED_PER_RUN, uploads, log: console.log });
+  if (g.after !== (grow.after ?? null)) {
+    grow.after = g.after;
+    await writeFile(configFile, JSON.stringify(config, null, 2) + "\n");
+  }
+} else if (grow) {
+  console.log(grow.enabled === false ? "growing: switched off in regions.json" : "growing: no squares left in this run");
+}
+
+await mkdir(join(ROOT, "data", "out"), { recursive: true });
+await writeFile(join(ROOT, "data", "out", "uploads.tsv"), uploads.map(([tag, file]) => `${tag}\t${relative(ROOT, file)}\n`).join(""));
+console.log(`files to publish: ${uploads.length}`);

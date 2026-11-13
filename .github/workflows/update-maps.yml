@@ -24,12 +24,33 @@ jobs:
         with:
           node-version: 22
 
-      - name: Build new and changed regions
+      # The OSM data for growing outwards (a whole Geofabrik extract, about 2 GB to download) is prepared once a
+      # week and kept between runs, instead of being downloaded four times a day.
+      - name: Week of the year, for the OSM data kept between runs
+        id: week
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore this week's OSM data
+        id: osm
+        uses: actions/cache/restore@v4
+        with:
+          path: data/osm-cache
+          key: osm-cache-${{ steps.week.outputs.week }}
+
+      - name: Build new and changed regions, and grow outwards
         env:
           MAX_REGIONS_PER_RUN: "2"
           MAX_SQUARES_PER_RUN: "100"
+          MAX_SQUARES_CHECKED_PER_RUN: "400"
           TRUST_INDEX: "1"
         run: node --max-old-space-size=8000 tools/update-regions.mjs
+
+      - name: Keep this week's OSM data for the next runs
+        if: steps.osm.outputs.cache-hit != 'true' && hashFiles('data/osm-cache/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/osm-cache
+          key: osm-cache-${{ steps.week.outputs.week }}
 
       - name: Test every published map file
         run: node --max-old-space-size=8000 tools/test-map.mjs
@@ -51,23 +72,37 @@ jobs:
           shopt -s nullglob   # no square built in this run: the loop does nothing, instead of failing on the literal pattern
           for f in data/published/squares/*.dmap; do gzip -9 -c "$f" > "$f.gz"; done
 
-      - name: Publish map files to the maps-latest release
+      - name: Publish map files to their releases
         if: steps.changes.outputs.changed == 'true' && github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Only files that exist are passed to gh, so no literal glob reaches it. Nothing found fails here, before any push.
-          shopt -s nullglob
-          files=(data/published/*.dmap data/published/squares/*.dmap data/published/squares/*.dmap.gz)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "::error::No map files found to upload. The index has not been pushed." >&2
-            exit 1
+          # data/out/uploads.tsv lists every file this run built and its release: maps-latest for regions and the
+          # fixed square areas, squares-<1 degree block> for squares the map grew into. Each .dmap goes with its .dmap.gz.
+          # A run that only passed over squares with no roads has nothing to upload, but still commits how far it got.
+          if [ ! -s data/out/uploads.tsv ]; then
+            echo "No new map files in this run."
+            exit 0
           fi
-          echo "Uploading ${#files[@]} file(s) to maps-latest"
-          gh release view maps-latest >/dev/null 2>&1 || \
-            gh release create maps-latest --title "Drivemate map regions (latest)" \
-              --notes "Automatically updated map regions. Each file replaces the previous version." --latest=false
-          gh release upload maps-latest "${files[@]}" --clobber
+          for tag in $(cut -f1 data/out/uploads.tsv | sort -u); do
+            files=()
+            while IFS=$'\t' read -r t f; do
+              [ "$t" = "$tag" ] || continue
+              files+=("$f")
+              if [ -f "$f.gz" ]; then files+=("$f.gz"); fi
+            done < data/out/uploads.tsv
+            if ! gh release view "$tag" >/dev/null 2>&1; then
+              if [ "$tag" = "maps-latest" ]; then
+                gh release create maps-latest --title "Drivemate map regions (latest)" \
+                  --notes "Automatically updated map regions. Each file replaces the previous version." --latest=false
+              else
+                gh release create "$tag" --title "Drivemate map squares ${tag#squares-}" \
+                  --notes "Map squares in this 1 degree block, added as the map grows outwards from Stockport. Each file replaces the previous version." --latest=false
+              fi
+            fi
+            echo "Uploading ${#files[@]} file(s) to $tag"
+            gh release upload "$tag" "${files[@]}" --clobber
+          done
 
       # Runs only after the upload above has succeeded. A failed build, test, compress or upload stops the
       # job before this step, so the index on the branch never names files the release does not have.

@@ -27,16 +27,6 @@
   ],
   "squareAreas": [
     {
-      "id": "stockport",
-      "bbox": [
-        -2.25,
-        53.34,
-        -2.07,
-        53.46
-      ],
-      "zoom": 14
-    },
-    {
       "id": "london",
       "bbox": [
         -0.55,
@@ -50,5 +40,16 @@
         "geofabrik": "greater-london"
       }
     }
-  ]
+  ],
+  "grow": {
+    "from": [
+      53.4,
+      -2.16
+    ],
+    "zoom": 14,
+    "osm": {
+      "geofabrik": "great-britain"
+    },
+    "after": null
+  }
 }
