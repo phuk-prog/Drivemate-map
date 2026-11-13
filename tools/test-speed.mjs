@@ -28,9 +28,11 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 }
 
 // 2. Matching. Coordinates are 1e-7 degree units; 100 units is about 1 m.
-const edge = (pts) => ({ from: 0, to: 1, roadClass: 3, flags: 0, points: pts });
-const east = edge([[0, -10000], [0, 0], [0, 10000]]); // runs along the way, west to east
-const west = edge([[0, 10000], [0, 0], [0, -10000]]); // runs against the way
+const edge = (pts, flags = 0) => ({ from: 0, to: 1, roadClass: 3, flags, points: pts });
+const east = edge([[0, -10000], [0, 0], [0, 10000]]); // two-way edge along the way, west to east
+const west = edge([[0, 10000], [0, 0], [0, -10000]]); // two-way edge against the way
+const eastOne = edge(east.points, 1); // one-way edges: travelled from start to end only
+const westOne = edge(west.points, 1);
 const way = (extra) => ({ way: 1, value: 50, unit: 0, direction: "both", oneway: 0, geom: [[0, -10000], [0, 10000]], ...extra });
 {
   let r = matchSpeedLimits([east], [way()]);
@@ -39,15 +41,19 @@ const way = (extra) => ({ way: 1, value: 50, unit: 0, direction: "both", oneway:
   check("plain limit applies to both directions, mph kept", r.speedLimits.length === 2 && r.speedLimits.every((s) => s.value === 30 && s.unit === 1) && r.stats.matchedMph === 2, JSON.stringify(r));
   const fwd = way({ direction: "forward", value: 40 });
   const back = way({ direction: "backward", value: 30 });
-  r = matchSpeedLimits([east, west], [fwd, back]);
-  check("forward and backward are chosen by direction", same(r.speedLimits, [{ edge: 0, value: 40, unit: 0 }, { edge: 1, value: 30, unit: 0 }]), JSON.stringify(r));
-  r = matchSpeedLimits([east, west], [way({ value: 50 }), fwd]);
+  r = matchSpeedLimits([eastOne, westOne], [fwd, back]);
+  check("forward and backward are chosen by direction (one-way edges)", same(r.speedLimits, [{ edge: 0, value: 40, unit: 0 }, { edge: 1, value: 30, unit: 0 }]), JSON.stringify(r));
+  r = matchSpeedLimits([eastOne, westOne], [way({ value: 50 }), fwd]);
   check("forward overrides plain along the way, plain applies against it", same(r.speedLimits, [{ edge: 0, value: 40, unit: 0 }, { edge: 1, value: 50, unit: 0 }]), JSON.stringify(r));
-  r = matchSpeedLimits([west], [fwd]);
+  r = matchSpeedLimits([westOne], [fwd]);
   check("only a forward limit: the opposite direction gets nothing", r.speedLimits.length === 0 && r.stats.noTagForDirection === 1, JSON.stringify(r.stats));
-  r = matchSpeedLimits([west], [way({ oneway: 1 })]);
+  r = matchSpeedLimits([east, west], [fwd, back]);
+  check("two-way edges whose directions differ get no limit", r.speedLimits.length === 0 && r.stats.directionsDiffer === 2, JSON.stringify(r));
+  r = matchSpeedLimits([east, west], [fwd, way({ direction: "backward", value: 40 })]);
+  check("two-way edges with equal limits both ways keep it", r.speedLimits.length === 2, JSON.stringify(r));
+  r = matchSpeedLimits([westOne], [way({ oneway: 1 })]);
   check("edge against a oneway way gets nothing", r.speedLimits.length === 0 && r.stats.oneWayAgainstWay === 1, JSON.stringify(r.stats));
-  r = matchSpeedLimits([east, west], [way({ oneway: -1 })]);
+  r = matchSpeedLimits([eastOne, westOne], [way({ oneway: -1 })]);
   check("oneway=-1 gives the limit to the edge that runs against the way geometry", same(r.speedLimits, [{ edge: 1, value: 50, unit: 0 }]), JSON.stringify(r));
   const far = way({ geom: [[2000, -10000], [2000, 10000]] });
   r = matchSpeedLimits([east], [far]);

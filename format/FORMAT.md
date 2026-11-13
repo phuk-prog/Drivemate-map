@@ -166,7 +166,8 @@ A u32 count, then that many records. Version 6 and earlier files have no speed l
 | u8   | value | the number shown on the sign, 1 to 255 |
 | u8   | unit  | 0 km/h, 1 mph |
 
-One limit per edge, in the direction the edge is travelled. The limit comes from the OpenStreetMap
+One limit per edge, for travel from the edge's first node to its last. A two-way edge whose two
+directions have different limits is not listed. The limit comes from the OpenStreetMap
 `maxspeed` tag (and `maxspeed:forward` / `maxspeed:backward` on two-way roads), matched to edges by
 location and direction at build time. Only plain numbers are stored (`50`, `30 mph`). Words such as
 `national`, `signals`, `none`, `walk` and `variable`, country defaults, lists and conditional limits

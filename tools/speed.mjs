@@ -7,7 +7,8 @@
 // and anything else we cannot read exactly are dropped. We never guess a default limit:
 // an edge with no limit simply shows none.
 //
-// Cache record (made by tools/osm-extract.mjs), one per maxspeed key on a way:
+// One limit per edge is stored, for travel from the edge's start to its end. A two-way edge whose two
+// directions do not have the same limit gets none. Cache record (made by tools/osm-extract.mjs), one per maxspeed key on a way:
 //   { way, value, unit, direction: "both"|"forward"|"backward", oneway: 0|1|-1, geom: [[lat, lon], ...] }
 // geom is a thinned copy of the way (at most a dozen points, always the first and last).
 // Coordinates are [lat, lon] in 1e-7 degree units, the same as the rest of the map.
@@ -103,7 +104,7 @@ export function matchSpeedLimits(edges, speedWays) {
   });
 
   const speedLimits = [];
-  const stats = { waysUsed: ways.length, matched: 0, matchedKmh: 0, matchedMph: 0, noWay: 0, oneWayAgainstWay: 0, noTagForDirection: 0, ambiguous: 0 };
+  const stats = { waysUsed: ways.length, matched: 0, matchedKmh: 0, matchedMph: 0, noWay: 0, oneWayAgainstWay: 0, noTagForDirection: 0, directionsDiffer: 0, ambiguous: 0 };
   edges.forEach((e, ei) => {
     const pts = e.points;
     const m = Math.floor(pts.length / 2);
@@ -158,6 +159,15 @@ export function matchSpeedLimits(edges, speedWays) {
       if (ways[bestWi].oneway !== 0 && limitFor({ ...ways[bestWi], oneway: 0 }, best.aligned)) stats.oneWayAgainstWay++;
       else stats.noTagForDirection++;
       return;
+    }
+    // One limit is stored per edge, for travel from the edge's start to its end. A two-way edge is also
+    // driven the other way, so it needs the same limit that way: otherwise we store none.
+    if ((e.flags & 1) === 0) {
+      const back = limitFor(ways[bestWi], !best.aligned);
+      if (!back || back.value !== limit.value || back.unit !== limit.unit) {
+        stats.directionsDiffer++;
+        return;
+      }
     }
     // Another way almost as close with a different limit: we cannot tell which road this is.
     const bestDist = Math.sqrt(bestD);
