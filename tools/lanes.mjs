@@ -186,52 +186,85 @@ export function matchLanes(edges, ways, opts = {}) {
     twoWayMatchedAmbiguous: 0,
     invalidLaneText: 0,
   };
-  edges.forEach((e, ei) => {
-    const pts = e.points;
-    const m = Math.floor(pts.length / 2);
-    const mid = pts[m];
-    // Direction of the edge at its middle.
-    const before = pts[Math.max(0, m - 1)];
-    const after = pts[Math.min(pts.length - 1, m + 1)];
-    // Longitude units are shorter than latitude units away from the equator: scale them so
-    // distances and angles are true.
-    const k = Math.cos((mid[0] * 1e-7 * Math.PI) / 180);
-    const dx = after[0] - before[0];
-    const dy = (after[1] - before[1]) * k;
-    const ci = Math.floor(mid[0] / CELL);
-    const cj = Math.floor(mid[1] / CELL);
-    const edgeOneway = e.flags === undefined ? true : (e.flags & 1) === 1;
+  const FRACTIONS = [0.2, 0.35, 0.5, 0.65, 0.8];
+  // Points along an edge at fractions of its length, each with the local direction.
+  const samplesOf = (pts) => {
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = cum[cum.length - 1];
+    const out = [];
+    for (const f of FRACTIONS) {
+      const target = total * f;
+      let i = 1;
+      while (i < pts.length - 1 && cum[i] < target) i++;
+      const a = pts[i - 1];
+      const b = pts[i];
+      const segLen = cum[i] - cum[i - 1];
+      const t = segLen === 0 ? 0 : Math.max(0, Math.min(1, (target - cum[i - 1]) / segLen));
+      out.push({ p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], d: [b[0] - a[0], b[1] - a[1]] });
+    }
+    return out;
+  };
 
-    // Best segment per way, scored by distance and angle together.
+  edges.forEach((e, ei) => {
+    const samples = samplesOf(e.points);
+    const edgeOneway = e.flags === undefined ? true : (e.flags & 1) === 1;
+    // Per way: how many sample points it fits, and the total score. A sample fits a way if the
+    // way is within 9 m, runs along the edge, and the oneway tag allows the direction.
     const perWay = new Map();
-    for (let di = -1; di <= 1; di++) {
-      for (let dj = -1; dj <= 1; dj++) {
-        for (const id of grid.get(`${ci + di},${cj + dj}`) || []) {
-          const wi = segWay[id];
-          const w = ways[wi];
-          const i = segStart[id];
-          const a = w.geom[i];
-          const b = w.geom[i + 1];
-          const d2 = distanceSquared([mid[0], mid[1] * k], [a[0], a[1] * k], [b[0], b[1] * k]);
-          if (d2 > MAX_DISTANCE * MAX_DISTANCE) continue;
-          const sx = b[0] - a[0];
-          const sy = (b[1] - a[1]) * k;
-          const denom = Math.hypot(dx, dy) * Math.hypot(sx, sy);
-          if (denom === 0) continue;
-          const cos = (dx * sx + dy * sy) / denom;
-          if (Math.abs(cos) < MIN_PARALLEL_COS) continue;
-          const aligned = cos > 0;
-          // Direction the oneway tag allows.
-          if (isOnewayYes(w.oneway) && !aligned) continue;
-          if (isOnewayMinus(w.oneway) && (aligned || !edgeOneway)) continue;
-          const dist = Math.sqrt(d2);
-          const score = dist + 400 * (1 - Math.abs(cos));
-          const prev = perWay.get(wi);
-          if (!prev || score < prev.score) perWay.set(wi, { wi, way: w, aligned, dist, cos, score });
+    for (const smp of samples) {
+      const mid = smp.p;
+      // Longitude units are shorter than latitude units away from the equator: scale them so
+      // distances and angles are true.
+      const k = Math.cos((mid[0] * 1e-7 * Math.PI) / 180);
+      const dx = smp.d[0];
+      const dy = smp.d[1] * k;
+      const ci = Math.floor(mid[0] / CELL);
+      const cj = Math.floor(mid[1] / CELL);
+      const bestHere = new Map();
+      for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+          for (const id of grid.get(`${ci + di},${cj + dj}`) || []) {
+            const wi = segWay[id];
+            const w = ways[wi];
+            const i = segStart[id];
+            const a = w.geom[i];
+            const b = w.geom[i + 1];
+            const d2 = distanceSquared([mid[0], mid[1] * k], [a[0], a[1] * k], [b[0], b[1] * k]);
+            if (d2 > MAX_DISTANCE * MAX_DISTANCE) continue;
+            const sx = b[0] - a[0];
+            const sy = (b[1] - a[1]) * k;
+            const denom = Math.hypot(dx, dy) * Math.hypot(sx, sy);
+            if (denom === 0) continue;
+            const cos = (dx * sx + dy * sy) / denom;
+            if (Math.abs(cos) < MIN_PARALLEL_COS) continue;
+            const aligned = cos > 0;
+            // Direction the oneway tag allows.
+            if (isOnewayYes(w.oneway) && !aligned) continue;
+            if (isOnewayMinus(w.oneway) && (aligned || !edgeOneway)) continue;
+            const dist = Math.sqrt(d2);
+            const score = dist + 400 * (1 - Math.abs(cos));
+            const prev = bestHere.get(wi);
+            if (!prev || score < prev.score) bestHere.set(wi, { dist, cos, score });
+          }
         }
       }
+      for (const [wi, c] of bestHere) {
+        const acc = perWay.get(wi) ?? { wi, way: ways[wi], hits: 0, score: 0, dist: 0, cos: 0 };
+        acc.hits++;
+        acc.score += c.score;
+        acc.dist += c.dist;
+        acc.cos += c.cos;
+        perWay.set(wi, acc);
+      }
     }
-    const cands = [...perWay.values()].sort((x, y) => x.score - y.score);
+    // A way must fit at least half of the sample points; more points fitted wins, then the
+    // lower average score.
+    const need = Math.ceil(samples.length / 2);
+    const cands = [...perWay.values()]
+      .filter((c) => c.hits >= need)
+      .map((c) => ({ ...c, score: c.score / c.hits, dist: c.dist / c.hits, cos: c.cos / c.hits, aligned: c.cos > 0 }))
+      .sort((x, y) => y.hits - x.hits || x.score - y.score);
 
     if (cands.length === 0) {
       stats.noWay++;
@@ -239,9 +272,9 @@ export function matchLanes(edges, ways, opts = {}) {
     }
     const best = cands[0];
     if (details) details[ei] = { way: best.wi, dist: best.dist, cos: best.cos, second: cands[1] ? { way: cands[1].wi, dist: cands[1].dist, cos: cands[1].cos } : null };
-    // Two candidate ways that both give a text but different ones, with nearly equal scores:
-    // we cannot tell which road this is, so leave it unmatched.
-    if (cands[1] && cands[1].score - best.score < 150) {
+    // Two candidate ways that fit equally well but give different texts: we cannot tell which
+    // road this is, so leave it unmatched.
+    if (cands[1] && cands[1].hits === best.hits && cands[1].score - best.score < 150) {
       const t0 = laneTextFor(best.way, best.aligned).text;
       const t1 = laneTextFor(cands[1].way, cands[1].aligned).text;
       if (t0 && t1 && t0 !== t1) {

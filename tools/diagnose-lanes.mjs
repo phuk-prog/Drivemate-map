@@ -172,6 +172,8 @@ for (const w of ways) {
   conv[ow][kind]++;
 }
 
+const owCount = {};
+for (const w of ways) owCount[w.oneway || "(none)"] = (owCount[w.oneway || "(none)"] || 0) + 1;
 const unmatchedWays = ways.length - usedAny.size;
 const pick = (arr, n) => arr.filter((_, i) => i % Math.max(1, Math.floor(arr.length / n)) === 0).slice(0, n);
 console.log(`lane ways: ${ways.length}; edges: ${edges.length}; version ${version}`);
@@ -181,6 +183,7 @@ console.log(`lane ways never the best match of an edge: ${ways.length - usedBest
 console.log(`edges matched to a way more than 9 m away: ${far9}; more than 5 m: ${far5}`);
 console.log(`edges at an oblique angle (over 20 degrees): ${oblique20}`);
 console.log(`edges with two candidate ways: ${withSecond}; of those nearly equally close: ${secondClose}`);
+console.log(`oneway values on lane ways: ${JSON.stringify(owCount)}`);
 console.log(`lane order on plain turn:lanes by oneway kind (leftFirst = turns listed left to right in the way's direction):`);
 console.log(JSON.stringify(conv));
 console.log(`\nsample suspicious cases (15):`);

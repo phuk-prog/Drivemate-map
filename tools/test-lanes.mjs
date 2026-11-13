@@ -97,6 +97,19 @@ const wayEast = {
   check("a clearly nearer way wins", r.lanes.length === 1 && r.lanes[0].text === "left|right", JSON.stringify(r));
 }
 
+// 3d2. Two consecutive ways meeting near the edge's middle: the one covering more of the edge wins;
+// a way covering less than half of the edge does not match.
+{
+  const e = [{ roadClass: 3, flags: 0, points: [[0, 0], [0, 20000]], from: 0, to: 1 }];
+  const A = { tags: { "turn:lanes": "left|right" }, oneway: "", geom: [[0, 0], [0, 12000]] };
+  const B = { tags: { "turn:lanes": "through|through" }, oneway: "", geom: [[0, 12000], [0, 30000]] };
+  let r = matchLanes(e, [A, B]);
+  check("consecutive ways: the one covering more of the edge wins", r.lanes.length === 1 && r.lanes[0].text === "left|right", JSON.stringify(r));
+  const tiny = { tags: { "turn:lanes": "left|right" }, oneway: "", geom: [[0, 9000], [0, 11000]] };
+  r = matchLanes(e, [tiny]);
+  check("a way covering under half the edge does not match", r.lanes.length === 0 && r.stats.noWay === 1, JSON.stringify(r.stats));
+}
+
 // 3e. Missing-direction stats: reversed edge on a two-way road with only :forward, and the opposite.
 {
   const g = [[0, -10000], [0, 10000]];
