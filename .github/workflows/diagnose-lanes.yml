@@ -40,3 +40,4 @@ jobs:
         run: |
           set -o pipefail
           node --max-old-space-size=8000 tools/diagnose-lanes.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14 | tee diagnose.txt
+# rerun after a transient Geofabrik error
