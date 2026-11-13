@@ -102,6 +102,53 @@ check("crossroads has a centre node", centre >= 0, `nodes=${JSON.stringify(nodes
   check("duplicate restriction is emitted once", r.matched.length === 2 && r.duplicates === 1, JSON.stringify(r.matched));
 }
 
+// 4c. A junction split into several nearby nodes (tile data does this): the roads meet on a node a few
+//     metres from the OSM via point, while the nearest node (within 3 m) holds only an unrelated road.
+{
+  const ns = [
+    { lat: 0, lon: 200 }, // 0: nearest to the via point, holds only a road going east
+    { lat: 0, lon: 900 }, // 1: where the south road ends and the west road starts (about 6 m east)
+    { lat: -10000, lon: 900 }, // 2
+    { lat: 0, lon: -10000 }, // 3
+    { lat: 0, lon: 10000 }, // 4
+  ];
+  const es = [
+    { from: 0, to: 4, roadClass: 6, flags: 0, points: [[0, 200], [0, 10000]] },
+    { from: 2, to: 1, roadClass: 6, flags: 0, points: [[-10000, 900], [0, 900]] },
+    { from: 1, to: 3, roadClass: 6, flags: 0, points: [[0, 900], [0, -10000]] },
+  ];
+  const record = { kind: RESTRICTION_NO, from: [[-10000, 0], [0, 0]], via: [0, 0], to: [[0, 0], [0, -10000]] };
+  const r = matchRestrictions(ns, es, [record]);
+  check("split junction: matched on the neighbouring node", r.matched.length === 1 && r.matched[0].via === 1 && r.matched[0].from === 1 && r.matched[0].to === 2, JSON.stringify(r));
+  // A second node that fits just as well makes the match unclear, so it stays unmatched.
+  const ns2 = ns.concat([{ lat: -10000, lon: -900 }, { lat: 0, lon: -900 }]);
+  const es2 = es.concat([
+    { from: 5, to: 6, roadClass: 6, flags: 0, points: [[-10000, -900], [0, -900]] },
+    { from: 6, to: 3, roadClass: 6, flags: 0, points: [[0, -900], [0, -10000]] },
+  ]);
+  const r2 = matchRestrictions(ns2, es2, [record]);
+  check("split junction: two equally good nodes stay unmatched", r2.matched.length === 0, JSON.stringify(r2.matched));
+  // A neighbouring node whose roads point the wrong way is never used.
+  const es3 = [es[0], { from: 2, to: 1, roadClass: 6, flags: 0, points: [[-10000, 900], [0, 900]] }, { from: 1, to: 4, roadClass: 6, flags: 0, points: [[0, 900], [0, 10000]] }];
+  const r3 = matchRestrictions(ns, es3, [record]);
+  check("split junction: wrong-direction roads are not matched", r3.matched.length === 0, JSON.stringify(r3.matched));
+}
+
+// 4d. Longitude is scaled by cos(latitude): a road 50 degrees off on the ground is not 60+ in raw units.
+{
+  // At London's latitude a degree of longitude is about 0.62 of a degree of latitude on the ground.
+  const lat0 = 515000000;
+  const ns = [{ lat: lat0, lon: 0 }, { lat: lat0 - 10000, lon: 0 }, { lat: lat0 + 7000, lon: 14000 }];
+  const es = [
+    { from: 1, to: 0, roadClass: 6, flags: 0, points: [[lat0 - 10000, 0], [lat0, 0]] },
+    { from: 0, to: 2, roadClass: 6, flags: 0, points: [[lat0, 0], [lat0 + 7000, 14000]] },
+  ];
+  // The OSM way leaves due north. The road leaves at 63 degrees in raw units but only 51 degrees on the ground.
+  const record = { kind: RESTRICTION_NO, from: [[lat0 - 10000, 0], [lat0, 0]], via: [lat0, 0], to: [[lat0, 0], [lat0 + 10000, 0]] };
+  const r = matchRestrictions(ns, es, [record]);
+  check("angles use true ground distance", r.matched.length === 1, JSON.stringify(r));
+}
+
 // 5. Overpass parsing: simple restrictions are kept, others are skipped.
 {
   const json = {
