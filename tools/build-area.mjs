@@ -117,7 +117,8 @@ function centroidPoint(parts) {
   return [sx / ring.length, sy / ring.length];
 }
 
-export async function buildArea({ name, bbox, zoom, version, log = console.log }) {
+// osmName: which data/osm-cache/*/<osmName>.json to read (a grid square uses its region's caches).
+export async function buildArea({ name, bbox, zoom, version, osmName = name, log = console.log }) {
   const cacheRoot = join(ROOT, "data", "cache", version);
   const tiles = tilesForBbox(bbox, zoom);
   const nodes = new NodeIndex();
@@ -276,9 +277,9 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   // Turn restrictions: from the cache made by tools/fetch-restrictions.mjs. None if there is no cache.
   let restrictionRecords = [];
   try {
-    restrictionRecords = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "restrictions", `${name}.json`), "utf8"));
+    restrictionRecords = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "restrictions", `${osmName}.json`), "utf8"));
   } catch {
-    log(`no restriction cache for ${name}; run tools/fetch-restrictions.mjs to add turn restrictions`);
+    log(`no restriction cache for ${osmName}; run tools/fetch-restrictions.mjs to add turn restrictions`);
   }
   const restrictions = matchRestrictions(repaired.nodes, repaired.edges, restrictionRecords);
   // Drop seam duplicates: the same area from two neighbouring tiles.
@@ -286,17 +287,17 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   // Lane guidance: from the cache made by tools/fetch-lanes.mjs. None if there is no cache.
   let laneWays = [];
   try {
-    laneWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "lanes", `${name}.json`), "utf8"));
+    laneWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "lanes", `${osmName}.json`), "utf8"));
   } catch {
-    log(`no lane cache for ${name}; run tools/fetch-lanes.mjs to add lane guidance`);
+    log(`no lane cache for ${osmName}; run tools/fetch-lanes.mjs to add lane guidance`);
   }
   const laneMatch = matchLanes(repaired.edges, laneWays);
   // Road warnings (speed cameras, level crossings, roadworks): from tools/osm-extract.mjs. None if there is no cache.
   let warnings = [];
   try {
-    warnings = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "warnings", `${name}.json`), "utf8"));
+    warnings = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "warnings", `${osmName}.json`), "utf8"));
   } catch {
-    log(`no warnings cache for ${name}; run tools/osm-extract.mjs to add road warnings`);
+    log(`no warnings cache for ${osmName}; run tools/osm-extract.mjs to add road warnings`);
   }
   const bytes = writeDmap({
     bbox: bboxFixed,

@@ -49,8 +49,16 @@ for (const file of files) {
   console.log(`${id}: ok (${size} bytes, ${map.nodes.length} nodes, ${map.edges.length} roads, ${map.polygons.length} areas, ${map.labels.length} labels)`);
 }
 
-for (const id of Object.keys(index)) {
-  if (!files.includes(`${id}.dmap`)) fail(`${id}: in index but file is missing`);
+// Map files are published to the maps-latest release, not committed, so a fresh checkout has none
+// of the files an earlier run built. An index entry that points at a release URL is fine without
+// a local file. An entry with no URL and no file is a real fault.
+for (const [id, entry] of Object.entries(index)) {
+  if (files.includes(`${id}.dmap`)) continue;
+  if (entry && typeof entry.url === "string" && entry.url.endsWith(`/${id}.dmap`)) {
+    console.log(`${id}: in index, file is a release asset (not checked here)`);
+  } else {
+    fail(`${id}: in index but file is missing and the entry has no release url`);
+  }
 }
 
 if (failures.length) {

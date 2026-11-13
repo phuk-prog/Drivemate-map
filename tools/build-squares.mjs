@@ -15,7 +15,10 @@ export const SQUARES_DIR = join(ROOT, "data", "published", "squares");
 const BUILDER_VERSION = "graph-repair-2";
 
 // Builds every square touching a bounding box given in lon-first order (as build-area uses).
-export async function buildSquares({ bbox, zoom, log = console.log }) {
+// osm: name of the OSM caches to use for every square (see build-area osmName); builderTag is added to the
+// builder version so squares are rebuilt when OSM data is switched on.
+export async function buildSquares({ bbox, zoom, osm, beforeBuild, log = console.log }) {
+  const builder = osm ? `${BUILDER_VERSION}+osm1` : BUILDER_VERSION;
   const [minLon, minLat, maxLon, maxLat] = bbox;
   await mkdir(SQUARES_DIR, { recursive: true });
   const indexFile = join(SQUARES_DIR, "index.json");
@@ -29,6 +32,7 @@ export async function buildSquares({ bbox, zoom, log = console.log }) {
   const squares = squaresTouching([minLat, minLon, maxLat, maxLon]);
   let version = null;
   let built = 0;
+  let prepared = false;
   for (const sq of squares) {
     const id = squareId(sq);
     const [sMinLat, sMinLon, sMaxLat, sMaxLon] = squareBbox(sq);
@@ -37,10 +41,14 @@ export async function buildSquares({ bbox, zoom, log = console.log }) {
     version = fetched.version;
     const out = join(SQUARES_DIR, `${id}.dmap`);
     const exists = await stat(out).then(() => true, () => false);
-    if (index[id] && index[id].version === version && index[id].builder === BUILDER_VERSION && exists) continue;
-    await buildArea({ name: id, bbox: sqBbox, zoom, version, log: () => {} });
+    if (index[id] && index[id].version === version && index[id].builder === builder && exists) continue;
+    if (beforeBuild && built === 0 && !prepared) {
+      prepared = true;
+      await beforeBuild();
+    }
+    await buildArea({ name: id, bbox: sqBbox, zoom, version, osmName: osm || id, log: () => {} });
     await copyFile(join(ROOT, "data", "out", `${id}.dmap`), out);
-    index[id] = { version, builder: BUILDER_VERSION, zoom, bbox: sqBbox, bytes: (await stat(out)).size, builtAt: new Date().toISOString() };
+    index[id] = { version, builder, zoom, bbox: sqBbox, bytes: (await stat(out)).size, builtAt: new Date().toISOString() };
     built++;
   }
   await writeFile(indexFile, JSON.stringify(index, null, 2) + "\n");

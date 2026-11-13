@@ -9,6 +9,20 @@
         53.46
       ],
       "zoom": 14
+    },
+    {
+      "id": "london",
+      "bbox": [
+        -0.55,
+        51.28,
+        0.3,
+        51.7
+      ],
+      "zoom": 14,
+      "enabled": false,
+      "osm": {
+        "geofabrik": "greater-london"
+      }
     }
   ],
   "squareAreas": [
@@ -21,6 +35,20 @@
         53.46
       ],
       "zoom": 14
+    },
+    {
+      "id": "london",
+      "bbox": [
+        -0.55,
+        51.28,
+        0.3,
+        51.7
+      ],
+      "zoom": 14,
+      "enabled": false,
+      "osm": {
+        "geofabrik": "greater-london"
+      }
     }
   ]
 }
