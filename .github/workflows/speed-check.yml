@@ -1,0 +1,71 @@
+name: Speed limit check
+
+# Downloads the Greater London OpenStreetMap extract, reads maxspeed tags, rebuilds the London map
+# and prints how many road edges got a speed limit. Runs only when this file changes, or on demand.
+# Does not publish anything.
+
+on:
+  push:
+    paths: ['.github/workflows/speed-check.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  speed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run the offline checks
+        run: |
+          node tools/test-graph.mjs
+          node tools/test-restrictions.mjs
+          node tools/test-lanes.mjs
+          node tools/test-osm-extract.mjs
+          node tools/test-speed.mjs
+
+      - name: Download the Greater London extract
+        run: |
+          URL=$(node tools/geofabrik-url.mjs greater-london)
+          echo "extract: $URL"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 10 -o london.osm.pbf "$URL"
+          ls -l london.osm.pbf
+
+      - name: Extract
+        shell: bash
+        run: |
+          set -o pipefail
+          node --max-old-space-size=6000 tools/osm-extract.mjs --pbf=london.osm.pbf --name=london --bbox=-0.55,51.28,0.30,51.70 | tee extract-summary.txt
+          ls -l data/osm-cache/speed
+
+      - name: Fetch the map tiles
+        run: node tools/fetch-tiles.mjs --bbox=-0.55,51.28,0.30,51.70 --zoom=14
+
+      - name: Build London
+        shell: bash
+        run: |
+          set -o pipefail
+          node --max-old-space-size=8000 tools/build-area.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14 | tee build-report.txt
+
+      - name: Speed limit counts
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { readDmap } from "./tools/dmap.mjs";
+            const m = readDmap(readFileSync("data/out/london.dmap"));
+            const ways = JSON.parse(readFileSync("data/osm-cache/speed/london.json", "utf8"));
+            const unit = [0, 0];
+            const values = {};
+            for (const s of m.speedLimits) { unit[s.unit]++; const k = s.value + (s.unit ? "mph" : "kmh"); values[k] = (values[k] || 0) + 1; }
+            const byDir = {};
+            for (const w of ways) byDir[w.direction] = (byDir[w.direction] || 0) + 1;
+            console.log(JSON.stringify({ speedWayRecords: ways.length, byDirection: byDir, edges: m.edges.length, edgesWithLimit: m.speedLimits.length, edgesWithoutLimit: m.edges.length - m.speedLimits.length, kmh: unit[0], mph: unit[1], values }, null, 2));
+          '
+          grep -A12 speedStats build-report.txt || true
