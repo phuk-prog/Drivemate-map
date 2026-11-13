@@ -34,20 +34,17 @@ jobs:
       - name: Test every published map file
         run: node --max-old-space-size=8000 tools/test-map.mjs
 
-      - name: Commit index only if something changed
-        id: commit
+      # The index is staged here but not committed or pushed until the release upload has succeeded.
+      - name: Check whether the index changed
+        id: changes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/published/index.json data/published/squares/index.json regions.json
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No new or changed map data. Nothing to publish."
-            exit 0
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          git commit -m "Update map index ($(date -u +%Y-%m-%dT%H:%MZ))"
-          git push origin HEAD:${GITHUB_REF_NAME}
-          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Compress square files for faster phone downloads
         run: |
@@ -55,11 +52,29 @@ jobs:
           for f in data/published/squares/*.dmap; do gzip -9 -c "$f" > "$f.gz"; done
 
       - name: Publish map files to the maps-latest release
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Only files that exist are passed to gh, so no literal glob reaches it. Nothing found fails here, before any push.
+          shopt -s nullglob
+          files=(data/published/*.dmap data/published/squares/*.dmap data/published/squares/*.dmap.gz)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No map files found to upload. The index has not been pushed." >&2
+            exit 1
+          fi
+          echo "Uploading ${#files[@]} file(s) to maps-latest"
           gh release view maps-latest >/dev/null 2>&1 || \
             gh release create maps-latest --title "Drivemate map regions (latest)" \
               --notes "Automatically updated map regions. Each file replaces the previous version." --latest=false
-          gh release upload maps-latest data/published/*.dmap data/published/squares/*.dmap data/published/squares/*.dmap.gz --clobber
+          gh release upload maps-latest "${files[@]}" --clobber
+
+      # Runs only after the upload above has succeeded. A failed build, test, compress or upload stops the
+      # job before this step, so the index on the branch never names files the release does not have.
+      - name: Commit index and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update map index ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git push origin HEAD:${GITHUB_REF_NAME}
