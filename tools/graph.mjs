@@ -110,8 +110,10 @@ export function splitAtSharedVertices(edges) {
 // Crossings: finds where two at-grade roads cross in the middle of a line, with no
 // shared point, and inserts the crossing point into both roads. splitAtSharedVertices
 // then makes it a junction. Bridges and tunnels are skipped, since they pass over or
-// under other roads without meeting them. Returns { edges, joins } where joins is the
-// number of crossings found.
+// under other roads without meeting them. Roads with different OSM layer values (edge.layer,
+// missing means 0) are skipped too: the layer tag says one passes above the other. Returns
+// { edges, joins, layerSkipped } where joins is the number of crossings joined and
+// layerSkipped the number of crossings left apart because the layers differ.
 const CELL = 20000; // grid cell in 1e-7 degree units: about 220 m
 const BRIDGE_OR_TUNNEL = 2 | 4;
 
@@ -136,6 +138,9 @@ function segmentCrossing(p, q, r, s) {
 function nearPoint(a, b) {
   return near(a[0], a[1], b[0], b[1]);
 }
+
+// OSM layer of a road: 0 when the tile does not carry one.
+const layerOf = (e) => e.layer ?? 0;
 
 export function joinCrossings(edges) {
   // Index every at-grade segment by the grid cells its bounding box covers.
@@ -173,6 +178,7 @@ export function joinCrossings(edges) {
   // where their boxes first overlap, so no pair is tested twice and no set is needed.
   const inserts = edges.map(() => []); // per edge: { seg, t, point }
   let joins = 0;
+  let layerSkipped = 0;
   for (const cell of grid.values()) {
     const ids = cell.ids;
     for (let x = 0; x < ids.length; x++) {
@@ -190,15 +196,22 @@ export function joinCrossings(edges) {
         const r = edges[e2].points;
         const hit = segmentCrossing(p[i1], p[i1 + 1], r[i2], r[i2 + 1]);
         if (!hit) continue;
-        joins++;
         // A crossing right at a road end is already a shared point (or a near miss
         // that the vertex index merges), so no point is added at that end.
-        if (!nearPoint(hit.point, p[i1]) && !nearPoint(hit.point, p[i1 + 1])) {
-          inserts[e1].push({ seg: i1, t: hit.t, point: hit.point });
+        const addTo1 = !nearPoint(hit.point, p[i1]) && !nearPoint(hit.point, p[i1 + 1]);
+        const addTo2 = !nearPoint(hit.point, r[i2]) && !nearPoint(hit.point, r[i2 + 1]);
+        if (!addTo1 && !addTo2) {
+          joins++; // already a shared point: nothing to insert
+          continue;
         }
-        if (!nearPoint(hit.point, r[i2]) && !nearPoint(hit.point, r[i2 + 1])) {
-          inserts[e2].push({ seg: i2, t: hit.u, point: hit.point });
+        // Roads at different layers pass over or under each other, so no junction is made.
+        if (layerOf(edges[e1]) !== layerOf(edges[e2])) {
+          layerSkipped++;
+          continue;
         }
+        joins++;
+        if (addTo1) inserts[e1].push({ seg: i1, t: hit.t, point: hit.point });
+        if (addTo2) inserts[e2].push({ seg: i2, t: hit.u, point: hit.point });
       }
     }
   }
@@ -223,7 +236,7 @@ export function joinCrossings(edges) {
     }
     return { ...e, points: pts };
   });
-  return { edges: out, joins };
+  return { edges: out, joins, layerSkipped };
 }
 
 // Seam duplicates: a tile edge can give the same area twice, from two neighbouring

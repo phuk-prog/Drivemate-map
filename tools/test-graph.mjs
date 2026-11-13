@@ -1,5 +1,5 @@
 // Tests the road graph repair: roads that cross in the middle become junctions,
-// while parallel roads, bridges and tunnels do not. Exits with code 1 on any failure.
+// while parallel roads, bridges, tunnels and roads at different OSM layers do not. Exits with code 1 on any failure.
 // Usage: node tools/test-graph.mjs
 
 import { joinCrossings, splitAtSharedVertices, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
@@ -294,6 +294,28 @@ const repair = (edges) => {
     road([[L - 2000, O + 750], [L + 2000, O + 750]]),
   ]);
   check("parallel roads 5 m apart (east-west) stay separate", parallelEW.nodes.length === 4 && parallelEW.edges.length === 2, `nodes=${parallelEW.nodes.length} edges=${parallelEW.edges.length}`);
+}
+
+// 9. OSM layers: roads at different layers pass over or under each other, so they are not joined.
+{
+  const layered = (points, layer) => ({ roadClass: 6, flags: 0, points, layer });
+  const plus = (layerA, layerB) =>
+    joinCrossings([
+      layered([[0, -10000], [0, 10000]], layerA),
+      layered([[-10000, 0], [10000, 0]], layerB),
+    ]);
+  const apart = plus(0, 1);
+  check("crossing roads at layers 0 and 1 are not joined", apart.joins === 0 && apart.layerSkipped === 1 && apart.edges.every((e) => e.points.length === 2), `joins=${apart.joins} skipped=${apart.layerSkipped}`);
+  const sameLayer = plus(1, 1);
+  check("crossing roads at the same layer are still joined", sameLayer.joins === 1 && sameLayer.layerSkipped === 0 && sameLayer.edges[0].points.length === 3, `joins=${sameLayer.joins} skipped=${sameLayer.layerSkipped}`);
+  const missingTag = joinCrossings([road([[0, -10000], [0, 10000]]), layered([[-10000, 0], [10000, 0]], 0)]);
+  check("a road with no layer tag counts as layer 0 and is joined", missingTag.joins === 1 && missingTag.layerSkipped === 0, `joins=${missingTag.joins} skipped=${missingTag.layerSkipped}`);
+  // A road end that lands mid-line on another road is a junction only when both are at the same layer.
+  const endOnLine = joinCrossings([
+    layered([[0, -10000], [0, 0]], -1),
+    layered([[-10000, 0], [10000, 0]], 0),
+  ]);
+  check("road end touching a road at another layer is not joined", endOnLine.joins === 0 && endOnLine.layerSkipped === 1, `joins=${endOnLine.joins} skipped=${endOnLine.layerSkipped}`);
 }
 
 if (failures.length) {

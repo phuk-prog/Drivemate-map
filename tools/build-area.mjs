@@ -213,7 +213,9 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
               dropped++;
               continue;
             }
-            edges.push({ from, to, roadClass, flags, points });
+            // OSM layer: roads at different layers are not joined where they cross (tools/graph.mjs).
+            const layer = Number(f.tags.layer) || 0;
+            edges.push({ from, to, roadClass, flags, points, layer });
             counts.edges[f.tags.class] = (counts.edges[f.tags.class] || 0) + 1;
           }
         }
@@ -378,6 +380,7 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     nodes: repaired.nodes.length,
     routableEdges: repaired.edges.length,
     crossingsFound: crossed.joins,
+    crossingsLayerSkipped: crossed.layerSkipped,
     restrictionsFetched: restrictionRecords.length,
     restrictionsMatched: restrictions.matched.length,
     restrictionsUnmatched: restrictions.unmatched,
