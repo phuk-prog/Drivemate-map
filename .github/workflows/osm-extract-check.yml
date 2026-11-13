@@ -1,0 +1,62 @@
+name: OSM extract check
+
+# Downloads the Greater London OpenStreetMap extract, reads turn restrictions and lane tags
+# from it with our own reader, rebuilds the London map with them, and reports how many were
+# matched to roads. Runs on pushes to the development branch and on demand.
+# Uploads the summary and the build report (not the map file). Does not publish anything.
+
+on:
+  push:
+    branches: [ccr-8fafbdec-2zz0bp]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run the offline checks
+        run: |
+          node tools/test-graph.mjs
+          node tools/test-restrictions.mjs
+          node tools/test-lanes.mjs
+          node tools/test-osm-extract.mjs
+
+      - name: Download the Greater London extract
+        run: |
+          curl -fL --retry 5 --retry-delay 10 -o london.osm.pbf https://download.geofabrik.de/europe/great-britain/england/greater-london-latest.osm.pbf
+          ls -l london.osm.pbf
+
+      - name: Extract restrictions and lane tags
+        shell: bash
+        run: |
+          set -o pipefail
+          node --max-old-space-size=6000 tools/osm-extract.mjs --pbf=london.osm.pbf --name=london --bbox=-0.55,51.28,0.30,51.70 | tee extract-summary.txt
+
+      - name: Fetch the map tiles
+        run: node tools/fetch-tiles.mjs --bbox=-0.55,51.28,0.30,51.70 --zoom=14
+
+      - name: Build London with restrictions and lanes
+        shell: bash
+        run: |
+          set -o pipefail
+          node --max-old-space-size=8000 tools/build-area.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14 | tee build-report.txt
+
+      - name: Save the summary and the build report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: osm-extract-london
+          path: |
+            extract-summary.txt
+            build-report.txt
+          if-no-files-found: warn
