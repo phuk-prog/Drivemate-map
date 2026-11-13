@@ -25,13 +25,19 @@ export async function fetchRestrictionJson(bbox) {
   const query = overpassQuery(bbox);
   let lastError = null;
   for (const url of ENDPOINTS) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 4; attempt++) {
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({ data: query }),
         });
+        if (res.status === 429) {
+          // Overpass is busy. Wait longer before trying again.
+          lastError = new Error(`HTTP 429 from ${url}`);
+          await new Promise((r) => setTimeout(r, 60000 * attempt));
+          continue;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
         return await res.json();
       } catch (err) {

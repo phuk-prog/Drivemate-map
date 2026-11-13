@@ -24,7 +24,10 @@ jobs:
           node-version: 22
 
       - name: Run the fetch for Greater London
-        run: node --max-old-space-size=6000 tools/fetch-restrictions.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 | tee fetch-summary.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          node --max-old-space-size=6000 tools/fetch-restrictions.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 | tee fetch-summary.txt
 
       - name: Save the summary and the parsed file
         if: always()
