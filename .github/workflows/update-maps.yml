@@ -51,6 +51,7 @@ jobs:
 
       - name: Compress square files for faster phone downloads
         run: |
+          shopt -s nullglob   # no square built in this run: the loop does nothing, instead of failing on the literal pattern
           for f in data/published/squares/*.dmap; do gzip -9 -c "$f" > "$f.gz"; done
 
       - name: Publish map files to the maps-latest release
