@@ -78,6 +78,18 @@ class VertexIndex {
   }
 }
 
+// Removes consecutive repeated points from a piece of road, keeping its first and last point.
+// Tile data can repeat a vertex, which gives a zero-length step the router does not need.
+function dropRepeats(points) {
+  const out = [];
+  for (const p of points) {
+    const last = out[out.length - 1];
+    if (last && last[0] === p[0] && last[1] === p[1]) continue;
+    out.push(p);
+  }
+  return out.length < 2 ? [points[0], points[points.length - 1]] : out;
+}
+
 // edges: [{ roadClass, flags, points: [[lat, lon], ...] }] in fixed-point units.
 // Returns { nodes, edges } where each edge runs between two junction nodes.
 export function splitAtSharedVertices(edges) {
@@ -115,7 +127,7 @@ export function splitAtSharedVertices(edges) {
         to: ids[b],
         roadClass: e.roadClass,
         flags: e.flags,
-        points,
+        points: dropRepeats(points),
       });
     }
   });

@@ -401,6 +401,13 @@ const repair = (edges) => {
   check("a road end just beyond another road's corner is joined", r.ends === 1 && r.edges.length === 3 && barNodes.has(r.edges[2].to), `ends=${r.ends} edges=${r.edges.length}`);
 }
 
+// 16. Tile data can repeat a vertex. The repaired roads have no repeated consecutive points, and their ends stay on their nodes.
+{
+  const r = repair([road([[0, 0], [0, 0], [0, 5000], [0, 5000], [0, 10000]])]);
+  const repeats = r.edges.reduce((n, e) => n + e.points.reduce((k, p, i) => k + (i > 0 && p[0] === e.points[i - 1][0] && p[1] === e.points[i - 1][1] ? 1 : 0), 0), 0);
+  check("repeated vertices are dropped from the repaired roads", repeats === 0 && r.edges.length === 1 && r.edges[0].points.length === 3, `repeats=${repeats} points=${JSON.stringify(r.edges.map((e) => e.points))}`);
+}
+
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed`);
   process.exit(1);
