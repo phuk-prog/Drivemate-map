@@ -3,6 +3,7 @@
 // Usage: node tools/test-graph.mjs
 
 import { joinCrossings, splitAtSharedVertices, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
+import { ownedRuns } from "./build-area.mjs";
 
 const failures = [];
 const check = (name, ok, detail = "") => {
@@ -143,6 +144,90 @@ const repair = (edges) => {
   const round = nodesOf([road(ring)]);
   check("roundabout loop is kept", dropDuplicateEdges(round).edges.length === 1);
   check("base road is untouched", dropDuplicateEdges(base).edges.length === 1 && dropDuplicateEdges(base).nodes.length === 2);
+}
+
+// 10. Tile ownership: a road that crosses a tile edge is cut there and kept by one tile only.
+//     Coordinates are tile units (extent 4096). The right-hand tile sees the same road shifted by 4096.
+{
+  const EXT = 4096;
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  const left = ownedRuns([[4000, 100], [4200, 100]], EXT);
+  const right = ownedRuns([[4000 - EXT, 100], [4200 - EXT, 100]], EXT);
+  check("road crossing a tile edge is kept by the left tile up to the edge", left.length === 1 && near(left[0][1][0], EXT) && near(left[0][1][1], 100), JSON.stringify(left));
+  check("the right tile keeps the rest from the edge on", right.length === 1 && near(right[0][0][0], 0) && near(right[0][1][0], 4200 - EXT), JSON.stringify(right));
+
+  // A road that only grazes the tile's corner region: both ends outside, the middle inside.
+  const corner = ownedRuns([[-100, 200], [200, -100]], EXT);
+  check("road through a tile corner (both ends outside) is kept", corner.length === 1 && corner[0].length === 2 && near(corner[0][0][0], 0) && near(corner[0][0][1], 100) && near(corner[0][1][0], 100) && near(corner[0][1][1], 0), JSON.stringify(corner));
+
+  // A line lying exactly on the far edge belongs to the tile on its near side only.
+  const farEdge = ownedRuns([[EXT, 0], [EXT, 500]], EXT);
+  const nearEdge = ownedRuns([[0, 0], [0, 500]], EXT);
+  check("line on the far edge is not kept by this tile", farEdge.length === 0, JSON.stringify(farEdge));
+  check("line on the near edge is kept by this tile", nearEdge.length === 1 && nearEdge[0].length === 2);
+
+  // A multi-point road crossing the edge keeps its inner points in order.
+  const bent = ownedRuns([[4000, 0], [4050, 0], [4200, 0], [4300, 0]], EXT);
+  check("bent road keeps its inner points up to the edge", bent.length === 1 && bent[0].length === 3 && near(bent[0][2][0], EXT), JSON.stringify(bent));
+
+  // Random roads across two neighbouring tiles: each stretch is kept once, and together they
+  // cover the road inside both tiles (sampled length check, 1% tolerance).
+  let seed = 12345;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; // Park-Miller, exact in doubles
+  const lengthOf = (runs) => runs.reduce((s, r) => s + r.reduce((t, p, i) => (i ? t + Math.hypot(p[0] - r[i - 1][0], p[1] - r[i - 1][1]) : 0), 0), 0);
+  let worst = 0;
+  let duplicated = 0;
+  for (let k = 0; k < 300; k++) {
+    const n = 2 + Math.floor(rnd() * 5);
+    const pts = [];
+    for (let i = 0; i < n; i++) pts.push([-1000 + rnd() * (2 * EXT + 2000), -1000 + rnd() * (EXT + 2000)]);
+    // Tile A is [0, EXT] x [0, EXT]; tile B is the box shifted right by EXT.
+    const inBox = (p, x0) => p[0] >= x0 && p[0] <= x0 + EXT && p[1] >= 0 && p[1] <= EXT;
+    const a = ownedRuns(pts, EXT);
+    const b = ownedRuns(pts.map(([x, y]) => [x - EXT, y]), EXT).map((r) => r.map(([x, y]) => [x + EXT, y]));
+    // Sampled length of the road inside the union of both boxes (fine steps).
+    let want = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [p, q] = [pts[i - 1], pts[i]];
+      const steps = 2000;
+      const L = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      for (let s = 0; s < steps; s++) {
+        const t = (s + 0.5) / steps;
+        const m = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+        if (inBox(m, 0) || inBox(m, EXT)) want += L / steps;
+      }
+    }
+    const got = lengthOf(a) + lengthOf(b);
+    if (want > 0) worst = Math.max(worst, Math.abs(got - want) / want);
+    // A stretch counted twice would make got exceed want.
+    if (got > want * 1.01 + 1) duplicated++;
+  }
+  check("random roads across a tile edge: every stretch kept once", duplicated === 0, `duplicated=${duplicated}`);
+  check("random roads across a tile edge: covered length within 1%", worst <= 0.01, `worst=${(worst * 100).toFixed(2)}%`);
+}
+
+// 11. Seam duplicates with the same outer boundary but a different set of holes: one is kept,
+//     the copy with more rings.
+{
+  const square = (x0, y0, s) => [[x0, y0], [x0 + s, y0], [x0 + s, y0 + s], [x0, y0 + s]];
+  const hole = [[10000, 10000], [20000, 10000], [20000, 20000], [10000, 20000]];
+  const polys = [
+    { kind: 4, rings: [square(0, 0, 100000)] },
+    { kind: 4, rings: [square(0, 0, 100000), hole] },
+  ];
+  const kept = dropSeamDuplicates(polys);
+  check("same outer boundary is kept once", kept.length === 1, `kept=${kept.length}`);
+  check("the copy with the hole is the one kept", kept.length === 1 && kept[0].rings.length === 2, `rings=${kept[0] && kept[0].rings.length}`);
+  const reversed = dropSeamDuplicates([polys[1], polys[0]]);
+  check("the hole copy is kept whichever comes first", reversed.length === 1 && reversed[0].rings.length === 2);
+
+  // A copy with an extra part far away (a larger box) has the same outer ring: still one area.
+  const far = [[500000, 500000], [510000, 500000], [510000, 510000]];
+  const parts = dropSeamDuplicates([
+    { kind: 1, rings: [square(0, 0, 100000)] },
+    { kind: 1, rings: [square(0, 0, 100000), far] },
+  ]);
+  check("same outer ring with an extra far part is kept once", parts.length === 1 && parts[0].rings.length === 2, `kept=${parts.length}`);
 }
 
 if (failures.length) {

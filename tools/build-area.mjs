@@ -31,26 +31,67 @@ function insideTile(px, py, extent) {
   return px >= 0 && px <= extent && py >= 0 && py <= extent;
 }
 
-// Split a line into runs of points inside the tile. Each run keeps the
-// neighbouring point just outside the tile, so features join across tile seams.
-function ownedRuns(points, extent) {
-  const runs = [];
-  let current = null;
-  for (let i = 0; i < points.length; i++) {
-    const [x, y] = points[i];
-    if (insideTile(x, y, extent)) {
-      if (!current) {
-        current = [];
-        if (i > 0) current.push(points[i - 1]);
+// The part of segment p->q inside the tile box [0, extent], or null if none. A segment that
+// crosses a tile edge is cut at the edge, so the neighbouring tile holds the other part.
+// The far edges (x = extent and y = extent) are not kept, so a line lying exactly on a
+// tile edge belongs to one tile only: the tile on its near side.
+function clipToTile(p, q, extent) {
+  const dx = q[0] - p[0];
+  const dy = q[1] - p[1];
+  let t0 = 0;
+  let t1 = 1;
+  const limits = [
+    [-dx, p[0]],
+    [dx, extent - p[0]],
+    [-dy, p[1]],
+    [dy, extent - p[1]],
+  ];
+  for (const [d, room] of limits) {
+    if (d === 0) {
+      if (room < 0) return null;
+    } else {
+      const r = room / d;
+      if (d < 0) {
+        if (r > t1) return null;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return null;
+        if (r < t1) t1 = r;
       }
-      current.push([x, y]);
-    } else if (current) {
-      current.push([x, y]);
-      runs.push(current);
-      current = null;
     }
   }
-  if (current && current.length >= 2) runs.push(current);
+  const snap = (v) => (Math.abs(v) < 1e-6 ? 0 : Math.abs(v - extent) < 1e-6 ? extent : v);
+  const a = t0 === 0 ? p : [snap(p[0] + t0 * dx), snap(p[1] + t0 * dy)];
+  const b = t1 === 1 ? q : [snap(p[0] + t1 * dx), snap(p[1] + t1 * dy)];
+  return { a, b };
+}
+
+// Split a line into runs of the parts owned by this tile (see clipToTile). Each segment is kept
+// by one tile only, so a road that crosses a tile edge is not drawn twice. The two runs meet at
+// the crossing point, which the vertex snap joins across the seam.
+export function ownedRuns(points, extent) {
+  const runs = [];
+  let current = null;
+  for (let i = 0; i + 1 < points.length; i++) {
+    const piece = clipToTile(points[i], points[i + 1], extent);
+    const far =
+      piece && ((piece.a[0] === extent && piece.b[0] === extent) || (piece.a[1] === extent && piece.b[1] === extent));
+    if (!piece || far) {
+      if (current) runs.push(current);
+      current = null;
+      continue;
+    }
+    const { a, b } = piece;
+    if (a[0] === b[0] && a[1] === b[1]) continue; // touches the tile at a single point
+    const last = current && current[current.length - 1];
+    if (last && last[0] === a[0] && last[1] === a[1]) {
+      current.push(b);
+    } else {
+      if (current) runs.push(current);
+      current = [a, b];
+    }
+  }
+  if (current) runs.push(current);
   return runs.filter((r) => r.length >= 2);
 }
 
