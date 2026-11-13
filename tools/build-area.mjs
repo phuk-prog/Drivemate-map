@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
-import { splitAtSharedVertices, joinCrossings, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
+import { splitAtSharedVertices, joinCrossings, joinRoadEnds, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
 import { matchRestrictions } from "./restrictions.mjs";
 import { matchSpeedLimits } from "./speed.mjs";
 import { matchLanes, parseLaneOverpass } from "./lanes.mjs";
@@ -315,9 +315,11 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
 
   const bboxFixed = [toFixed7(bbox[1]), toFixed7(bbox[0]), toFixed7(bbox[3]), toFixed7(bbox[2])];
   // Make every junction a node, so roads that meet mid-line can be routed across.
-  // Roads that cross in the middle get a junction at the crossing point.
+  // Roads that cross in the middle get a junction at the crossing point, and road ends that
+  // stop short of another road's middle are joined to it.
   const crossed = joinCrossings(edges);
-  const repaired = dropDuplicateEdges(splitAtSharedVertices(crossed.edges));
+  const ended = joinRoadEnds(crossed.edges);
+  const repaired = dropDuplicateEdges(splitAtSharedVertices(ended.edges));
   // Turn restrictions: from the cache made by tools/fetch-restrictions.mjs. None if there is no cache.
   let restrictionRecords = [];
   try {
@@ -381,6 +383,8 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     routableEdges: repaired.edges.length,
     crossingsFound: crossed.joins,
     crossingsLayerSkipped: crossed.layerSkipped,
+    endJoins: ended.joins,
+    endLayerSkipped: ended.layerSkipped,
     restrictionsFetched: restrictionRecords.length,
     restrictionsMatched: restrictions.matched.length,
     restrictionsUnmatched: restrictions.unmatched,

@@ -1,8 +1,9 @@
-// Tests the road graph repair: roads that cross in the middle become junctions,
-// while parallel roads, bridges, tunnels and roads at different OSM layers do not. Exits with code 1 on any failure.
+// Tests the road graph repair: roads that cross in the middle become junctions, and road ends
+// that stop within 2 m of another road's middle are joined to it, while parallel roads, bridges,
+// tunnels and roads at different OSM layers do not. Exits with code 1 on any failure.
 // Usage: node tools/test-graph.mjs
 
-import { joinCrossings, splitAtSharedVertices, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
+import { joinCrossings, joinRoadEnds, splitAtSharedVertices, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
 import { ownedRuns } from "./build-area.mjs";
 import { validateDmap } from "./validate-dmap.mjs";
 
@@ -17,10 +18,12 @@ const check = (name, ok, detail = "") => {
 
 // Coordinates are [lat, lon] in 1e-7 degree units. 10000 units is about 110 m.
 const road = (points, flags = 0) => ({ roadClass: 6, flags, points });
+// The build's order: crossings, then road ends, then the split at shared points.
 const repair = (edges) => {
   const crossed = joinCrossings(edges);
-  const split = splitAtSharedVertices(crossed.edges);
-  return { ...split, crossings: crossed.joins };
+  const ended = joinRoadEnds(crossed.edges);
+  const split = splitAtSharedVertices(ended.edges);
+  return { ...split, crossings: crossed.joins, ends: ended.joins, endLayerSkipped: ended.layerSkipped };
 };
 
 // 1. Plus shape: one road crosses the middle of another, no shared end point.
@@ -316,6 +319,55 @@ const repair = (edges) => {
     layered([[-10000, 0], [10000, 0]], 0),
   ]);
   check("road end touching a road at another layer is not joined", endOnLine.joins === 0 && endOnLine.layerSkipped === 1, `joins=${endOnLine.joins} skipped=${endOnLine.layerSkipped}`);
+}
+
+// 13. Road ends that stop short of another road's middle are joined to it, at Stockport's latitude
+//     (one north-south unit is about 1.11 cm, so 90 units is 1 m, 270 units is 3 m). Layers match unless stated.
+{
+  const L = 534000000;
+  const O = -22000000;
+  const N_1M = 90;
+  const N_3M = 270;
+  const cross = (points, layer) => ({ roadClass: 6, flags: 0, points, layer });
+  const bar = [[L, O - 2000], [L, O + 2000]]; // the road that the end stops short of, east-west
+
+  // A road from the north stops 1 m short of the bar's middle.
+  const stub = repair([cross(bar, 0), cross([[L + 2000, O], [L + N_1M, O]], 0)]);
+  check("road end 1 m short of another road's middle is joined", stub.ends === 1 && stub.nodes.length === 4 && stub.edges.length === 3, `ends=${stub.ends} nodes=${stub.nodes.length} edges=${stub.edges.length}`);
+  check("the joined end meets the junction the bar is split at", stub.edges[0].to === stub.edges[1].from && [stub.edges[2].from, stub.edges[2].to].includes(stub.edges[0].to), JSON.stringify(stub.edges.map((e) => [e.from, e.to])));
+
+  // Ends from both sides meet at one junction, not two.
+  const both = repair([cross(bar, 0), cross([[L + 2000, O], [L + N_1M, O]], 0), cross([[L - 2000, O], [L - N_1M, O]], 0)]);
+  check("road ends from both sides of a road meet at one junction", both.ends === 2 && both.nodes.length === 5 && both.edges.length === 4, `ends=${both.ends} nodes=${both.nodes.length} edges=${both.edges.length}`);
+
+  // The validator accepts the joined roads.
+  const map = { bbox: [L - 5000, O - 5000, L + 5000, O + 5000], nodes: stub.nodes, edges: stub.edges, lines: [], polygons: [], labels: [], restrictions: [], lanes: [], warnings: [] };
+  check("a joined road end passes the validator", validateDmap(map).length === 0, JSON.stringify(validateDmap(map)));
+
+  // 3 m short: too far to join.
+  const far = repair([cross(bar, 0), cross([[L + 2000, O], [L + N_3M, O]], 0)]);
+  check("road end 3 m short of another road is not joined", far.ends === 0 && far.nodes.length === 4 && far.edges.length === 2, `ends=${far.ends} nodes=${far.nodes.length} edges=${far.edges.length}`);
+
+  // Different OSM layers: left apart, as for crossings.
+  const layers = repair([cross(bar, 0), cross([[L + 2000, O], [L + N_1M, O]], 1)]);
+  check("road end 1 m short of a road at another layer is not joined", layers.ends === 0 && layers.endLayerSkipped === 1 && layers.edges.length === 2, `ends=${layers.ends} skipped=${layers.endLayerSkipped} edges=${layers.edges.length}`);
+
+  // A nearer road at another layer does not stop the end joining the road at its own layer.
+  // The layer-1 road runs 0.67 m north of the bar, so it is nearer to the end than the bar is.
+  // Its ends sit 1000 units along, clear of the bar's own ends, so they do not merge with them.
+  const nearerOther = repair([cross(bar, 0), cross([[L + 60, O - 1000], [L + 60, O + 1000]], 1), cross([[L + 2000, O], [L + N_1M, O]], 0)]);
+  const otherPieces = nearerOther.edges.filter((e) => e.points.some((p) => p[0] === L + 60));
+  check("the end joins the road at its own layer, not a nearer road at another layer", nearerOther.ends === 1 && nearerOther.edges.length === 4 && otherPieces.length === 1 && otherPieces[0].points.length === 2, `ends=${nearerOther.ends} edges=${nearerOther.edges.length} pieces=${otherPieces.length}`);
+
+  // Bridges and tunnels are not joined at their ends either.
+  const bridgeEnd = repair([cross(bar, 0), { roadClass: 6, flags: 2, points: [[L + 2000, O], [L + N_1M, O]], layer: 0 }]);
+  check("a bridge end 1 m short of a road is not joined", bridgeEnd.ends === 0 && bridgeEnd.edges.length === 2, `ends=${bridgeEnd.ends} edges=${bridgeEnd.edges.length}`);
+  const overBridge = repair([{ roadClass: 6, flags: 2, points: bar, layer: 0 }, cross([[L + 2000, O], [L + N_1M, O]], 0)]);
+  check("a road end 1 m short of a bridge is not joined", overBridge.ends === 0 && overBridge.edges.length === 2, `ends=${overBridge.ends} edges=${overBridge.edges.length}`);
+
+  // A road end that already lies on another road is shared, so it is not joined a second time.
+  const tee = repair([road([[0, -10000], [0, 10000]]), road([[-10000, 0], [0, 0]])]);
+  check("a road end already on another road is not joined again", tee.ends === 0 && tee.nodes.length === 4 && tee.edges.length === 3, `ends=${tee.ends} nodes=${tee.nodes.length} edges=${tee.edges.length}`);
 }
 
 if (failures.length) {
