@@ -4,6 +4,7 @@
 
 import { joinCrossings, splitAtSharedVertices, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
 import { ownedRuns } from "./build-area.mjs";
+import { validateDmap } from "./validate-dmap.mjs";
 
 const failures = [];
 const check = (name, ok, detail = "") => {
@@ -228,6 +229,71 @@ const repair = (edges) => {
     { kind: 1, rings: [square(0, 0, 100000), far] },
   ]);
   check("same outer ring with an extra far part is kept once", parts.length === 1 && parts[0].rings.length === 2, `kept=${parts.length}`);
+}
+
+// 12. Road ends within 2 m of each other join, measured on the ground at Stockport's latitude
+//     (53.4 degrees). There one unit is about 1.11 cm north-south and about 0.66 cm east-west,
+//     so 241 units east-west is about 1.60 m and 450 units is about 3.0 m.
+{
+  const L = 534000000; // lat 53.4
+  const O = -22000000; // lon -2.2
+  const EW_1P6 = 241;
+  const EW_3 = 450;
+
+  const joined = repair([
+    road([[L - 2000, O], [L, O]]), // ends at P
+    road([[L, O + EW_1P6], [L + 2000, O + EW_1P6]]), // starts 1.6 m east of P
+  ]);
+  check("road ends 1.6 m apart join", joined.nodes.length === 3 && joined.edges.length === 2, `nodes=${joined.nodes.length} edges=${joined.edges.length}`);
+  check("joined road ends share one node", joined.edges.length === 2 && joined.edges[0].to === joined.edges[1].from, JSON.stringify(joined.edges.map((e) => [e.from, e.to])));
+
+  // Each snapped edge must sit within the validator's EDGE_END_TOLERANCE (220 units per axis) of its node.
+  const EDGE_END_TOLERANCE = 220; // tools/validate-dmap.mjs
+  const endOffset = (e) => {
+    const n = joined.nodes;
+    const ends = [[e.points[0], n[e.from]], [e.points[e.points.length - 1], n[e.to]]];
+    return Math.max(...ends.map(([p, q]) => Math.max(Math.abs(p[0] - q.lat), Math.abs(p[1] - q.lon))));
+  };
+  const worstEnd = Math.max(...joined.edges.map(endOffset));
+  check("snapped road ends are within EDGE_END_TOLERANCE of their node", worstEnd <= EDGE_END_TOLERANCE, `worst=${worstEnd} units`);
+  const map = {
+    bbox: [L - 5000, O - 5000, L + 5000, O + 5000],
+    nodes: joined.nodes,
+    edges: joined.edges,
+    lines: [],
+    polygons: [],
+    labels: [],
+    restrictions: [],
+    lanes: [],
+    warnings: [],
+  };
+  const problems = validateDmap(map);
+  check("snapped edges pass the validator", problems.length === 0, JSON.stringify(problems));
+
+  const apart = repair([
+    road([[L - 2000, O], [L, O]]),
+    road([[L, O + EW_3], [L + 2000, O + EW_3]]), // 3 m east of P
+  ]);
+  check("road ends 3 m apart stay separate", apart.nodes.length === 4 && apart.edges.length === 2, `nodes=${apart.nodes.length} edges=${apart.edges.length}`);
+
+  // A crossing at Stockport's latitude still makes one junction, not a missed join.
+  const cross = repair([
+    road([[L - 2000, O], [L + 2000, O]]),
+    road([[L, O - 2000], [L, O + 2000]]),
+  ]);
+  check("crossing at Stockport latitude makes one junction", cross.nodes.length === 5 && cross.edges.length === 4 && cross.crossings === 1, `nodes=${cross.nodes.length} edges=${cross.edges.length} crossings=${cross.crossings}`);
+
+  // Parallel roads 5 m apart (450 units north-south, 750 units east-west) do not meet.
+  const parallelNS = repair([
+    road([[L, O - 2000], [L, O + 2000]]),
+    road([[L + 450, O - 2000], [L + 450, O + 2000]]),
+  ]);
+  check("parallel roads 5 m apart (north-south) stay separate", parallelNS.nodes.length === 4 && parallelNS.edges.length === 2, `nodes=${parallelNS.nodes.length} edges=${parallelNS.edges.length}`);
+  const parallelEW = repair([
+    road([[L - 2000, O], [L + 2000, O]]),
+    road([[L - 2000, O + 750], [L + 2000, O + 750]]),
+  ]);
+  check("parallel roads 5 m apart (east-west) stay separate", parallelEW.nodes.length === 4 && parallelEW.edges.length === 2, `nodes=${parallelEW.nodes.length} edges=${parallelEW.edges.length}`);
 }
 
 if (failures.length) {
