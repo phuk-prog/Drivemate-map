@@ -1,0 +1,158 @@
+name: OSM scale test
+
+# Measures whether the map pipeline scales beyond one city:
+#   1. extractor on the whole England extract (time per pass, peak memory, counts)
+#   2. a mid-size region (Greater Manchester) built end to end, with DMAP gzip sizes and an
+#      extrapolation to a whole country
+#   3. how many grid squares a country touches
+# Uploads text/JSON summaries only. Never uploads map files or extracts. Publishes nothing.
+
+on:
+  push:
+    paths:
+      - ".github/workflows/osm-scale-test.yml"
+      - "tools/scale-report.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ENGLAND_BBOX: "-6.5,49.8,1.8,55.85"
+  MANCHESTER_BBOX: "-2.75,53.33,-1.90,53.69"
+
+jobs:
+  england-extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download the England extract
+        run: |
+          mkdir -p work
+          URL=$(node tools/geofabrik-url.mjs england)
+          echo "extract: $URL"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 10 -o work/england.osm.pbf "$URL"
+          ls -l work/england.osm.pbf
+          df -h . | tail -1
+
+      - name: Run the extractor on England (measured)
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p report
+          # 12 GB heap limit: if the extractor needs more than that, we want to see where.
+          node tools/scale-report.mjs run --label=england-extract --pbf=work/england.osm.pbf \
+            --out=report/england-extract.json -- \
+            node --max-old-space-size=12000 tools/osm-extract.mjs --pbf=work/england.osm.pbf --name=england --bbox=$ENGLAND_BBOX \
+            2>&1 | tee report/england-extract.log
+          free -m | tee report/memory-after.txt
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## England extractor"
+            echo '```'
+            tail -40 report/england-extract.log || true
+            echo '```'
+            node -e '
+              const r=JSON.parse(require("fs").readFileSync("report/england-extract.json","utf8"));
+              delete r.rssSeries; console.log("```\n"+JSON.stringify(r,null,2)+"\n```");' || true
+            echo "Output cache sizes:"
+            echo '```'
+            ls -l data/osm-cache/*/england.json || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY" report/england-summary.md
+          ls -l data/osm-cache/*/england.json > report/cache-sizes.txt 2>&1 || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-england-extract
+          path: report/
+          if-no-files-found: warn
+
+  mid-size-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download the Greater Manchester extract
+        run: |
+          mkdir -p work report
+          URL=$(node tools/geofabrik-url.mjs greater-manchester)
+          echo "extract: $URL"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 10 -o work/gm.osm.pbf "$URL"
+          ls -l work/gm.osm.pbf
+
+      - name: Extract (measured)
+        shell: bash
+        run: |
+          set -o pipefail
+          node tools/scale-report.mjs run --label=manchester-extract --pbf=work/gm.osm.pbf \
+            --out=report/manchester-extract.json -- \
+            node --max-old-space-size=6000 tools/osm-extract.mjs --pbf=work/gm.osm.pbf --name=manchester --bbox=$MANCHESTER_BBOX \
+            2>&1 | tee report/manchester-extract.log
+
+      - name: Fetch tiles (measured)
+        shell: bash
+        run: |
+          set -o pipefail
+          node tools/scale-report.mjs run --label=manchester-tiles --out=report/manchester-tiles.json -- \
+            node tools/fetch-tiles.mjs --bbox=$MANCHESTER_BBOX --zoom=14 2>&1 | tee report/manchester-tiles.log
+          du -sh data/cache | tee report/tile-cache-size.txt
+
+      - name: Build the map (measured)
+        shell: bash
+        run: |
+          set -o pipefail
+          node tools/scale-report.mjs run --label=manchester-build --out=report/manchester-build.json -- \
+            node --max-old-space-size=8000 tools/build-area.mjs --name=manchester --bbox=$MANCHESTER_BBOX --zoom=14 \
+            2>&1 | tee report/manchester-build.log
+          DMAP=$(find data -name manchester.dmap | head -1)
+          echo "dmap: $DMAP"
+          node tools/scale-report.mjs sizes --file="$DMAP" --out=report/manchester-sizes.json
+
+      - name: Squares, extrapolation and summary
+        shell: bash
+        run: |
+          node tools/scale-report.mjs grid --bbox=$ENGLAND_BBOX --out=report/england-grid.json
+          KM2=$(node -e '
+            const [a,b,c,d]=process.env.MANCHESTER_BBOX.split(",").map(Number);
+            const k=111.195; console.log(Math.round((c-a)*k*Math.cos(((b+d)/2)*Math.PI/180)*(d-b)*k));')
+          echo "Manchester bbox area: $KM2 km2"
+          # England land area is about 130279 km2 (ONS).
+          node tools/scale-report.mjs estimate --mid=report/manchester-sizes.json --km2-mid=$KM2 --km2-country=130279 \
+            --grid=report/england-grid.json --out=report/estimate.json | tee report/estimate.txt
+          {
+            echo "## Greater Manchester end to end"
+            echo '```'
+            for f in extract tiles build; do
+              node -e '
+                const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+                console.log(r.label+": exit "+r.exitCode+", wall "+r.wallSeconds+"s, peak RSS "+r.peakRssMB+" MB"+(r.passSecondsApprox?", passes "+r.passSecondsApprox.join("/")+" s":""));' report/manchester-$f.json
+            done
+            cat report/manchester-sizes.json | node -e 'const r=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(JSON.stringify(r))'
+            echo "tile cache: $(cat report/tile-cache-size.txt)"
+            grep -E "tiles|fetched|cached|failed" report/manchester-tiles.log | head -5
+            echo
+            cat report/estimate.txt
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY" report/mid-size-summary.md
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-mid-size
+          path: report/
+          if-no-files-found: warn
