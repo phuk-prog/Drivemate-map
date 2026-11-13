@@ -10,12 +10,14 @@ import { sourceVersion, fetchTiles } from "./fetch-tiles.mjs";
 import { buildArea } from "./build-area.mjs";
 import { buildSquares } from "./build-squares.mjs";
 import { loadAreaRoads } from "./osm-area.mjs";
+import { readGrowth, writeGrowth, squaresBbox, CACHE_DIR } from "./grow.mjs";
+import { squaresTouching } from "./grid.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
 const MAX_REGIONS_PER_RUN = Number(process.env.MAX_REGIONS_PER_RUN ?? 2);
 // Change this when the builder changes output, so existing regions are rebuilt.
-const BUILDER_VERSION = "osm-roads-1";
+const BUILDER_VERSION = "osm-v5-1";
 
 const config = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
 const regions = Array.isArray(config) ? config : config.regions;
@@ -67,10 +69,20 @@ for (const region of regions) {
 await writeFile(indexFile, JSON.stringify(index, null, 2) + "\n");
 console.log(`built ${built} region(s)`);
 
-// Grid squares for drawn-area downloads. Each square is rebuilt only when the source or builder changes.
+// Grid squares for drawn-area downloads. Each square is rebuilt only when the source or builder
+// changes, and the OSM extracts are downloaded only when a square must be built. When each
+// extract was downloaded (and its Last-Modified) is kept in data/published/growth.json.
+const growth = await readGrowth();
+let usedExtracts = false;
 for (const area of squareAreas) {
   const bbox = [area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3]];
-  let osmRoads = null;
-  if (area.osm) osmRoads = await loadAreaRoads(area.osm, join(ROOT, "data", "cache", "osm"));
-  await buildSquares({ bbox, zoom: area.zoom, osmRoads, log: console.log });
+  const clip = squaresBbox(squaresTouching([bbox[1], bbox[0], bbox[3], bbox[2]]));
+  const loadOsmRoads = area.osm
+    ? () => {
+        usedExtracts = true;
+        return loadAreaRoads(area.osm, CACHE_DIR, console.log, { clip, record: growth.extracts });
+      }
+    : null;
+  await buildSquares({ bbox, zoom: area.zoom, loadOsmRoads, log: console.log });
 }
+if (usedExtracts) await writeGrowth(growth);

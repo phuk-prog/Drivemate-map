@@ -1,6 +1,7 @@
 name: OSM roads check
 
-# Builds the Stockport squares with roads from a real OpenStreetMap extract and tests them.
+# Builds the Stockport squares with roads from a real OpenStreetMap extract and tests them, and
+# prints the growth plan (the next county and its extracts) from Geofabrik's real index.
 # Runs on pushes to work branches, so the OSM pipeline is checked before it reaches main.
 # It publishes nothing.
 
@@ -33,6 +34,12 @@ jobs:
           node tools/test-osmpbf.mjs "$RUNNER_TEMP/fixtures/package/test"
           node tools/test-osm-roads.mjs "$RUNNER_TEMP/fixtures/package/test"
 
+      - name: Test growth with a sample Geofabrik index
+        run: node tools/test-grow.mjs
+
+      - name: Growth plan (dry run, downloads no extracts)
+        run: node tools/grow.mjs --dry-run
+
       - name: Build Stockport squares with OSM roads
         run: |
           node --input-type=module -e '
@@ -43,7 +50,7 @@ jobs:
             console.time("load OSM roads");
             const osmRoads = await loadAreaRoads(area.osm, "data/cache/osm");
             console.timeEnd("load OSM roads");
-            await buildSquares({ bbox: area.bbox, zoom: area.zoom, osmRoads });
+            await buildSquares({ bbox: area.bbox, zoom: area.zoom, osmRoads, force: true });
           '
 
       - name: Test the squares and report OSM detail

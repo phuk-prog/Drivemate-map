@@ -16,13 +16,23 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Growth gets GROW_MINUTES (240); the rest is for regions, tests and uploads.
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      # OSM extracts from earlier runs. An extract is downloaded again only when Geofabrik's
+      # Last-Modified differs from the copy recorded in data/published/growth.json.
+      - name: Restore OSM extracts from earlier runs
+        uses: actions/cache@v4
+        with:
+          path: data/cache/osm
+          key: osm-extracts-${{ github.run_id }}
+          restore-keys: osm-extracts-
 
       - name: Build new and changed regions
         env:
@@ -32,35 +42,62 @@ jobs:
       - name: Test every published map file
         run: node --max-old-space-size=8000 tools/test-map.mjs
 
-      - name: Commit index only if something changed
-        id: commit
+      # Adds the next county (England first, then Wales, Scotland, Northern Ireland).
+      # If it fails part-way, the squares it finished are still tested, published and recorded,
+      # and the run is marked failed at the end.
+      - name: Grow the map by the next county
+        id: grow
+        continue-on-error: true
+        env:
+          GROW_PER_RUN: "1"
+          GROW_MINUTES: "240"
+        run: node --max-old-space-size=8000 tools/grow.mjs
+
+      - name: Test the square files built on this run
+        run: node --max-old-space-size=8000 tools/test-squares.mjs --allow-empty
+
+      - name: Check whether the index or growth state changed
+        id: changes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/published/index.json data/published/squares/index.json regions.json
+          git add data/published/index.json data/published/squares/index.json data/published/growth.json regions.json
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No new or changed map data. Nothing to publish."
-            exit 0
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          git commit -m "Update map index ($(date -u +%Y-%m-%dT%H:%MZ))"
-          git push origin HEAD:${GITHUB_REF_NAME}
-          echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Compress square files for faster phone downloads
-        run: |
-          for f in data/published/squares/*.dmap; do gzip -9 -c "$f" > "$f.gz"; done
+      # Each square goes, gzip-compressed, to the release of its latitude row (squares-lat<latIdx>,
+      # created when missing), because a release holds at most 1000 files. Stockport and London
+      # squares also go to maps-latest, where older app builds read them.
+      - name: Publish square files to their row releases
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/publish-squares.mjs
 
-      - name: Publish map files to the maps-latest release
-        if: steps.commit.outputs.changed == 'true'
+      - name: Publish region files to the maps-latest release
+        if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          shopt -s nullglob
+          files=(data/published/*.dmap)
+          if [ ${#files[@]} -eq 0 ]; then echo "No region files were built on this run."; exit 0; fi
           gh release view maps-latest >/dev/null 2>&1 || \
             gh release create maps-latest --title "Drivemate map regions (latest)" \
               --notes "Automatically updated map regions. Each file replaces the previous version." --latest=false
-          # Squares are published only compressed (.dmap.gz); the app reads those. Regions stay plain.
-          gh release upload maps-latest data/published/*.dmap data/published/squares/*.dmap.gz --clobber
+          gh release upload maps-latest "${files[@]}" --clobber
+
+      # Committed after the uploads, so the index never lists a square that is not published.
+      - name: Commit the index and growth state
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update map index ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
 
       - name: Remove old uncompressed square files from the release
         # Runs on every run (not only when something changed), so old plain squares are cleared once.
@@ -73,3 +110,9 @@ jobs:
             echo "Deleting $name"
             gh release delete-asset maps-latest "$name" --yes
           done
+
+      - name: Mark the run failed if growth failed
+        if: steps.grow.outcome == 'failure'
+        run: |
+          echo "Growth failed part-way; finished squares were published. See the growth step log."
+          exit 1

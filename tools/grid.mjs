@@ -27,3 +27,21 @@ export function squaresTouching([minLat, minLon, maxLat, maxLon]) {
   }
   return out;
 }
+
+// The square named by an id such as "lat1068_lon-44", or null.
+export function parseSquareId(id) {
+  const m = /^lat(-?\d+)_lon(-?\d+)$/.exec(id);
+  return m ? { latIdx: Number(m[1]), lonIdx: Number(m[2]) } : null;
+}
+
+// Square files are published as GitHub release assets, one release per latitude row,
+// because a release holds at most 1000 files. The app builds the same URL from the square id.
+export const SQUARES_REPO = "phuk-prog/Drivemate-map";
+
+export function squareRelease({ latIdx }) {
+  return `squares-lat${latIdx}`;
+}
+
+export function squareUrl(sq, repo = SQUARES_REPO) {
+  return `https://github.com/${repo}/releases/download/${squareRelease(sq)}/${squareId(sq)}.dmap.gz`;
+}

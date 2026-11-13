@@ -10,7 +10,9 @@
       53.35
     ],
     "bytes": 1040574,
-    "builtAt": "2026-11-12T22:54:37.924Z"
+    "builtAt": "2026-11-12T22:54:37.924Z",
+    "release": "squares-lat1066",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1066/lat1066_lon-45.dmap.gz"
   },
   "lat1066_lon-44": {
     "version": "20261101_080013_pt",
@@ -23,7 +25,9 @@
       53.35
     ],
     "bytes": 744464,
-    "builtAt": "2026-11-12T22:54:38.044Z"
+    "builtAt": "2026-11-12T22:54:38.044Z",
+    "release": "squares-lat1066",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1066/lat1066_lon-44.dmap.gz"
   },
   "lat1066_lon-43": {
     "version": "20261101_080013_pt",
@@ -36,7 +40,9 @@
       53.35
     ],
     "bytes": 657317,
-    "builtAt": "2026-11-12T22:54:38.134Z"
+    "builtAt": "2026-11-12T22:54:38.134Z",
+    "release": "squares-lat1066",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1066/lat1066_lon-43.dmap.gz"
   },
   "lat1066_lon-42": {
     "version": "20261101_080013_pt",
@@ -49,7 +55,9 @@
       53.35
     ],
     "bytes": 494800,
-    "builtAt": "2026-11-12T22:54:38.202Z"
+    "builtAt": "2026-11-12T22:54:38.202Z",
+    "release": "squares-lat1066",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1066/lat1066_lon-42.dmap.gz"
   },
   "lat1067_lon-45": {
     "version": "20261101_080013_pt",
@@ -62,7 +70,9 @@
       53.4
     ],
     "bytes": 1544358,
-    "builtAt": "2026-11-12T22:54:38.375Z"
+    "builtAt": "2026-11-12T22:54:38.375Z",
+    "release": "squares-lat1067",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1067/lat1067_lon-45.dmap.gz"
   },
   "lat1067_lon-44": {
     "version": "20261101_080013_pt",
@@ -75,7 +85,9 @@
       53.4
     ],
     "bytes": 3359575,
-    "builtAt": "2026-11-12T22:54:38.809Z"
+    "builtAt": "2026-11-12T22:54:38.809Z",
+    "release": "squares-lat1067",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1067/lat1067_lon-44.dmap.gz"
   },
   "lat1067_lon-43": {
     "version": "20261101_080013_pt",
@@ -88,7 +100,9 @@
       53.4
     ],
     "bytes": 1495847,
-    "builtAt": "2026-11-12T22:54:38.988Z"
+    "builtAt": "2026-11-12T22:54:38.988Z",
+    "release": "squares-lat1067",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1067/lat1067_lon-43.dmap.gz"
   },
   "lat1067_lon-42": {
     "version": "20261101_080013_pt",
@@ -101,7 +115,9 @@
       53.4
     ],
     "bytes": 983256,
-    "builtAt": "2026-11-12T22:54:39.106Z"
+    "builtAt": "2026-11-12T22:54:39.106Z",
+    "release": "squares-lat1067",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1067/lat1067_lon-42.dmap.gz"
   },
   "lat1068_lon-45": {
     "version": "20261101_080013_pt",
@@ -114,7 +130,9 @@
       53.45
     ],
     "bytes": 3259107,
-    "builtAt": "2026-11-12T22:54:39.388Z"
+    "builtAt": "2026-11-12T22:54:39.388Z",
+    "release": "squares-lat1068",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1068/lat1068_lon-45.dmap.gz"
   },
   "lat1068_lon-44": {
     "version": "20261101_080013_pt",
@@ -127,7 +145,9 @@
       53.45
     ],
     "bytes": 4947292,
-    "builtAt": "2026-11-12T22:54:40.013Z"
+    "builtAt": "2026-11-12T22:54:40.013Z",
+    "release": "squares-lat1068",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1068/lat1068_lon-44.dmap.gz"
   },
   "lat1068_lon-43": {
     "version": "20261101_080013_pt",
@@ -140,7 +160,9 @@
       53.45
     ],
     "bytes": 1913988,
-    "builtAt": "2026-11-12T22:54:40.253Z"
+    "builtAt": "2026-11-12T22:54:40.253Z",
+    "release": "squares-lat1068",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1068/lat1068_lon-43.dmap.gz"
   },
   "lat1068_lon-42": {
     "version": "20261101_080013_pt",
@@ -153,7 +175,9 @@
       53.45
     ],
     "bytes": 1102704,
-    "builtAt": "2026-11-12T22:54:40.398Z"
+    "builtAt": "2026-11-12T22:54:40.398Z",
+    "release": "squares-lat1068",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1068/lat1068_lon-42.dmap.gz"
   },
   "lat1069_lon-45": {
     "version": "20261101_080013_pt",
@@ -166,7 +190,9 @@
       53.5
     ],
     "bytes": 4249317,
-    "builtAt": "2026-11-12T22:54:40.915Z"
+    "builtAt": "2026-11-12T22:54:40.915Z",
+    "release": "squares-lat1069",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1069/lat1069_lon-45.dmap.gz"
   },
   "lat1069_lon-44": {
     "version": "20261101_080013_pt",
@@ -179,7 +205,9 @@
       53.5
     ],
     "bytes": 2254655,
-    "builtAt": "2026-11-12T22:54:41.186Z"
+    "builtAt": "2026-11-12T22:54:41.186Z",
+    "release": "squares-lat1069",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1069/lat1069_lon-44.dmap.gz"
   },
   "lat1069_lon-43": {
     "version": "20261101_080013_pt",
@@ -192,7 +220,9 @@
       53.5
     ],
     "bytes": 1115353,
-    "builtAt": "2026-11-12T22:54:41.322Z"
+    "builtAt": "2026-11-12T22:54:41.322Z",
+    "release": "squares-lat1069",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1069/lat1069_lon-43.dmap.gz"
   },
   "lat1069_lon-42": {
     "version": "20261101_080013_pt",
@@ -205,6 +235,8 @@
       53.5
     ],
     "bytes": 1080040,
-    "builtAt": "2026-11-12T22:54:41.456Z"
+    "builtAt": "2026-11-12T22:54:41.456Z",
+    "release": "squares-lat1069",
+    "url": "https://github.com/phuk-prog/Drivemate-map/releases/download/squares-lat1069/lat1069_lon-42.dmap.gz"
   }
 }

@@ -55,8 +55,9 @@ async function fetchWithRetry(url) {
   throw new Error(`Failed after ${RETRIES} attempts: ${url}: ${lastError}`);
 }
 
-export async function fetchTiles(bbox, zoom, { log = console.log } = {}) {
-  const { version, template } = await sourceVersion();
+// source (optional): the result of sourceVersion(), so a caller fetching many areas asks once.
+export async function fetchTiles(bbox, zoom, { log = console.log, source = null } = {}) {
+  const { version, template } = source ?? (await sourceVersion());
   const cacheRoot = join(ROOT, "data", "cache", version);
   const tiles = tilesForBbox(bbox, zoom);
   let done = 0;

@@ -1,0 +1,37 @@
+{
+  "seeds": [
+    {
+      "id": "stockport",
+      "lat": 53.4,
+      "lon": -2.16
+    },
+    {
+      "id": "london",
+      "lat": 51.49,
+      "lon": -0.13
+    }
+  ],
+  "phases": [
+    "england",
+    "wales",
+    "scotland",
+    {
+      "id": "northern-ireland",
+      "name": "Northern Ireland",
+      "extract": "ireland-and-northern-ireland",
+      "bbox": [
+        -8.2,
+        54,
+        -5.4,
+        55.35
+      ]
+    }
+  ],
+  "first": [],
+  "skip": [],
+  "zoom": 14,
+  "current": null,
+  "finished": [],
+  "lastRun": null,
+  "extracts": {}
+}

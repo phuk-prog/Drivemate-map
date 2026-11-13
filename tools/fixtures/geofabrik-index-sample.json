@@ -1,0 +1,493 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "europe",
+    "name": "Europe",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/../europe-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/../europe-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -25,
+       34
+      ],
+      [
+       45,
+       34
+      ],
+      [
+       45,
+       72
+      ],
+      [
+       -25,
+       72
+      ],
+      [
+       -25,
+       34
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "united-kingdom",
+    "parent": "europe",
+    "name": "United Kingdom",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -8.7,
+       49.8
+      ],
+      [
+       1.8,
+       49.8
+      ],
+      [
+       1.8,
+       60.9
+      ],
+      [
+       -8.7,
+       60.9
+      ],
+      [
+       -8.7,
+       49.8
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "england",
+    "parent": "united-kingdom",
+    "name": "England",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/england-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -5.8,
+       49.85
+      ],
+      [
+       1.8,
+       49.85
+      ],
+      [
+       1.8,
+       55.82
+      ],
+      [
+       -5.8,
+       55.82
+      ],
+      [
+       -5.8,
+       49.85
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "wales",
+    "parent": "united-kingdom",
+    "name": "Wales",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/wales-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/wales-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -5.33,
+       51.36
+      ],
+      [
+       -2.64,
+       51.36
+      ],
+      [
+       -2.64,
+       53.44
+      ],
+      [
+       -5.33,
+       53.44
+      ],
+      [
+       -5.33,
+       51.36
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "scotland",
+    "parent": "united-kingdom",
+    "name": "Scotland",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/scotland-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/scotland-updates"
+    }
+   },
+   "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+     [
+      [
+       [
+        -7.6,
+        54.63
+       ],
+       [
+        -1.73,
+        54.63
+       ],
+       [
+        -1.73,
+        58.71
+       ],
+       [
+        -7.6,
+        58.71
+       ],
+       [
+        -7.6,
+        54.63
+       ]
+      ]
+     ],
+     [
+      [
+       [
+        -1.71,
+        59.82
+       ],
+       [
+        -0.71,
+        59.82
+       ],
+       [
+        -0.71,
+        60.88
+       ],
+       [
+        -1.71,
+        60.88
+       ],
+       [
+        -1.71,
+        59.82
+       ]
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "greater-london",
+    "parent": "england",
+    "name": "Greater London",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/england/greater-london-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/england/greater-london-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -0.51,
+       51.31
+      ],
+      [
+       0.31,
+       51.31
+      ],
+      [
+       0.31,
+       51.69
+      ],
+      [
+       -0.51,
+       51.69
+      ],
+      [
+       -0.51,
+       51.31
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "greater-manchester",
+    "parent": "england",
+    "name": "Greater Manchester",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/england/greater-manchester-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -2.71,
+       53.31
+      ],
+      [
+       -1.91,
+       53.31
+      ],
+      [
+       -1.91,
+       53.69
+      ],
+      [
+       -2.71,
+       53.69
+      ],
+      [
+       -2.71,
+       53.31
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "cheshire",
+    "parent": "england",
+    "name": "Cheshire",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/england/cheshire-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/england/cheshire-updates"
+    }
+   },
+   "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+     [
+      [
+       [
+        -3.11,
+        52.96
+       ],
+       [
+        -2.41,
+        52.96
+       ],
+       [
+        -2.41,
+        53.31
+       ],
+       [
+        -3.11,
+        53.31
+       ],
+       [
+        -3.11,
+        52.96
+       ]
+      ]
+     ],
+     [
+      [
+       [
+        -2.36,
+        52.97
+       ],
+       [
+        -1.96,
+        52.97
+       ],
+       [
+        -1.96,
+        53.19
+       ],
+       [
+        -2.36,
+        53.19
+       ],
+       [
+        -2.36,
+        52.97
+       ]
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "kent",
+    "parent": "england",
+    "name": "Kent",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/england/kent-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/england/kent-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       0.01,
+       50.91
+      ],
+      [
+       1.49,
+       50.91
+      ],
+      [
+       1.49,
+       51.49
+      ],
+      [
+       0.01,
+       51.49
+      ],
+      [
+       0.01,
+       50.91
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "surrey",
+    "parent": "england",
+    "name": "Surrey",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/england/surrey-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/england/surrey-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -0.91,
+       51.01
+      ],
+      [
+       -0.01,
+       51.01
+      ],
+      [
+       -0.01,
+       51.11
+      ],
+      [
+       -0.81,
+       51.11
+      ],
+      [
+       -0.81,
+       51.49
+      ],
+      [
+       -0.91,
+       51.49
+      ],
+      [
+       -0.91,
+       51.01
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "cornwall",
+    "parent": "england",
+    "name": "Cornwall",
+    "urls": {
+     "pbf": "https://download.geofabrik.de/europe/united-kingdom/england/cornwall-latest.osm.pbf",
+     "updates": "https://download.geofabrik.de/europe/united-kingdom/england/cornwall-updates"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -5.79,
+       49.91
+      ],
+      [
+       -4.21,
+       49.91
+      ],
+      [
+       -4.21,
+       50.94
+      ],
+      [
+       -5.79,
+       50.94
+      ],
+      [
+       -5.79,
+       49.91
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}
