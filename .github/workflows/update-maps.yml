@@ -52,7 +52,7 @@ jobs:
           for f in data/published/squares/*.dmap; do gzip -9 -c "$f" > "$f.gz"; done
 
       - name: Publish map files to the maps-latest release
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true' && github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -72,7 +72,7 @@ jobs:
       # Runs only after the upload above has succeeded. A failed build, test, compress or upload stops the
       # job before this step, so the index on the branch never names files the release does not have.
       - name: Commit index and push
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true' && github.ref_name == 'main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
