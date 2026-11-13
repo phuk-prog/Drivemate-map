@@ -34,17 +34,20 @@ class VertexIndex {
     return v;
   }
 
-  // Returns the vertex id for a point. Every vertex within SNAP_M metres of the point is merged into
-  // one, so points that are near each other share a vertex whatever order they were added in. The
-  // merged vertex keeps the coordinates of the root of the nearest one. A new vertex is made if none is within SNAP_M.
+  // Returns the vertex id for a point. Every point keeps its own position in the index, so a point is
+  // compared with each earlier point, not with the merged position of a group. Points within SNAP_M
+  // metres of it are merged into one vertex, whatever order the points were added in. The vertex
+  // keeps the coordinates of the root of the nearest point. A new vertex is made if none is within SNAP_M.
   id(lat, lon) {
+    const v = this.verts.length;
+    this.verts.push({ lat, lon, uses: new Set(), parent: v });
     const ci = Math.floor(lat / INDEX_CELL);
     const cj = Math.floor(lon / INDEX_CELL);
     // Cells to search each way. East-west distance per unit grows as 1/cos(latitude), so this can be more than 1.
     const reach = Math.ceil(SNAP_M / (METRES_PER_UNIT * Math.cos(lat * RADIANS_PER_UNIT)) / INDEX_CELL);
-    const found = [];
-    let nearest = -1;
-    let nearestD = Infinity;
+    const roots = [];
+    let best = -1;
+    let bestD = Infinity;
     for (let di = -reach; di <= reach; di++) {
       for (let dj = -reach; dj <= reach; dj++) {
         const ids = this.cells.get(`${ci + di},${cj + dj}`);
@@ -53,29 +56,25 @@ class VertexIndex {
           const w = this.verts[u];
           if (!near(w.lat, w.lon, lat, lon)) continue;
           const r = this.find(u);
-          if (!found.includes(r)) found.push(r);
+          if (!roots.includes(r)) roots.push(r);
           const d = dist2(w.lat, w.lon, lat, lon);
-          if (d < nearestD) {
-            nearestD = d;
-            nearest = r;
+          if (d < bestD) {
+            bestD = d;
+            best = r;
           }
         }
       }
     }
-    if (nearest >= 0) {
-      for (const r of found) {
-        if (r === nearest) continue;
-        this.verts[r].parent = nearest;
-        for (const e of this.verts[r].uses) this.verts[nearest].uses.add(e);
-      }
-      return nearest;
-    }
-    const v = this.verts.length;
-    this.verts.push({ lat, lon, uses: new Set(), parent: v });
     const key = `${ci},${cj}`;
     if (!this.cells.has(key)) this.cells.set(key, []);
     this.cells.get(key).push(v);
-    return v;
+    if (best < 0) return v;
+    for (const r of [...roots, v]) {
+      if (r === best) continue;
+      this.verts[r].parent = best;
+      for (const e of this.verts[r].uses) this.verts[best].uses.add(e);
+    }
+    return best;
   }
 }
 
