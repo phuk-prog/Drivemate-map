@@ -30,6 +30,7 @@ jobs:
           node tools/test-restrictions.mjs
           node tools/test-lanes.mjs
           node tools/test-osm-extract.mjs
+          node tools/test-validate-dmap.mjs
 
       - name: Download the Greater London extract
         run: |
@@ -52,6 +53,9 @@ jobs:
         run: |
           set -o pipefail
           node --max-old-space-size=8000 tools/build-area.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14 | tee build-report.txt
+
+      - name: Validate the London map file
+        run: node --max-old-space-size=4000 tools/validate-dmap.mjs data/out/london.dmap
 
       - name: Save the summary and the build report
         if: always()

@@ -7,6 +7,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readDmap, fromFixed7 } from "./dmap.mjs";
+import { validateDmap } from "./validate-dmap.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
@@ -46,6 +47,8 @@ for (const file of files) {
   if (map.edges.some((e) => e.roadClass < 1 || e.roadClass > 8)) fail(`${id}: road class out of range`);
   if (map.edges.some((e) => e.from >= map.nodes.length || e.to >= map.nodes.length)) fail(`${id}: edge refers to a missing node`);
   if (map.labels.some((l) => !l.name)) fail(`${id}: label with empty name`);
+
+  for (const problem of validateDmap(map)) fail(`${id}: ${problem}`);
 
   console.log(`${id}: ok (${size} bytes, ${map.nodes.length} nodes, ${map.edges.length} roads, ${map.polygons.length} areas, ${map.labels.length} labels)`);
 }
