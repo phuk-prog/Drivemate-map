@@ -370,6 +370,24 @@ const repair = (edges) => {
   check("a road end already on another road is not joined again", tee.ends === 0 && tee.nodes.length === 4 && tee.edges.length === 3, `ends=${tee.ends} nodes=${tee.nodes.length} edges=${tee.edges.length}`);
 }
 
+// 14. A point within 2 m of two junction vertices joins the nearer one. Here the junction J is
+//     at O, a road end E is 2.3 m east of J (not within 2 m, so it is its own vertex), and a
+//     middle point P of a third road sits 0.46 m from E and 1.66 m from J. Joining the first
+//     vertex found would send P to J and leave E's road with no junction; joining the nearest sends P to E.
+{
+  const L = 534000000;
+  const O = -22000000;
+  const junctionRoad = { roadClass: 6, flags: 0, points: [[L - 2000, O], [L, O]] }; // ends at J
+  const endRoad = { roadClass: 6, flags: 0, points: [[L + 2000, O + 350], [L, O + 350]] }; // ends at E, 2.3 m from J
+  const partner = { roadClass: 6, flags: 0, points: [[L - 2000, O + 250], [L, O + 250], [L + 2000, O + 250]] }; // P is its middle
+  const r = splitAtSharedVertices([junctionRoad, endRoad, partner]);
+  // The end road must end at a node that the partner road is split at.
+  // Output order: junction road (1 piece), end road (1 piece), partner road (2 pieces).
+  const partnerNodes = new Set([r.edges[2].from, r.edges[2].to, r.edges[3].from, r.edges[3].to]);
+  const endNode = r.edges[1].to;
+  check("a point between two junction vertices joins the nearer one, so the road end is connected", r.edges.length === 4 && partnerNodes.has(endNode), JSON.stringify(r.edges.map((e) => [e.from, e.to])));
+}
+
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed`);
   process.exit(1);

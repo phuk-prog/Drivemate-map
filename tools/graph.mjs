@@ -28,24 +28,50 @@ class VertexIndex {
     this.cells = new Map();
   }
 
-  // Returns the vertex id for a point, creating one if no vertex is within SNAP_M metres.
+  // The vertex that a vertex id now stands for. Merged vertices point at the one they joined.
+  find(v) {
+    while (this.verts[v].parent !== v) v = this.verts[v].parent;
+    return v;
+  }
+
+  // Returns the vertex id for a point. Every vertex within SNAP_M metres of the point is merged into
+  // one, so points that are near each other share a vertex whatever order they were added in. The
+  // merged vertex keeps the coordinates of the root of the nearest one. A new vertex is made if none is within SNAP_M.
   id(lat, lon) {
     const ci = Math.floor(lat / INDEX_CELL);
     const cj = Math.floor(lon / INDEX_CELL);
     // Cells to search each way. East-west distance per unit grows as 1/cos(latitude), so this can be more than 1.
     const reach = Math.ceil(SNAP_M / (METRES_PER_UNIT * Math.cos(lat * RADIANS_PER_UNIT)) / INDEX_CELL);
+    const found = [];
+    let nearest = -1;
+    let nearestD = Infinity;
     for (let di = -reach; di <= reach; di++) {
       for (let dj = -reach; dj <= reach; dj++) {
         const ids = this.cells.get(`${ci + di},${cj + dj}`);
         if (!ids) continue;
-        for (const v of ids) {
-          const w = this.verts[v];
-          if (near(w.lat, w.lon, lat, lon)) return v;
+        for (const u of ids) {
+          const w = this.verts[u];
+          if (!near(w.lat, w.lon, lat, lon)) continue;
+          const r = this.find(u);
+          if (!found.includes(r)) found.push(r);
+          const d = dist2(w.lat, w.lon, lat, lon);
+          if (d < nearestD) {
+            nearestD = d;
+            nearest = r;
+          }
         }
       }
     }
+    if (nearest >= 0) {
+      for (const r of found) {
+        if (r === nearest) continue;
+        this.verts[r].parent = nearest;
+        for (const e of this.verts[r].uses) this.verts[nearest].uses.add(e);
+      }
+      return nearest;
+    }
     const v = this.verts.length;
-    this.verts.push({ lat, lon, uses: new Set() });
+    this.verts.push({ lat, lon, uses: new Set(), parent: v });
     const key = `${ci},${cj}`;
     if (!this.cells.has(key)) this.cells.set(key, []);
     this.cells.get(key).push(v);
@@ -57,13 +83,15 @@ class VertexIndex {
 // Returns { nodes, edges } where each edge runs between two junction nodes.
 export function splitAtSharedVertices(edges) {
   const index = new VertexIndex();
-  const pointIds = edges.map((e, ei) =>
+  const rawIds = edges.map((e, ei) =>
     e.points.map(([lat, lon]) => {
       const v = index.id(lat, lon);
       index.verts[v].uses.add(ei);
       return v;
     }),
   );
+  // Later points can merge earlier vertices, so resolve every id to its final vertex.
+  const pointIds = rawIds.map((ids) => ids.map((v) => index.find(v)));
 
   const pieces = [];
   edges.forEach((e, ei) => {
