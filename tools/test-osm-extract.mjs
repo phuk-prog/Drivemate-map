@@ -160,7 +160,8 @@ const file = Buffer.concat([
   frame("OSMData", relationBlock()),
 ]);
 
-const dir = join(ROOT, "data", "cache", "test-pbf");
+// Not under data/cache: the map builder treats every folder there as a set of map tiles.
+const dir = join(ROOT, "data", "test-tmp");
 await mkdir(dir, { recursive: true });
 const path = join(dir, "tiny.osm.pbf");
 await writeFile(path, file);
