@@ -7,8 +7,9 @@
 //
 // Thresholds (units are 1e-7 degrees, 1 unit is about 1.1 cm in latitude):
 //   EDGE_END_TOLERANCE 220  an edge's first/last point must be within this of its node, on each axis.
-//                           The builder snaps nodes with SNAP = 200 (about 2.2 m); 20 extra units
-//                           (about 22 cm) absorb rounding. 220 units is about 2.4 m, inside 2.5 m.
+//                           The builder snaps nodes within SNAP_M = 2 m on the ground (tools/graph.mjs),
+//                           and moves each edge end onto its node. 20 extra units (about 22 cm) absorb
+//                           rounding. 220 units is about 2.4 m north-south and about 1.5 m east-west at 53.4 degrees.
 //   POINT_MARGIN 500000     road and area points may lie this far (about 5 km) outside the bbox,
 //                           because map tiles reach past the requested box.
 //   WARNING_MARGIN 50000    warnings come from the OSM extract of the bbox itself, so only about
