@@ -158,7 +158,7 @@ const bbox = arg("bbox", "-0.55,51.28,0.30,51.70").split(",").map(Number);
 const zoom = Number(arg("zoom", "14"));
 const records = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "restrictions", `${name}.json`), "utf8"));
 const { nodes, edges } = await buildGraph(bbox, zoom);
-console.log(`graph: ${nodes.length} nodes, ${edges.length} edges; ${records.length} restriction records`);
+console.log(`matcher version: split-junction + ground angles\ngraph: ${nodes.length} nodes, ${edges.length} edges; ${records.length} restriction records`);
 
 const res = matchRestrictions(nodes, edges, records);
 console.log(`matched ${res.matched.length} (${((100 * res.matched.length) / records.length).toFixed(1)}%), unmatched ${JSON.stringify(res.unmatched)}`);
