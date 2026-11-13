@@ -7,8 +7,9 @@
 // Rules:
 //   - turn:lanes:forward (or turn:lanes) applies to an edge that runs the same way as the way.
 //   - turn:lanes:backward applies to an edge that runs against the way, on a two-way road.
-//   - A one-way road that runs against the way is skipped, because its lane order would
-//     need reversing. These are counted in the stats.
+//   - A one-way road with oneway=-1 runs against the way: turn:lanes:backward is used as it
+//     stands; plain turn:lanes (listed in the way's direction) is reversed and mirrored.
+//   - An edge that runs against a oneway=yes way is a different road: it is not matched.
 //
 // Coordinates are [lat, lon] in 1e-7 degree units, the same as the rest of the map.
 
@@ -58,15 +59,73 @@ function distanceSquared(p, a, b) {
   return ex * ex + ey * ey;
 }
 
-// The lane text for an edge, given whether it runs the same way as the way.
-function laneTextFor(way, aligned) {
-  if (aligned) return way.tags["turn:lanes:forward"] ?? way.tags["turn:lanes"] ?? null;
-  const twoWay = way.oneway === "" || way.oneway === "no";
-  return twoWay ? way.tags["turn:lanes:backward"] ?? null : null;
+const MIRROR = {
+  left: "right", right: "left",
+  slight_left: "slight_right", slight_right: "slight_left",
+  sharp_left: "sharp_right", sharp_right: "sharp_left",
+  merge_to_left: "merge_to_right", merge_to_right: "merge_to_left",
+  through: "through", reverse: "reverse", none: "none", "": "",
+};
+
+// Turns lane text written in the way's direction into text in the opposite direction, left to
+// right as the driver sees it: lane order reversed, left and right values swapped, and the
+// values inside one lane (separated by ";") reversed too. Returns null for any value we do not
+// know, so unknown text is never attached.
+export function reverseLaneText(text) {
+  const lanes = text.split("|");
+  const out = [];
+  for (const lane of lanes) {
+    const vals = lane.split(";").map((v) => v.trim());
+    const mirrored = [];
+    for (const v of vals) {
+      if (!Object.hasOwn(MIRROR, v)) return null;
+      mirrored.push(MIRROR[v]);
+    }
+    out.push(mirrored.reverse().join(";"));
+  }
+  return out.reverse().join("|");
 }
 
-// Matches lane ways to edges. Returns { lanes: [{ edge, text }], stats }.
-export function matchLanes(edges, ways) {
+// Wiki reading (Key:turn, Key:oneway): on a oneway=-1 way the :backward key lists lanes in the
+// direction of travel, so it is used as it stands. Plain turn:lanes lists lanes in the direction
+// of the way, so it is reversed and mirrored. :forward on such a way is the direction nobody
+// travels and is ignored. Set false to leave plain turn:lanes on oneway=-1 ways unmatched.
+export const REVERSE_PLAIN_ON_ONEWAY_MINUS_ONE = true;
+
+const isOnewayYes = (o) => o === "yes" || o === "true" || o === "1";
+const isOnewayMinus = (o) => o === "-1" || o === "reverse";
+const isTwoWay = (o) => !isOnewayYes(o) && !isOnewayMinus(o);
+
+// The lane text for an edge, given whether it runs the same way as the way.
+// Returns { text, why }: why says what is missing when there is no text.
+function laneTextFor(way, aligned) {
+  const t = way.tags;
+  const o = way.oneway;
+  if (isOnewayMinus(o)) {
+    if (aligned) return { text: null, why: "oneWayAgainstWay" }; // edge should be anti-parallel
+    if (t["turn:lanes:backward"]) return { text: t["turn:lanes:backward"], why: "" };
+    if (t["turn:lanes"] && REVERSE_PLAIN_ON_ONEWAY_MINUS_ONE) {
+      const r = reverseLaneText(t["turn:lanes"]);
+      return r ? { text: r, why: "" } : { text: null, why: "oneWayAgainstWay" };
+    }
+    return { text: null, why: "oneWayAgainstWay" };
+  }
+  if (aligned) {
+    const text = t["turn:lanes:forward"] ?? t["turn:lanes"] ?? null;
+    return { text, why: text ? "" : "onlyBackwardTag" };
+  }
+  if (isTwoWay(o)) {
+    const text = t["turn:lanes:backward"] ?? null;
+    return { text, why: text ? "" : "reversedEdgeOnlyForwardTag" };
+  }
+  return { text: null, why: "oneWayAgainstWay" };
+}
+
+// Matches lane ways to edges. Returns { lanes: [{ edge, text }], stats }, and with
+// opts.details also details[edge] = { way, dist, cos, second } for every edge that found a way.
+// A candidate way must run in a direction its oneway tag allows (an edge against a oneway=yes
+// way belongs to another carriageway); of several candidates the best by distance and angle wins.
+export function matchLanes(edges, ways, opts = {}) {
   // Grid of way segments, by the cells each segment's box covers.
   const segWay = [];
   const segStart = [];
@@ -93,7 +152,17 @@ export function matchLanes(edges, ways) {
   });
 
   const lanes = [];
-  const stats = { matched: 0, noWay: 0, oneWayAgainstWay: 0, noTagForDirection: 0 };
+  const details = opts.details ? new Array(edges.length).fill(null) : null;
+  const stats = {
+    matched: 0,
+    noWay: 0,
+    oneWayAgainstWay: 0,
+    noTagForDirection: 0,
+    reversedEdgeOnlyForwardTag: 0,
+    onlyBackwardTag: 0,
+    reversedOnOneWayMinusOne: 0,
+    twoWayMatchedAmbiguous: 0,
+  };
   edges.forEach((e, ei) => {
     const pts = e.points;
     const m = Math.floor(pts.length / 2);
@@ -101,48 +170,73 @@ export function matchLanes(edges, ways) {
     // Direction of the edge at its middle.
     const before = pts[Math.max(0, m - 1)];
     const after = pts[Math.min(pts.length - 1, m + 1)];
+    // Longitude units are shorter than latitude units away from the equator: scale them so
+    // distances and angles are true.
+    const k = Math.cos((mid[0] * 1e-7 * Math.PI) / 180);
     const dx = after[0] - before[0];
-    const dy = after[1] - before[1];
+    const dy = (after[1] - before[1]) * k;
     const ci = Math.floor(mid[0] / CELL);
     const cj = Math.floor(mid[1] / CELL);
+    const edgeOneway = e.flags === undefined ? true : (e.flags & 1) === 1;
 
-    let best = null;
-    let bestD = Infinity;
+    // Best segment per way, scored by distance and angle together.
+    const perWay = new Map();
     for (let di = -1; di <= 1; di++) {
       for (let dj = -1; dj <= 1; dj++) {
         for (const id of grid.get(`${ci + di},${cj + dj}`) || []) {
-          const w = ways[segWay[id]];
+          const wi = segWay[id];
+          const w = ways[wi];
           const i = segStart[id];
           const a = w.geom[i];
           const b = w.geom[i + 1];
-          const d = distanceSquared(mid, a, b);
-          if (d > MAX_DISTANCE * MAX_DISTANCE || d >= bestD) continue;
-          // Direction of the way segment, compared with the edge direction.
+          const d2 = distanceSquared([mid[0], mid[1] * k], [a[0], a[1] * k], [b[0], b[1] * k]);
+          if (d2 > MAX_DISTANCE * MAX_DISTANCE) continue;
           const sx = b[0] - a[0];
-          const sy = b[1] - a[1];
+          const sy = (b[1] - a[1]) * k;
           const denom = Math.hypot(dx, dy) * Math.hypot(sx, sy);
           if (denom === 0) continue;
           const cos = (dx * sx + dy * sy) / denom;
           if (Math.abs(cos) < MIN_PARALLEL_COS) continue;
-          bestD = d;
-          best = { way: w, aligned: cos > 0 };
+          const aligned = cos > 0;
+          // Direction the oneway tag allows.
+          if (isOnewayYes(w.oneway) && !aligned) continue;
+          if (isOnewayMinus(w.oneway) && (aligned || !edgeOneway)) continue;
+          const dist = Math.sqrt(d2);
+          const score = dist + 400 * (1 - Math.abs(cos));
+          const prev = perWay.get(wi);
+          if (!prev || score < prev.score) perWay.set(wi, { wi, way: w, aligned, dist, cos, score });
         }
       }
     }
+    const cands = [...perWay.values()].sort((x, y) => x.score - y.score);
 
-    if (!best) {
+    if (cands.length === 0) {
       stats.noWay++;
       return;
     }
-    const text = laneTextFor(best.way, best.aligned);
+    const best = cands[0];
+    if (details) details[ei] = { way: best.wi, dist: best.dist, cos: best.cos, second: cands[1] ? { way: cands[1].wi, dist: cands[1].dist, cos: cands[1].cos } : null };
+    // Two candidate ways that both give a text but different ones, with nearly equal scores:
+    // we cannot tell which road this is, so leave it unmatched.
+    if (cands[1] && cands[1].score - best.score < 150) {
+      const t0 = laneTextFor(best.way, best.aligned).text;
+      const t1 = laneTextFor(cands[1].way, cands[1].aligned).text;
+      if (t0 && t1 && t0 !== t1) {
+        stats.twoWayMatchedAmbiguous++;
+        return;
+      }
+    }
+    const { text, why } = laneTextFor(best.way, best.aligned);
     if (text) {
       lanes.push({ edge: ei, text });
       stats.matched++;
-    } else if (!best.aligned && best.way.oneway !== "" && best.way.oneway !== "no") {
+      if (isOnewayMinus(best.way.oneway)) stats.reversedOnOneWayMinusOne++;
+    } else if (why === "oneWayAgainstWay") {
       stats.oneWayAgainstWay++;
     } else {
       stats.noTagForDirection++;
+      if (why) stats[why]++;
     }
   });
-  return { lanes, stats };
+  return { lanes, stats, details };
 }
