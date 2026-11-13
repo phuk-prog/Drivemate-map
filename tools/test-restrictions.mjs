@@ -94,6 +94,14 @@ check("crossroads has a centre node", centre >= 0, `nodes=${JSON.stringify(nodes
   check("U-turn restriction is not matched to the same road", r.matched.length === 0, JSON.stringify(r));
 }
 
+// 4b. Two relations for the same turn give one restriction, not two.
+{
+  const record = { kind: RESTRICTION_NO, from: [[-10000, 0], [0, 0]], via: [0, 0], to: [[0, 0], [0, -10000]] };
+  const other = { ...record, from: [[-9000, 0], [0, 0]] }; // another relation, slightly different geometry
+  const r = matchRestrictions(nodes, edges, [record, other, { ...record, kind: RESTRICTION_ONLY }]);
+  check("duplicate restriction is emitted once", r.matched.length === 2 && r.duplicates === 1, JSON.stringify(r.matched));
+}
+
 // 5. Overpass parsing: simple restrictions are kept, others are skipped.
 {
   const json = {

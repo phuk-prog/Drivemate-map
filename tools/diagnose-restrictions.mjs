@@ -162,6 +162,15 @@ console.log(`graph: ${nodes.length} nodes, ${edges.length} edges; ${records.leng
 
 const res = matchRestrictions(nodes, edges, records);
 console.log(`matched ${res.matched.length} (${((100 * res.matched.length) / records.length).toFixed(1)}%), unmatched ${JSON.stringify(res.unmatched)}`);
+{
+  const keys = new Map();
+  for (const r of records) {
+    const k = `${r.kind}|${r.via}|${r.from.join(";")}|${r.to.join(";")}`;
+    keys.set(k, (keys.get(k) || 0) + 1);
+  }
+  const dupInput = [...keys.values()].reduce((a, c) => a + c - 1, 0);
+  console.log(`identical input records (same kind, via, from, to points): ${dupInput}; duplicates dropped by the matcher: ${res.duplicates}`);
+}
 const matchedKinds = res.matched.reduce((m, r) => ((m[r.kind] = (m[r.kind] || 0) + 1), m), {});
 console.log(`matched by kind ${JSON.stringify(matchedKinds)}`);
 

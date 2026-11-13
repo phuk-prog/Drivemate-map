@@ -121,6 +121,8 @@ export function matchRestrictions(nodes, edges, records) {
 
   const unmatched = { noVia: 0, noFrom: 0, noTo: 0 };
   const matched = [];
+  const seen = new Set();
+  let duplicates = 0; // records that matched the same turn as an earlier one
   const failed = []; // { record, reason } for each unmatched record, for diagnostics
 
   for (const r of records) {
@@ -173,9 +175,16 @@ export function matchRestrictions(nodes, edges, records) {
       failed.push({ record: r, reason: "noTo" });
       continue;
     }
+    // Two OSM relations can describe the same turn; keep one record per kind, from edge, via node and to edge.
+    const key = `${r.kind}/${fromEdge}/${toEdge}/${v}`;
+    if (seen.has(key)) {
+      duplicates++;
+      continue;
+    }
+    seen.add(key);
     matched.push({ kind: r.kind, from: fromEdge, via: v, to: toEdge });
   }
-  return { matched, unmatched, failed };
+  return { matched, unmatched, failed, duplicates };
 }
 
 // Index of the point in pts that is nearest to the target point.
