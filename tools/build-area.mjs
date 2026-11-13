@@ -291,6 +291,13 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     log(`no lane cache for ${name}; run tools/fetch-lanes.mjs to add lane guidance`);
   }
   const laneMatch = matchLanes(repaired.edges, laneWays);
+  // Road warnings (speed cameras, level crossings, roadworks): from tools/osm-extract.mjs. None if there is no cache.
+  let warnings = [];
+  try {
+    warnings = JSON.parse(await readFile(join(ROOT, "data", "cache", "warnings", `${name}.json`), "utf8"));
+  } catch {
+    log(`no warnings cache for ${name}; run tools/osm-extract.mjs to add road warnings`);
+  }
   const bytes = writeDmap({
     bbox: bboxFixed,
     nodes: repaired.nodes,
@@ -300,6 +307,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     labels,
     restrictions: restrictions.matched,
     lanes: laneMatch.lanes,
+    warnings,
   });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
@@ -322,6 +330,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     laneWays: laneWays.length,
     laneEdgesMatched: laneMatch.stats.matched,
     laneStats: laneMatch.stats,
+    warnings: warnings.length,
     lines: lines.length,
     polygons: keptPolygons.length,
     seamDuplicatesDropped: polygons.length - keptPolygons.length,

@@ -1,7 +1,8 @@
-// Extracts turn restrictions and lane tags from an OpenStreetMap .osm.pbf extract,
+// Extracts turn restrictions, lane tags and road warnings from an OpenStreetMap .osm.pbf extract,
 // and caches them for the map builder:
 //   data/cache/restrictions/<name>.json  (same records the Overpass fetch made)
 //   data/cache/lanes/<name>.json         (same ways the Overpass fetch made)
+//   data/cache/warnings/<name>.json      (speed cameras, level crossings, roads under construction)
 // Build-time only: the app never reads OpenStreetMap files. Our own code.
 //
 // Usage: node tools/osm-extract.mjs --pbf=greater-london.osm.pbf --name=london --bbox=-0.55,51.28,0.30,51.70
@@ -16,7 +17,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readPbf } from "./osm-pbf.mjs";
-import { RESTRICTION_NO, RESTRICTION_ONLY } from "./dmap.mjs";
+import { RESTRICTION_NO, RESTRICTION_ONLY, WARNING_SPEED_CAMERA, WARNING_LEVEL_CROSSING, WARNING_ROADWORKS } from "./dmap.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LANE_KEYS = ["turn:lanes", "turn:lanes:forward", "turn:lanes:backward"];
@@ -43,6 +44,9 @@ export async function extractFromPbf(path, bbox) {
     laneWaysFound: 0,
     laneWaysMissingGeometry: 0,
     laneWaysOutsideBox: 0,
+    warningsSpeedCamera: 0,
+    warningsLevelCrossing: 0,
+    warningsRoadworks: 0,
   };
 
   // Pass 1: restriction relations.
@@ -87,8 +91,20 @@ export async function extractFromPbf(path, bbox) {
   // Pass 2: the from and to ways, and the ways with lane tags.
   const wayRefs = new Map();
   const laneRaw = [];
+  const constructionNodes = []; // one middle node per road under construction
   await readPbf(path, {
     onWay(way, block) {
+      // Roads under construction (highway=construction) become one roadworks warning each.
+      const constructionVal = block.find("construction");
+      if (constructionVal >= 0) {
+        const highwayKey = block.find("highway");
+        for (let k = 0; k < way.keys.length; k++) {
+          if (way.keys[k] === highwayKey && way.vals[k] === constructionVal && way.refs.length > 0) {
+            constructionNodes.push(way.refs[Math.floor(way.refs.length / 2)]);
+            break;
+          }
+        }
+      }
       const needed = neededWays.has(way.id);
       const laneIndexes = LANE_KEYS.map((k) => block.find(k));
       const hasLaneKey = laneIndexes.some((i) => i >= 0);
@@ -129,12 +145,30 @@ export async function extractFromPbf(path, bbox) {
     for (const id of toRefs) neededNodes.add(id);
   }
   for (const w of laneRaw) for (const id of w.refs) neededNodes.add(id);
+  for (const id of constructionNodes) neededNodes.add(id);
 
   // Pass 3: node coordinates.
   const coords = new Map();
+  const warnings = [];
   await readPbf(path, {
-    onNode(id, lat, lon) {
+    wantNodeTags: true,
+    onNode(id, lat, lon, tags, block) {
       if (neededNodes.has(id)) coords.set(id, [lat, lon]);
+      if (!tags) return;
+      // Speed cameras (highway=speed_camera) and level crossings (railway=level_crossing).
+      const highwayKey = block.find("highway");
+      const railwayKey = block.find("railway");
+      for (const [k, v] of tags) {
+        let kind = 0;
+        if (k === highwayKey && v === block.find("speed_camera")) kind = WARNING_SPEED_CAMERA;
+        else if (k === railwayKey && v === block.find("level_crossing")) kind = WARNING_LEVEL_CROSSING;
+        if (!kind) continue;
+        if (inBox([lat, lon])) {
+          warnings.push({ kind, lat, lon });
+          if (kind === WARNING_SPEED_CAMERA) stats.warningsSpeedCamera++;
+          else stats.warningsLevelCrossing++;
+        }
+      }
     },
   });
 
@@ -169,7 +203,15 @@ export async function extractFromPbf(path, bbox) {
     laneWays.push({ tags: w.tags, oneway: w.oneway, geom });
   }
 
-  return { restrictions, laneWays, stats };
+  for (const id of constructionNodes) {
+    const p = coords.get(id);
+    if (p && inBox(p)) {
+      warnings.push({ kind: WARNING_ROADWORKS, lat: p[0], lon: p[1] });
+      stats.warningsRoadworks++;
+    }
+  }
+
+  return { restrictions, laneWays, warnings, stats };
 }
 
 async function main() {
@@ -182,14 +224,14 @@ async function main() {
   const name = arg("name", "london");
   const bbox = arg("bbox", "-0.55,51.28,0.30,51.70").split(",").map(Number);
   const started = Date.now();
-  const { restrictions, laneWays, stats } = await extractFromPbf(pbf, bbox);
+  const { restrictions, laneWays, warnings, stats } = await extractFromPbf(pbf, bbox);
 
-  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays]]) {
+  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings]]) {
     const outDir = join(ROOT, "data", "cache", dir);
     await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, `${name}.json`), JSON.stringify(data));
   }
-  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, stats }, null, 2));
+  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, warnings: warnings.length, stats }, null, 2));
   console.log(`extracted in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

@@ -97,13 +97,23 @@ const wayEast = {
   check("DMAP round trip keeps lanes", JSON.stringify(back.lanes) === JSON.stringify(lanes), JSON.stringify(back.lanes));
   check("DMAP round trip keeps restrictions", JSON.stringify(back.restrictions) === JSON.stringify(restrictions));
 
-  // A version 4 file has restrictions but no lanes section. Its last 4 bytes are the
-  // lane count, so drop them and set the version to 4.
+  // A version 4 file has restrictions but no lanes or warnings section. Its last 8 bytes are the
+  // lane count and the warning count, so drop them and set the version to 4.
   const v4 = Buffer.from(writeDmap({ bbox: [0, 0, 0, 0], nodes, edges, lines: [], polygons: [], labels: [], restrictions, lanes: [] }));
-  const v4cut = v4.subarray(0, v4.length - 4);
+  const v4cut = v4.subarray(0, v4.length - 8);
   v4cut.writeUInt16LE(4, 4);
   const old = readDmap(v4cut);
   check("version 4 file reads, with no lanes", old.lanes.length === 0 && old.restrictions.length === 1, JSON.stringify(old.restrictions));
+
+  // Warnings round trip, and a version 5 file (no warnings section) still reads.
+  const warnings = [{ kind: 1, lat: 515005000, lon: -1005000 }, { kind: 3, lat: 515009000, lon: -985000 }];
+  const withWarnings = writeDmap({ bbox: [0, 0, 0, 0], nodes, edges, lines: [], polygons: [], labels: [], restrictions, lanes, warnings });
+  check("DMAP round trip keeps warnings", JSON.stringify(readDmap(withWarnings).warnings) === JSON.stringify(warnings));
+  const v5 = Buffer.from(withWarnings);
+  const v5cut = v5.subarray(0, v5.length - (4 + warnings.length * 9));
+  v5cut.writeUInt16LE(5, 4);
+  const v5read = readDmap(v5cut);
+  check("version 5 file reads, with lanes and no warnings", v5read.warnings.length === 0 && v5read.lanes.length === 2, JSON.stringify(v5read.lanes));
 }
 
 if (failures.length) {

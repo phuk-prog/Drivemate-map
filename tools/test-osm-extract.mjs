@@ -7,7 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 import { extractFromPbf } from "./osm-extract.mjs";
-import { RESTRICTION_NO } from "./dmap.mjs";
+import { RESTRICTION_NO, WARNING_SPEED_CAMERA, WARNING_LEVEL_CROSSING, WARNING_ROADWORKS } from "./dmap.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -80,14 +80,26 @@ const nodes = [
   { id: 5, lat: 515010000, lon: -1000000 }, // north
   { id: 6, lat: 520000000, lon: -1000000 }, // far away, outside the box
   { id: 7, lat: 520000000, lon: -1010000 }, // far away, outside the box
+  { id: 8, lat: 515005000, lon: -1005000, tags: [["highway", "speed_camera"]] }, // speed camera, in the box
+  { id: 9, lat: 514995000, lon: -995000, tags: [["railway", "level_crossing"]] }, // level crossing, in the box
+  { id: 10, lat: 515008000, lon: -990000 }, // roadworks way, first node
+  { id: 11, lat: 515009000, lon: -985000 }, // roadworks way, second node
+  { id: 12, lat: 520000000, lon: -990000, tags: [["highway", "speed_camera"]] }, // speed camera, far away
 ];
 
 function nodeBlock() {
   const st = strings();
+  // keys_vals: key and value indexes for each node in turn, with a 0 ending each node.
+  const keysVals = [];
+  for (const n of nodes) {
+    for (const [k, v] of n.tags || []) keysVals.push(st.id(k), st.id(v));
+    keysVals.push(0);
+  }
   const dense = Buffer.concat([
     packedField(1, deltaZigzag(nodes.map((n) => n.id))),
     packedField(8, deltaZigzag(nodes.map((n) => n.lat))),
     packedField(9, deltaZigzag(nodes.map((n) => n.lon))),
+    packedField(10, keysVals),
   ]);
   return block(st, [lenField(2, dense)]);
 }
@@ -106,6 +118,7 @@ function wayBlock() {
     way(11, [4, 1], [["highway", "residential"]]), // restriction from way
     way(12, [1, 2], [["highway", "residential"]]), // restriction to way
     way(13, [6, 7], [["highway", "primary"], ["turn:lanes:forward", "left|right"], ["oneway", "yes"]]), // far away
+    way(14, [10, 11], [["highway", "construction"]]), // road under construction, in the box
   ];
   return block(st, [Buffer.concat(ways.map((w) => lenField(3, w)))]);
 }
@@ -153,7 +166,7 @@ const path = join(dir, "tiny.osm.pbf");
 await writeFile(path, file);
 
 // The box is [minLon, minLat, maxLon, maxLat] in degrees, around the crossroads.
-const { restrictions, laneWays, stats } = await extractFromPbf(path, [-0.2, 51.4, 0.0, 51.6]);
+const { restrictions, laneWays, warnings, stats } = await extractFromPbf(path, [-0.2, 51.4, 0.0, 51.6]);
 
 // 1. The simple restriction is found, with coordinates read from the delta-coded nodes.
 check("one simple restriction is extracted", restrictions.length === 1, JSON.stringify(restrictions));
@@ -178,10 +191,22 @@ check("both restriction relations were seen", stats.restrictionRelations === 2, 
 check("only the simple one was usable", stats.restrictionsSimple === 1, JSON.stringify(stats));
 check("the far lane way was found but dropped for being outside the box", stats.laneWaysFound === 2 && stats.laneWaysOutsideBox === 1, JSON.stringify(stats));
 
-// 4. A box that does not contain the crossroads drops everything.
+// 4. Warnings: speed camera, level crossing and roadworks in the box; the far camera is dropped.
+{
+  const kinds = warnings.map((w) => w.kind).sort();
+  check("three warnings are extracted", warnings.length === 3, JSON.stringify(warnings));
+  check("warning kinds are camera, crossing and roadworks", JSON.stringify(kinds) === JSON.stringify([WARNING_SPEED_CAMERA, WARNING_LEVEL_CROSSING, WARNING_ROADWORKS].sort()), JSON.stringify(kinds));
+  const cam = warnings.find((w) => w.kind === WARNING_SPEED_CAMERA);
+  check("speed camera keeps its position", cam && cam.lat === 515005000 && cam.lon === -1005000, JSON.stringify(cam));
+  const works = warnings.find((w) => w.kind === WARNING_ROADWORKS);
+  check("roadworks is the middle node of the road", works && works.lat === 515009000 && works.lon === -985000, JSON.stringify(works));
+  check("the far speed camera is not counted", stats.warningsSpeedCamera === 1, JSON.stringify(stats));
+}
+
+// 5. A box that does not contain the crossroads drops everything.
 {
   const empty = await extractFromPbf(path, [10, 10, 11, 11]);
-  check("a box away from the crossroads gives nothing", empty.restrictions.length === 0 && empty.laneWays.length === 0, JSON.stringify(empty.stats));
+  check("a box away from the crossroads gives nothing", empty.restrictions.length === 0 && empty.laneWays.length === 0 && empty.warnings.length === 0, JSON.stringify(empty.stats));
 }
 
 if (failures.length) {

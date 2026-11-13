@@ -6,7 +6,9 @@
 // This reader streams the file block by block and calls handlers for the kinds you ask for.
 //
 //   await readPbf(path, {
-//     onNode(id, lat, lon),         // lat and lon in 1e-7 degree units (the map's fixed-point)
+//     onNode(id, lat, lon, tags, block), // lat and lon in 1e-7 degree units (the map's fixed-point).
+//                                   // tags is [[keyIndex, valueIndex], ...] for tagged nodes, else null.
+//                                   // Set handlers.wantNodeTags to get tags; it costs some time.
 //     onWay(way, block),            // way = { id, keys, vals, refs }; block.str(i) gives a string
 //     onRelation(rel, block),       // rel = { id, keys, vals, roles, memids, types }
 //   });
@@ -87,11 +89,12 @@ function undelta(values) {
   return values;
 }
 
-function parseDense(buf, granularity, onNode) {
+function parseDense(buf, granularity, onNode, block, wantTags) {
   const r = new Pb(buf);
   let ids = null;
   let lats = null;
   let lons = null;
+  let keysVals = null;
   while (r.more()) {
     const t = r.varint();
     const f = t >>> 3;
@@ -99,13 +102,25 @@ function parseDense(buf, granularity, onNode) {
     if (f === 1 && w === 2) ids = undelta(packed(r.bytes(), true));
     else if (f === 8 && w === 2) lats = undelta(packed(r.bytes(), true));
     else if (f === 9 && w === 2) lons = undelta(packed(r.bytes(), true));
+    else if (f === 10 && w === 2 && wantTags) keysVals = packed(r.bytes(), false);
     else r.skip(w);
   }
   if (!ids || !lats || !lons) return;
   // Raw units are granularity nanodegrees; the map uses 1e-7 degrees, which is 100 nanodegrees.
   const scale = granularity / 100;
+  // keys_vals lists key and value indexes for each node in turn, with a 0 ending each node.
+  let kv = 0;
   for (let i = 0; i < ids.length; i++) {
-    onNode(ids[i], Math.round(lats[i] * scale), Math.round(lons[i] * scale));
+    let tags = null;
+    if (keysVals) {
+      while (kv < keysVals.length && keysVals[kv] !== 0) {
+        if (!tags) tags = [];
+        tags.push([keysVals[kv], keysVals[kv + 1]]);
+        kv += 2;
+      }
+      kv++; // the 0 that ends this node
+    }
+    onNode(ids[i], Math.round(lats[i] * scale), Math.round(lons[i] * scale), tags, block);
   }
 }
 
@@ -197,7 +212,7 @@ function parseBlock(buf, handlers) {
       const t = gr.varint();
       const f = t >>> 3;
       const w = t & 7;
-      if (f === 2 && w === 2 && handlers.onNode) parseDense(gr.bytes(), granularity, handlers.onNode);
+      if (f === 2 && w === 2 && handlers.onNode) parseDense(gr.bytes(), granularity, handlers.onNode, block, handlers.wantNodeTags);
       else if (f === 3 && w === 2 && handlers.onWay) handlers.onWay(parseWay(gr.bytes()), block);
       else if (f === 4 && w === 2 && handlers.onRelation) handlers.onRelation(parseRelation(gr.bytes()), block);
       else gr.skip(w);

@@ -142,6 +142,20 @@ The text comes from `turn:lanes` (or `turn:lanes:forward` / `turn:lanes:backward
 matched to edges by location and direction at build time. Only edges that run the same way as the way,
 or the reverse of a two-way road, get text. One-way roads that run against the way get none.
 
+## Road warnings (version 6 only, after the lanes)
+
+A u32 count, then that many records. Version 5 and earlier files have no warnings section.
+
+| Type | Field | Meaning |
+|------|-------|---------|
+| u8   | kind  | 1 speed camera, 2 level crossing, 3 roadworks (a road under construction) |
+| i32  | lat   | position |
+| i32  | lon   | position |
+
+Warnings are fixed things read from OpenStreetMap (`highway=speed_camera`, `railway=level_crossing`,
+`highway=construction`). They are not live: they show only what OpenStreetMap had when the map was built.
+A road under construction gets one point, at the middle node of the road.
+
 ## Source and licence
 
 Source data: OpenStreetMap, through OpenFreeMap's vector tiles (OpenMapTiles

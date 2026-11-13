@@ -1,10 +1,15 @@
-// Reader and writer for the DMAP map format, version 5 (see format/FORMAT.md).
-// Version 3 and 4 files (no lanes section, or no restrictions or lanes) can still be read.
+// Reader and writer for the DMAP map format, version 6 (see format/FORMAT.md).
+// Version 3, 4 and 5 files (older files without some of the later sections) can still be read.
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 5;
-const READABLE_VERSIONS = [3, 4, 5];
+const VERSION = 6;
+const READABLE_VERSIONS = [3, 4, 5, 6];
+
+// Warning kinds stored in the warnings section.
+export const WARNING_SPEED_CAMERA = 1;
+export const WARNING_LEVEL_CROSSING = 2;
+export const WARNING_ROADWORKS = 3;
 
 // Turn restriction kinds stored in the restrictions section.
 export const RESTRICTION_NO = 1; // this turn is not allowed
@@ -77,7 +82,7 @@ function writePoints(w, points) {
 }
 
 export function writeDmap(model) {
-  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [], lanes = [] } = model;
+  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [], lanes = [], warnings = [] } = model;
   const w = new ByteWriter();
   w.bytes(Buffer.from(MAGIC, "ascii"));
   w.u16(VERSION);
@@ -151,6 +156,14 @@ export function writeDmap(model) {
     w.u32(l.edge);
     w.u16(text.length);
     w.bytes(text);
+  }
+
+  // Version 6: road warnings, after the lanes. Each record is a kind and a point.
+  w.u32(warnings.length);
+  for (const x of warnings) {
+    w.u8(x.kind);
+    w.i32(x.lat);
+    w.i32(x.lon);
   }
 
   return w.result();
@@ -277,5 +290,17 @@ export function readDmap(buf) {
     }
   }
 
-  return { bbox, nodes, edges, lines, polygons, labels, restrictions, lanes };
+  // Version 6 files have a warnings section.
+  const warnings = [];
+  if (version >= 6) {
+    const count = u32();
+    for (let i = 0; i < count; i++) {
+      const kind = u8();
+      const lat = i32();
+      const lon = i32();
+      warnings.push({ kind, lat, lon });
+    }
+  }
+
+  return { bbox, nodes, edges, lines, polygons, labels, restrictions, lanes, warnings };
 }
