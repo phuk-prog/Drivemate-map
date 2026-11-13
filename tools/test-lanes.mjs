@@ -4,7 +4,7 @@
 // Usage: node tools/test-lanes.mjs
 
 import { splitAtSharedVertices } from "./graph.mjs";
-import { parseLaneOverpass, matchLanes, reverseLaneText } from "./lanes.mjs";
+import { parseLaneOverpass, matchLanes, reverseLaneText, validLaneText } from "./lanes.mjs";
 import { writeDmap, readDmap, RESTRICTION_NO } from "./dmap.mjs";
 
 const failures = [];
@@ -106,6 +106,17 @@ const wayEast = {
   const fwd = [{ roadClass: 3, flags: 1, points: [[0, -10000], [0, 10000]], from: 0, to: 1 }];
   r = matchLanes(fwd, [{ tags: { "turn:lanes:backward": "left|right" }, oneway: "yes", geom: g }]);
   check("oneway=yes with only :backward: unmatched and counted", r.lanes.length === 0 && r.stats.onlyBackwardTag === 1, JSON.stringify(r.stats));
+}
+
+// 3f. Lane text that is not valid OSM grammar is dropped and counted, never attached.
+{
+  const g = [[0, -10000], [0, 10000]];
+  const fwd = [{ roadClass: 3, flags: 0, points: [[0, -10000], [0, 10000]], from: 0, to: 1 }];
+  let r = matchLanes(fwd, [{ tags: { "turn:lanes": "throughthrough||right" }, oneway: "", geom: g }]);
+  check("invalid lane text is dropped and counted", r.lanes.length === 0 && r.stats.invalidLaneText === 1 && r.stats.noTagForDirection === 0, JSON.stringify(r.stats));
+  r = matchLanes(fwd, [{ tags: { "turn:lanes": "left||through;right|reversible" }, oneway: "", geom: g }]);
+  check("valid text with an empty lane is kept", r.lanes.length === 1, JSON.stringify(r.stats));
+  check("validLaneText rejects spaces, empty values and 13 lanes", !validLaneText("left; through") && !validLaneText("left;|right") && !validLaneText(Array(13).fill("left").join("|")) && validLaneText("none|"));
 }
 
 // 4. A way far away (about 100 m off) does not match.

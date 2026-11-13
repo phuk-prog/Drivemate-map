@@ -64,7 +64,7 @@ const MIRROR = {
   slight_left: "slight_right", slight_right: "slight_left",
   sharp_left: "sharp_right", sharp_right: "sharp_left",
   merge_to_left: "merge_to_right", merge_to_right: "merge_to_left",
-  through: "through", reverse: "reverse", none: "none", "": "",
+  through: "through", reverse: "reverse", reversible: "reversible", none: "none", "": "",
 };
 
 // Turns lane text written in the way's direction into text in the opposite direction, left to
@@ -75,7 +75,7 @@ export function reverseLaneText(text) {
   const lanes = text.split("|");
   const out = [];
   for (const lane of lanes) {
-    const vals = lane.split(";").map((v) => v.trim());
+    const vals = lane.split(";");
     const mirrored = [];
     for (const v of vals) {
       if (!Object.hasOwn(MIRROR, v)) return null;
@@ -92,13 +92,29 @@ export function reverseLaneText(text) {
 // travels and is ignored. Set false to leave plain turn:lanes on oneway=-1 ways unmatched.
 export const REVERSE_PLAIN_ON_ONEWAY_MINUS_ONE = true;
 
+const MAX_LANES = 12;
+
+// True if the text is valid OSM lane grammar: 1 to 12 lanes separated by "|", each lane empty
+// (none) or values from the turn:lanes vocabulary separated by ";". Same vocabulary as
+// tools/validate-dmap.mjs. Text that fails is dropped, never repaired.
+export function validLaneText(text) {
+  if (typeof text !== "string" || text.length === 0) return false;
+  const lanes = text.split("|");
+  if (lanes.length > MAX_LANES) return false;
+  for (const lane of lanes) {
+    if (lane === "") continue;
+    for (const v of lane.split(";")) if (!Object.hasOwn(MIRROR, v) || v === "") return false;
+  }
+  return true;
+}
+
 const isOnewayYes = (o) => o === "yes" || o === "true" || o === "1";
 const isOnewayMinus = (o) => o === "-1" || o === "reverse";
 const isTwoWay = (o) => !isOnewayYes(o) && !isOnewayMinus(o);
 
 // The lane text for an edge, given whether it runs the same way as the way.
 // Returns { text, why }: why says what is missing when there is no text.
-function laneTextFor(way, aligned) {
+function rawLaneTextFor(way, aligned) {
   const t = way.tags;
   const o = way.oneway;
   if (isOnewayMinus(o)) {
@@ -119,6 +135,12 @@ function laneTextFor(way, aligned) {
     return { text, why: text ? "" : "reversedEdgeOnlyForwardTag" };
   }
   return { text: null, why: "oneWayAgainstWay" };
+}
+
+function laneTextFor(way, aligned) {
+  const r = rawLaneTextFor(way, aligned);
+  if (r.text && !validLaneText(r.text)) return { text: null, why: "invalidLaneText" };
+  return r;
 }
 
 // Matches lane ways to edges. Returns { lanes: [{ edge, text }], stats }, and with
@@ -162,6 +184,7 @@ export function matchLanes(edges, ways, opts = {}) {
     onlyBackwardTag: 0,
     reversedOnOneWayMinusOne: 0,
     twoWayMatchedAmbiguous: 0,
+    invalidLaneText: 0,
   };
   edges.forEach((e, ei) => {
     const pts = e.points;
@@ -234,8 +257,11 @@ export function matchLanes(edges, ways, opts = {}) {
     } else if (why === "oneWayAgainstWay") {
       stats.oneWayAgainstWay++;
     } else {
-      stats.noTagForDirection++;
-      if (why) stats[why]++;
+      if (why === "invalidLaneText") stats.invalidLaneText++;
+      else {
+        stats.noTagForDirection++;
+        if (why) stats[why]++;
+      }
     }
   });
   return { lanes, stats, details };
