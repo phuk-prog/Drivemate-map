@@ -261,6 +261,37 @@ function explain(r, wantFrom) {
   });
   return { v, node, ref, refD: metres(node, ref), cands, nodeD: nn.d };
 }
+// Point at `dist` metres along edge e, walking away from node v (at one end of the edge).
+function pointAlong(e, v, dist) {
+  const pts = e.to === v && e.from !== v ? e.points.slice().reverse() : e.points;
+  let left = dist;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const seg = metres(pts[i], pts[i + 1]);
+    if (seg >= left && seg > 0) {
+      const t = left / seg;
+      return [pts[i][0] + t * (pts[i + 1][0] - pts[i][0]), pts[i][1] + t * (pts[i + 1][1] - pts[i][1])];
+    }
+    left -= seg;
+  }
+  return pts[pts.length - 1];
+}
+// Does some edge at node v (usable the needed way) leave in the direction of `ref`, comparing at `dist` metres?
+function bestAtDistance(v, ref, wantFrom, dist, exclude = -1) {
+  const node = [nodes[v].lat, nodes[v].lon];
+  let best = Infinity;
+  edges.forEach((e, ei) => {
+    if (ei === exclude || (e.from !== v && e.to !== v)) return;
+    const atTo = e.to === v;
+    const oneway = !!(e.flags & 1);
+    if (!(wantFrom ? atTo || !oneway : !atTo || !oneway)) return;
+    best = Math.min(best, angle(node, ref, pointAlong(e, v, dist), true));
+  });
+  return deg(best);
+}
+const sameWay = (r) => {
+  const key = (pts) => pts.map((p) => p.join(",")).sort().join("|");
+  return key(r.from) === key(r.to);
+};
 for (const [reason, wantFrom] of [["noFrom", true], ["noTo", false]]) {
   const list = byReason[reason];
   console.log(`\n=== ${reason}: ${list.length} ===`);
@@ -283,6 +314,30 @@ for (const [reason, wantFrom] of [["noFrom", true], ["noTo", false]]) {
     if (x.cands.length === 1) bump("  (node has a single edge: dead end or tile seam)");
   }
   console.log(JSON.stringify(cat, null, 1));
+  const uturn = ex.filter((e) => sameWay(e.r));
+  console.log(`from way and to way are the same way (U-turn): ${uturn.length}`);
+  const rest = ex.filter((e) => !sameWay(e.r));
+  const hyp = { rest: rest.length, nearbyNodeMatches: 0, farDirection20mLe45: 0, farDirection20mLe60: 0, farDirection40mLe45: 0, noEdgeAtAll: 0, oneEdgeOnly: 0 };
+  for (const { r, x } of rest) {
+    if (x.cands.length === 0) hyp.noEdgeAtAll++;
+    if (x.cands.length === 1) hyp.oneEdgeOnly++;
+    const way = wantFrom ? r.from : r.to;
+    const ref = x.ref;
+    // Direction compared further along the roads rather than at the first point.
+    const d20 = bestAtDistance(x.v, ref, wantFrom, Math.min(20, Math.max(5, x.refD)));
+    if (d20 <= 45) hyp.farDirection20mLe45++;
+    if (d20 <= 60) hyp.farDirection20mLe60++;
+    if (bestAtDistance(x.v, ref, wantFrom, Math.min(40, Math.max(5, x.refD))) <= 45) hyp.farDirection40mLe45++;
+    // Another node within 15 m of the via point.
+    for (const i of around(nodeGrid, r.via)) {
+      if (i === x.v || metres(r.via, [nodes[i].lat, nodes[i].lon]) > 15) continue;
+      if (bestAtDistance(i, ref, wantFrom, 15) <= 45) {
+        hyp.nearbyNodeMatches++;
+        break;
+      }
+    }
+  }
+  console.log("hypotheses (non U-turn records):", JSON.stringify(hyp));
   const bestAngles = ex.filter((e) => e.x.cands.some((c) => c.ok)).map((e) => Math.min(...e.x.cands.filter((c) => c.ok).map((c) => c.as)));
   console.log("best usable angle, scaled (deg):", JSON.stringify(histogram(bestAngles, [30, 45, 60, 75, 90, 120, 150])));
   console.log("via node distance to the OSM via point (m):", JSON.stringify(histogram(ex.map((e) => e.x.nodeD), [0.5, 1, 2, 3])));
