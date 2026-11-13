@@ -10,6 +10,7 @@ import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
 import { splitAtSharedVertices, joinCrossings, dropSeamDuplicates } from "./graph.mjs";
 import { matchRestrictions } from "./restrictions.mjs";
+import { matchLanes, parseLaneOverpass } from "./lanes.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -282,6 +283,14 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   const restrictions = matchRestrictions(repaired.nodes, repaired.edges, restrictionRecords);
   // Drop seam duplicates: the same area from two neighbouring tiles.
   const keptPolygons = dropSeamDuplicates(polygons);
+  // Lane guidance: from the cache made by tools/fetch-lanes.mjs. None if there is no cache.
+  let laneWays = [];
+  try {
+    laneWays = JSON.parse(await readFile(join(ROOT, "data", "cache", "lanes", `${name}.json`), "utf8"));
+  } catch {
+    log(`no lane cache for ${name}; run tools/fetch-lanes.mjs to add lane guidance`);
+  }
+  const laneMatch = matchLanes(repaired.edges, laneWays);
   const bytes = writeDmap({
     bbox: bboxFixed,
     nodes: repaired.nodes,
@@ -290,6 +299,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     polygons: keptPolygons,
     labels,
     restrictions: restrictions.matched,
+    lanes: laneMatch.lanes,
   });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
@@ -309,6 +319,9 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     restrictionsFetched: restrictionRecords.length,
     restrictionsMatched: restrictions.matched.length,
     restrictionsUnmatched: restrictions.unmatched,
+    laneWays: laneWays.length,
+    laneEdgesMatched: laneMatch.stats.matched,
+    laneStats: laneMatch.stats,
     lines: lines.length,
     polygons: keptPolygons.length,
     seamDuplicatesDropped: polygons.length - keptPolygons.length,

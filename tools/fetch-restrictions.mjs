@@ -7,46 +7,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseOverpass } from "./restrictions.mjs";
+import { fetchOverpass, overpassBox } from "./overpass.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-];
 
-// Overpass bounding boxes are (south, west, north, east).
-export function overpassQuery([minLon, minLat, maxLon, maxLat]) {
+export function overpassQuery(bbox) {
   return `[out:json][timeout:900];
-relation["type"="restriction"](${minLat},${minLon},${maxLat},${maxLon});
+relation["type"="restriction"]${overpassBox(bbox)};
 out geom;`;
-}
-
-export async function fetchRestrictionJson(bbox) {
-  const query = overpassQuery(bbox);
-  let lastError = null;
-  for (const url of ENDPOINTS) {
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ data: query }),
-        });
-        if (res.status === 429) {
-          // Overpass is busy. Wait longer before trying again.
-          lastError = new Error(`HTTP 429 from ${url}`);
-          await new Promise((r) => setTimeout(r, 60000 * attempt));
-          continue;
-        }
-        if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
-        return await res.json();
-      } catch (err) {
-        lastError = err;
-        await new Promise((r) => setTimeout(r, 5000 * attempt));
-      }
-    }
-  }
-  throw new Error(`Overpass request failed: ${lastError?.message}`);
 }
 
 async function main() {
@@ -57,7 +25,7 @@ async function main() {
   const name = arg("name", "london");
   const bbox = arg("bbox", "-0.55,51.28,0.30,51.70").split(",").map(Number);
   const started = Date.now();
-  const json = await fetchRestrictionJson(bbox);
+  const json = await fetchOverpass(overpassQuery(bbox));
   const { records, skipped } = parseOverpass(json);
   const outDir = join(ROOT, "data", "cache", "restrictions");
   await mkdir(outDir, { recursive: true });

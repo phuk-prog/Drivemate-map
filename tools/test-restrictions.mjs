@@ -137,7 +137,9 @@ check("crossroads has a centre node", centre >= 0, `nodes=${JSON.stringify(nodes
   check("DMAP round trip keeps edges", back.edges.length === edges.length);
   const v3 = Buffer.from(bytes);
   v3.writeUInt16LE(3, 4);
-  const noSection = readDmap(v3.subarray(0, v3.length - (4 + restrictions.length * 13)));
+  // Version 5 files end with the restrictions section and an empty lanes count (4 bytes).
+  // Dropping the lanes count, the restriction records and the restriction count leaves a version 3 layout.
+  const noSection = readDmap(v3.subarray(0, v3.length - (4 + restrictions.length * 13 + 4)));
   check("version 3 files still read, with no restrictions", noSection.restrictions.length === 0);
 }
 

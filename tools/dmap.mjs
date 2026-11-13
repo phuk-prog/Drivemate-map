@@ -1,10 +1,10 @@
-// Reader and writer for the DMAP map format, version 4 (see format/FORMAT.md).
-// Version 3 files (no restrictions section) can still be read.
+// Reader and writer for the DMAP map format, version 5 (see format/FORMAT.md).
+// Version 3 and 4 files (no lanes section, or no restrictions or lanes) can still be read.
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 4;
-const READABLE_VERSIONS = [3, 4];
+const VERSION = 5;
+const READABLE_VERSIONS = [3, 4, 5];
 
 // Turn restriction kinds stored in the restrictions section.
 export const RESTRICTION_NO = 1; // this turn is not allowed
@@ -77,7 +77,7 @@ function writePoints(w, points) {
 }
 
 export function writeDmap(model) {
-  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [] } = model;
+  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [], lanes = [] } = model;
   const w = new ByteWriter();
   w.bytes(Buffer.from(MAGIC, "ascii"));
   w.u16(VERSION);
@@ -142,6 +142,15 @@ export function writeDmap(model) {
     w.u32(r.from);
     w.u32(r.to);
     w.u32(r.via);
+  }
+
+  // Version 5: lane guidance, after the restrictions. Each record is an edge and its raw OSM lane text.
+  w.u32(lanes.length);
+  for (const l of lanes) {
+    const text = Buffer.from(l.text, "utf8").subarray(0, 65535);
+    w.u32(l.edge);
+    w.u16(text.length);
+    w.bytes(text);
   }
 
   return w.result();
@@ -254,5 +263,19 @@ export function readDmap(buf) {
     }
   }
 
-  return { bbox, nodes, edges, lines, polygons, labels, restrictions };
+  // Version 5 files have a lanes section.
+  const lanes = [];
+  if (version >= 5) {
+    const count = u32();
+    for (let i = 0; i < count; i++) {
+      const edge = u32();
+      const len = u16();
+      need(len);
+      const text = buf.toString("utf8", pos, pos + len);
+      pos += len;
+      lanes.push({ edge, text });
+    }
+  }
+
+  return { bbox, nodes, edges, lines, polygons, labels, restrictions, lanes };
 }

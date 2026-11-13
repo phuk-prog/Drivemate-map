@@ -128,6 +128,20 @@ A u32 count, then that many records. Version 3 files have no restrictions sectio
 Restrictions come from OpenStreetMap restriction relations (simple ones only: one from road, one via node, one to road).
 They are matched to edges by location at build time, since the map tiles do not carry them.
 
+## Lane guidance (version 5 only, after the restrictions)
+
+A u32 count, then that many records. Version 4 and earlier files have no lanes section.
+
+| Type  | Field | Meaning |
+|-------|-------|---------|
+| u32   | edge  | edge ID |
+| u16   | len   | byte length of the text |
+| bytes | text  | raw OpenStreetMap lane text, UTF-8, for the direction the edge is travelled in, for example `left|through|through|right` |
+
+The text comes from `turn:lanes` (or `turn:lanes:forward` / `turn:lanes:backward`) on OpenStreetMap ways,
+matched to edges by location and direction at build time. Only edges that run the same way as the way,
+or the reverse of a two-way road, get text. One-way roads that run against the way get none.
+
 ## Source and licence
 
 Source data: OpenStreetMap, through OpenFreeMap's vector tiles (OpenMapTiles

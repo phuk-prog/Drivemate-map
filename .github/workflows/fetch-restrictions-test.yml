@@ -29,6 +29,12 @@ jobs:
           set -o pipefail
           node --max-old-space-size=6000 tools/fetch-restrictions.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 | tee fetch-summary.txt
 
+      - name: Run the lane tag fetch for Greater London
+        shell: bash
+        run: |
+          set -o pipefail
+          node --max-old-space-size=6000 tools/fetch-lanes.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 | tee -a fetch-summary.txt
+
       - name: Save the summary and the parsed file
         if: always()
         uses: actions/upload-artifact@v4
@@ -37,4 +43,5 @@ jobs:
           path: |
             fetch-summary.txt
             data/cache/restrictions/london.json
+            data/cache/lanes/london.json
           if-no-files-found: warn
