@@ -14,6 +14,10 @@ import { prepareOsm } from "./osm-prepare.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
 const MAX_REGIONS_PER_RUN = Number(process.env.MAX_REGIONS_PER_RUN ?? 2);
+// Squares built in one run over all square areas. Measured: about 1 s per square, so this is about upload size, not build time.
+let squaresLeft = Number(process.env.MAX_SQUARES_PER_RUN ?? 100);
+// On CI the .dmap files are not in the checkout; trust the index (the release holds the files).
+const TRUST_INDEX = process.env.TRUST_INDEX === "1";
 // Change this when the builder changes output, so existing regions are rebuilt.
 const BUILDER_VERSION = "graph-repair-2";
 
@@ -44,7 +48,7 @@ for (const region of regions) {
   }
   const builder = builderFor(region);
   const out = join(PUBLISHED, `${region.id}.dmap`);
-  const exists = await stat(out).then(() => true, () => false);
+  const exists = TRUST_INDEX || (await stat(out).then(() => true, () => false));
   const previous = index[region.id];
 
   if (previous && previous.version === version && previous.builder === builder && exists) {
@@ -84,5 +88,6 @@ for (const area of squareAreas) {
     continue;
   }
   const bbox = [area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3]];
-  await buildSquares({ bbox, zoom: area.zoom, osm: area.osm ? area.id : undefined, beforeBuild: area.osm ? () => prepareOsm({ geofabrik: area.osm.geofabrik, name: area.id, bbox: area.bbox }) : undefined, log: console.log });
+  const r = await buildSquares({ bbox, zoom: area.zoom, osm: area.osm ? area.id : undefined, maxBuild: squaresLeft, beforeBuild: area.osm ? () => prepareOsm({ geofabrik: area.osm.geofabrik, name: area.id, bbox: area.bbox }) : undefined, log: console.log });
+  squaresLeft -= r.built;
 }
