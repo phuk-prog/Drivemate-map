@@ -5,6 +5,8 @@ name: Test the turn restriction fetch
 # and the parsed restriction file as artifacts. Does not publish anything.
 
 on:
+  push:
+    branches: [ccr-8fafbdec-2zz0bp]
   workflow_dispatch:
 
 permissions:
