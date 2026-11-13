@@ -1,0 +1,19 @@
+{
+  "data": [
+    { "id": "1000000000000001", "object_value": "regulatory--maximum-speed-limit-30--g1", "geometry": { "type": "Point", "coordinates": [-2.2350, 53.41005] }, "first_seen_at": "2023-05-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000002", "object_value": "regulatory--maximum-speed-limit-20--g1", "geometry": { "type": "Point", "coordinates": [-2.2380, 53.41008] }, "first_seen_at": "2024-03-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000003", "object_value": "regulatory--maximum-speed-limit-20--g3", "geometry": { "type": "Point", "coordinates": [-2.2320, 53.40992] }, "first_seen_at": "2024-03-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000004", "object_value": "regulatory--maximum-speed-limit-30--g1", "geometry": { "type": "Point", "coordinates": [-2.2350, 53.42009] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000005", "object_value": "regulatory--maximum-speed-limit-30--g1", "geometry": { "type": "Point", "coordinates": [-2.2350, 53.43030] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000006", "object_value": "regulatory--maximum-speed-limit-30--g1", "geometry": { "type": "Point", "coordinates": [-2.2330, 53.43015] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000007", "object_value": "regulatory--maximum-speed-limit-30--g1", "geometry": { "type": "Point", "coordinates": [-2.2350, 53.44005] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000008", "object_value": "regulatory--end-of-maximum-speed-limit-30--g1", "geometry": { "type": "Point", "coordinates": [-2.2360, 53.41005] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000009", "object_value": "regulatory--maximum-speed-limit-30--g1", "geometry": { "type": "Point", "coordinates": [-2.2350, 53.46000] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000010", "object_value": "regulatory--maximum-speed-limit-50--g1", "geometry": { "type": "Point", "coordinates": [-2.2200, 53.42000] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" },
+    { "id": "1000000000000011", "object_value": "warning--road-bump--g1", "geometry": { "type": "Point", "coordinates": [-2.2350, 53.41001] }, "first_seen_at": "2022-01-01T10:00:00+0000", "last_seen_at": "2025-08-01T10:00:00+0000" }
+  ],
+  "paging": {
+    "cursors": { "before": "MAZDZD", "after": "MTAZD" },
+    "next": "https://graph.mapillary.com/map_features?access_token=MLY%7CFIXTURE&fields=id%2Cobject_value%2Cgeometry%2Cfirst_seen_at%2Clast_seen_at&bbox=-2.25%2C53.4%2C-2.2%2C53.45&limit=2&after=MTAZD"
+  }
+}

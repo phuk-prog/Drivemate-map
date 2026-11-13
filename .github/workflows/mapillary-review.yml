@@ -1,0 +1,106 @@
+name: Mapillary review
+
+# Compares Mapillary speed-limit sign detections with the speed limits in our published map squares
+# and commits review flags to data/published/review/*.geojson (GitHub shows them on a map).
+# The owner checks each flag against the Mapillary photo and edits OpenStreetMap by hand.
+# Nothing is ever sent to OpenStreetMap.
+
+on:
+  schedule:
+    # Weekly, Monday at 03:41 UTC.
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Squares to review: areas (squares of the regions.json squareAreas) or all (every published square)"
+        type: choice
+        options: [areas, all]
+        default: areas
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mapillary-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      SCOPE: ${{ inputs.scope || 'areas' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test the Mapillary review
+        run: node tools/test-mapillary.mjs
+
+      - name: Check for the Mapillary token
+        id: token
+        env:
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+        run: |
+          if [ -z "$MAPILLARY_TOKEN" ]; then
+            echo "::warning::The MAPILLARY_TOKEN secret is not set, so the Mapillary review was skipped. Add it under Settings, Secrets and variables, Actions."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Each square is downloaded from the release of its latitude row (squares-lat<latIdx>), or from
+      # maps-latest when the row release does not have it. Squares that cannot be downloaded are skipped.
+      - name: Download the published squares to review
+        if: steps.token.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/published/squares
+          node tools/review-mapillary.mjs --list-squares --scope="$SCOPE" > "$RUNNER_TEMP/squares.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/squares.txt") published square(s) in scope ($SCOPE)."
+          while read -r id release; do
+            [ -n "$id" ] || continue
+            if gh release download "$release" --pattern "$id.dmap.gz" --dir data/published/squares --clobber 2>/dev/null \
+              || gh release download maps-latest --pattern "$id.dmap.gz" --dir data/published/squares --clobber 2>/dev/null; then
+              gunzip -f "data/published/squares/$id.dmap.gz"
+            else
+              echo "::warning::Could not download $id.dmap.gz; it is skipped."
+            fi
+          done < "$RUNNER_TEMP/squares.txt"
+          shopt -s nullglob
+          files=(data/published/squares/*.dmap)
+          echo "Downloaded ${#files[@]} square file(s)."
+
+      - name: Review the squares against Mapillary
+        id: review
+        if: steps.token.outputs.present == 'true'
+        continue-on-error: true
+        env:
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
+        run: node tools/review-mapillary.mjs --scope="$SCOPE"
+
+      # Areas whose squares all answered are committed even if another area failed.
+      - name: Commit the review flags if they changed
+        if: steps.token.outputs.present == 'true'
+        run: |
+          mkdir -p data/published/review
+          git add data/published/review
+          if git diff --cached --quiet; then
+            echo "The review flags did not change. Nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update Mapillary review flags ($(date -u +%Y-%m-%d))"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
+
+      - name: Mark the run failed if the review failed
+        if: steps.review.outcome == 'failure'
+        run: |
+          echo "The Mapillary review failed for some squares or the token was refused. See the review step log."
+          exit 1
