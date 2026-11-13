@@ -27,6 +27,8 @@ jobs:
       - name: Build new and changed regions
         env:
           MAX_REGIONS_PER_RUN: "2"
+          MAX_SQUARES_PER_RUN: "100"
+          TRUST_INDEX: "1"
         run: node --max-old-space-size=8000 tools/update-regions.mjs
 
       - name: Test every published map file

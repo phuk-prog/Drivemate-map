@@ -2,13 +2,16 @@
 // Usage: node tools/build-area.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14
 // Output: data/out/<name>.dmap (not committed; published to static hosting later)
 
-import { readdir, writeFile, mkdir, stat } from "node:fs/promises";
+import { readdir, readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
-import { splitAtSharedVertices } from "./graph.mjs";
+import { splitAtSharedVertices, joinCrossings, dropSeamDuplicates } from "./graph.mjs";
+import { matchRestrictions } from "./restrictions.mjs";
+import { matchSpeedLimits } from "./speed.mjs";
+import { matchLanes, parseLaneOverpass } from "./lanes.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -115,7 +118,8 @@ function centroidPoint(parts) {
   return [sx / ring.length, sy / ring.length];
 }
 
-export async function buildArea({ name, bbox, zoom, version, log = console.log }) {
+// osmName: which data/osm-cache/*/<osmName>.json to read (a grid square uses its region's caches).
+export async function buildArea({ name, bbox, zoom, version, osmName = name, log = console.log }) {
   const cacheRoot = join(ROOT, "data", "cache", version);
   const tiles = tilesForBbox(bbox, zoom);
   const nodes = new NodeIndex();
@@ -268,8 +272,56 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
 
   const bboxFixed = [toFixed7(bbox[1]), toFixed7(bbox[0]), toFixed7(bbox[3]), toFixed7(bbox[2])];
   // Make every junction a node, so roads that meet mid-line can be routed across.
-  const repaired = splitAtSharedVertices(edges);
-  const bytes = writeDmap({ bbox: bboxFixed, nodes: repaired.nodes, edges: repaired.edges, lines, polygons, labels });
+  // Roads that cross in the middle get a junction at the crossing point.
+  const crossed = joinCrossings(edges);
+  const repaired = splitAtSharedVertices(crossed.edges);
+  // Turn restrictions: from the cache made by tools/fetch-restrictions.mjs. None if there is no cache.
+  let restrictionRecords = [];
+  try {
+    restrictionRecords = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "restrictions", `${osmName}.json`), "utf8"));
+  } catch {
+    log(`no restriction cache for ${osmName}; run tools/fetch-restrictions.mjs to add turn restrictions`);
+  }
+  const restrictions = matchRestrictions(repaired.nodes, repaired.edges, restrictionRecords);
+  // Drop seam duplicates: the same area from two neighbouring tiles.
+  const keptPolygons = dropSeamDuplicates(polygons);
+  // Lane guidance: from the cache made by tools/fetch-lanes.mjs. None if there is no cache.
+  let laneWays = [];
+  try {
+    laneWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "lanes", `${osmName}.json`), "utf8"));
+  } catch {
+    log(`no lane cache for ${osmName}; run tools/fetch-lanes.mjs to add lane guidance`);
+  }
+  const laneMatch = matchLanes(repaired.edges, laneWays);
+  // Road warnings (speed cameras, level crossings, roadworks): from tools/osm-extract.mjs. None if there is no cache.
+  let warnings = [];
+  try {
+    warnings = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "warnings", `${osmName}.json`), "utf8"));
+  } catch {
+    log(`no warnings cache for ${osmName}; run tools/osm-extract.mjs to add road warnings`);
+  }
+  // The cache covers the whole area, but a square (or any smaller build) keeps only the warnings inside its own box.
+  warnings = warnings.filter((w) => w.lat >= bboxFixed[0] && w.lat <= bboxFixed[2] && w.lon >= bboxFixed[1] && w.lon <= bboxFixed[3]);
+  // Road speed limits (OSM maxspeed): from tools/osm-extract.mjs. None if there is no cache.
+  let speedWays = [];
+  try {
+    speedWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "speed", `${osmName}.json`), "utf8"));
+  } catch {
+    log(`no speed cache for ${osmName}; run tools/osm-extract.mjs to add speed limits`);
+  }
+  const speedMatch = matchSpeedLimits(repaired.edges, speedWays);
+  const bytes = writeDmap({
+    bbox: bboxFixed,
+    nodes: repaired.nodes,
+    edges: repaired.edges,
+    lines,
+    polygons: keptPolygons,
+    labels,
+    restrictions: restrictions.matched,
+    lanes: laneMatch.lanes,
+    warnings,
+    speedLimits: speedMatch.speedLimits,
+  });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, `${name}.dmap`);
@@ -284,8 +336,22 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     bytes: size,
     nodes: repaired.nodes.length,
     routableEdges: repaired.edges.length,
+    crossingsFound: crossed.joins,
+    restrictionsFetched: restrictionRecords.length,
+    restrictionsMatched: restrictions.matched.length,
+    restrictionsUnmatched: restrictions.unmatched,
+    laneWays: laneWays.length,
+    laneEdgesMatched: laneMatch.stats.matched,
+    laneStats: laneMatch.stats,
+    warnings: warnings.length,
+    speedRecords: speedWays.length,
+    speedWaysUsed: speedMatch.stats.waysUsed,
+    speedEdgesMatched: speedMatch.stats.matched,
+    speedEdgesUnmatched: repaired.edges.length - speedMatch.stats.matched,
+    speedStats: speedMatch.stats,
     lines: lines.length,
-    polygons: polygons.length,
+    polygons: keptPolygons.length,
+    seamDuplicatesDropped: polygons.length - keptPolygons.length,
     labels: labels.length,
     dropped,
     counts,
@@ -300,7 +366,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     return hit ? hit.slice(n.length + 3) : def;
   };
   const cacheDir = join(ROOT, "data", "cache");
-  const versions = (await readdir(cacheDir)).sort();
+  // Tile versions are named like 20261101_080013_pt. Ignore any other folder.
+  const versions = (await readdir(cacheDir)).filter((v) => /^\d{8}_\d{6}/.test(v)).sort();
   const version = arg("version", versions[versions.length - 1]);
   const started = Date.now();
   await buildArea({

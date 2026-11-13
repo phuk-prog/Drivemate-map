@@ -1,4 +1,4 @@
-# Drivemate map file format (DMAP), version 3
+# Drivemate map file format (DMAP), versions 3 to 7
 
 Our own binary format for one downloadable map area. All numbers are little-endian.
 Coordinates are stored as signed 32-bit integers in units of 1e-7 degree
@@ -12,7 +12,7 @@ reference reader is `tools/dmap.mjs`. Class-to-code tables are in `tools/classes
 | Offset | Type      | Field        | Meaning                              |
 |--------|-----------|--------------|--------------------------------------|
 | 0      | 4 bytes   | magic        | ASCII `DMAP`                         |
-| 4      | u16       | version      | `3`                                  |
+| 4      | u16       | version      | `7` (3 to 6 can still be read)       |
 | 6      | u16       | reserved     | `0`                                  |
 | 8      | i32 x 4   | bbox         | minLat, minLon, maxLat, maxLon       |
 | 24     | u32       | nodeCount    | number of road nodes                 |
@@ -113,6 +113,67 @@ Categories:
   10 public services, 11 other.
 
 Only named features produce labels. Labels are drawn by the app, not stored as images.
+
+## Turn restrictions (version 4 only, after the labels)
+
+A u32 count, then that many records. Version 3 files have no restrictions section.
+
+| Type | Field | Meaning |
+|------|-------|---------|
+| u8   | kind  | 1 no: this turn is not allowed. 2 only: this is the only turn allowed from the edge at the via node. |
+| u32  | from  | edge ID the traveller comes in on |
+| u32  | to    | edge ID the traveller leaves on |
+| u32  | via   | node ID of the junction where the turn happens |
+
+Restrictions come from OpenStreetMap restriction relations (simple ones only: one from road, one via node, one to road).
+They are matched to edges by location at build time, since the map tiles do not carry them.
+
+## Lane guidance (version 5 only, after the restrictions)
+
+A u32 count, then that many records. Version 4 and earlier files have no lanes section.
+
+| Type  | Field | Meaning |
+|-------|-------|---------|
+| u32   | edge  | edge ID |
+| u16   | len   | byte length of the text |
+| bytes | text  | raw OpenStreetMap lane text, UTF-8, for the direction the edge is travelled in, for example `left|through|through|right` |
+
+The text comes from `turn:lanes` (or `turn:lanes:forward` / `turn:lanes:backward`) on OpenStreetMap ways,
+matched to edges by location and direction at build time. Only edges that run the same way as the way,
+or the reverse of a two-way road, get text. One-way roads that run against the way get none.
+
+## Road warnings (version 6 only, after the lanes)
+
+A u32 count, then that many records. Version 5 and earlier files have no warnings section.
+
+| Type | Field | Meaning |
+|------|-------|---------|
+| u8   | kind  | 1 speed camera, 2 level crossing, 3 roadworks (a road under construction) |
+| i32  | lat   | position |
+| i32  | lon   | position |
+
+Warnings are fixed things read from OpenStreetMap (`highway=speed_camera`, `railway=level_crossing`,
+`highway=construction`). They are not live: they show only what OpenStreetMap had when the map was built.
+A road under construction gets one point, at the middle node of the road.
+
+## Road speed limits (version 7 only, after the warnings)
+
+A u32 count, then that many records. Version 6 and earlier files have no speed limit section.
+
+| Type | Field | Meaning |
+|------|-------|---------|
+| u32  | edge  | index of the road edge |
+| u8   | value | the number shown on the sign, 1 to 255 |
+| u8   | unit  | 0 km/h, 1 mph |
+
+One limit per edge, for travel from the edge's first node to its last. A two-way edge whose two
+directions have different limits is not listed. The limit comes from the OpenStreetMap
+`maxspeed` tag (and `maxspeed:forward` / `maxspeed:backward` on two-way roads), matched to edges by
+location and direction at build time. Only plain numbers are stored (`50`, `30 mph`). Words such as
+`national`, `signals`, `none`, `walk` and `variable`, country defaults, lists and conditional limits
+are dropped, and no default limit is ever guessed. An edge that is not listed has no known limit,
+and the app shows no speed sign for it. Coverage is partial. The value is stored as shown, so a
+limit in mph is not converted: the app converts between units only for display.
 
 ## Source and licence
 

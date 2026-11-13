@@ -1,0 +1,46 @@
+name: Diagnose restrictions
+
+# Explains why turn restrictions fail to match roads in the London build. Runs only when the
+# diagnostic files change, or on demand. Prints the report to the job log. Publishes nothing.
+
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-restrictions.yml'
+      - 'tools/diagnose-restrictions.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run the offline checks
+        run: |
+          node tools/test-graph.mjs
+          node tools/test-restrictions.mjs
+
+      - name: Download the Greater London extract
+        run: |
+          URL=$(node tools/geofabrik-url.mjs greater-london)
+          echo "extract: $URL"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 10 -o london.osm.pbf "$URL"
+          ls -l london.osm.pbf
+
+      - name: Extract restrictions
+        run: node --max-old-space-size=6000 tools/osm-extract.mjs --pbf=london.osm.pbf --name=london --bbox=-0.55,51.28,0.30,51.70
+
+      - name: Fetch the map tiles
+        run: node tools/fetch-tiles.mjs --bbox=-0.55,51.28,0.30,51.70 --zoom=14
+
+      - name: Diagnose
+        run: node --max-old-space-size=8000 tools/diagnose-restrictions.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14

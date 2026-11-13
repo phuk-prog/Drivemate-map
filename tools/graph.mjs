@@ -1,5 +1,6 @@
 // Road graph repair: splits roads wherever another road shares a point with them,
-// so that every junction becomes a node the router can turn at. Our own code.
+// so that every junction becomes a node the router can turn at. Also joins roads
+// that cross in the middle. Our own code.
 
 const SNAP = 200; // 1e-7 degree units: about 2 m, same as the builder
 
@@ -83,4 +84,168 @@ export function splitAtSharedVertices(edges) {
     points: p.points,
   }));
   return { nodes, edges: out };
+}
+
+// Crossings: finds where two at-grade roads cross in the middle of a line, with no
+// shared point, and inserts the crossing point into both roads. splitAtSharedVertices
+// then makes it a junction. Bridges and tunnels are skipped, since they pass over or
+// under other roads without meeting them. Returns { edges, joins } where joins is the
+// number of crossings found.
+const CELL = 20000; // grid cell in 1e-7 degree units: about 220 m
+const BRIDGE_OR_TUNNEL = 2 | 4;
+
+// Intersection of segment p->q with segment r->s. Returns null unless the two
+// segments cross at a point inside both. t is the position on p->q, u on r->s.
+function segmentCrossing(p, q, r, s) {
+  const rx = q[0] - p[0];
+  const ry = q[1] - p[1];
+  const sx = s[0] - r[0];
+  const sy = s[1] - r[1];
+  const d = rx * sy - ry * sx;
+  if (d === 0) return null; // parallel or collinear
+  const wx = r[0] - p[0];
+  const wy = r[1] - p[1];
+  const t = (wx * sy - wy * sx) / d;
+  const u = (wx * ry - wy * rx) / d;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { t, u, point: [Math.round(p[0] + t * rx), Math.round(p[1] + t * ry)] };
+}
+
+// True when two points are within SNAP of each other, the same rule as the vertex index.
+function nearPoint(a, b) {
+  return Math.abs(a[0] - b[0]) <= SNAP && Math.abs(a[1] - b[1]) <= SNAP;
+}
+
+export function joinCrossings(edges) {
+  // Index every at-grade segment by the grid cells its bounding box covers.
+  const segEdge = [];
+  const segIndex = [];
+  const segMinI = [];
+  const segMinJ = [];
+  const grid = new Map(); // "ci,cj" -> { ci, cj, ids: [segment ids] }
+  edges.forEach((e, ei) => {
+    if (e.flags & BRIDGE_OR_TUNNEL) return;
+    const pts = e.points;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const id = segEdge.length;
+      const [a, b] = [pts[i], pts[i + 1]];
+      const minI = Math.floor(Math.min(a[0], b[0]) / CELL);
+      const maxI = Math.floor(Math.max(a[0], b[0]) / CELL);
+      const minJ = Math.floor(Math.min(a[1], b[1]) / CELL);
+      const maxJ = Math.floor(Math.max(a[1], b[1]) / CELL);
+      segEdge.push(ei);
+      segIndex.push(i);
+      segMinI.push(minI);
+      segMinJ.push(minJ);
+      for (let ci = minI; ci <= maxI; ci++) {
+        for (let cj = minJ; cj <= maxJ; cj++) {
+          const key = `${ci},${cj}`;
+          let cell = grid.get(key);
+          if (!cell) grid.set(key, (cell = { ci, cj, ids: [] }));
+          cell.ids.push(id);
+        }
+      }
+    }
+  });
+
+  // Test pairs of segments from different roads. A pair is tested only in the cell
+  // where their boxes first overlap, so no pair is tested twice and no set is needed.
+  const inserts = edges.map(() => []); // per edge: { seg, t, point }
+  let joins = 0;
+  for (const cell of grid.values()) {
+    const ids = cell.ids;
+    for (let x = 0; x < ids.length; x++) {
+      for (let y = x + 1; y < ids.length; y++) {
+        const s1 = ids[x];
+        const s2 = ids[y];
+        const e1 = segEdge[s1];
+        const e2 = segEdge[s2];
+        if (e1 === e2) continue;
+        if (cell.ci !== Math.max(segMinI[s1], segMinI[s2]) || cell.cj !== Math.max(segMinJ[s1], segMinJ[s2])) continue;
+
+        const i1 = segIndex[s1];
+        const i2 = segIndex[s2];
+        const p = edges[e1].points;
+        const r = edges[e2].points;
+        const hit = segmentCrossing(p[i1], p[i1 + 1], r[i2], r[i2 + 1]);
+        if (!hit) continue;
+        joins++;
+        // A crossing right at a road end is already a shared point (or a near miss
+        // that the vertex index merges), so no point is added at that end.
+        if (!nearPoint(hit.point, p[i1]) && !nearPoint(hit.point, p[i1 + 1])) {
+          inserts[e1].push({ seg: i1, t: hit.t, point: hit.point });
+        }
+        if (!nearPoint(hit.point, r[i2]) && !nearPoint(hit.point, r[i2 + 1])) {
+          inserts[e2].push({ seg: i2, t: hit.u, point: hit.point });
+        }
+      }
+    }
+  }
+
+  // Rebuild each edge's points with the crossing points in order along the road.
+  const out = edges.map((e, ei) => {
+    const add = inserts[ei];
+    if (add.length === 0) return e;
+    add.sort((a, b) => a.seg - b.seg || a.t - b.t);
+    const pts = [];
+    let next = 0;
+    const push = (pt) => {
+      const last = pts[pts.length - 1];
+      if (!last || last[0] !== pt[0] || last[1] !== pt[1]) pts.push(pt);
+    };
+    for (let k = 0; k < e.points.length; k++) {
+      push(e.points[k]);
+      while (next < add.length && add[next].seg === k) {
+        push(add[next].point);
+        next++;
+      }
+    }
+    return { ...e, points: pts };
+  });
+  return { edges: out, joins };
+}
+
+// Seam duplicates: a tile edge can give the same area twice, from two neighbouring
+// tiles. Keeps the first of each group of areas that have the same kind, the same
+// place (bounding box to about 11 m) and the same size (area within 1%). Areas with the
+// same place but a different shape are kept. Returns the kept areas.
+const DUP_BOX = 1000; // 1e-7 degree units: about 1.1 cm grid for the place key
+const DUP_AREA = 0.01;
+
+function ringsArea(rings) {
+  let total = 0;
+  for (const ring of rings) {
+    let twice = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const [x1, y1] = ring[i];
+      const [x2, y2] = ring[(i + 1) % ring.length];
+      twice += x1 * y2 - x2 * y1;
+    }
+    total += Math.abs(twice) / 2;
+  }
+  return total;
+}
+
+export function dropSeamDuplicates(polygons) {
+  const seen = new Map(); // place key -> [areas already kept]
+  const kept = [];
+  for (const p of polygons) {
+    let minA = Infinity, minB = Infinity, maxA = -Infinity, maxB = -Infinity;
+    for (const ring of p.rings) {
+      for (const [a, b] of ring) {
+        if (a < minA) minA = a;
+        if (a > maxA) maxA = a;
+        if (b < minB) minB = b;
+        if (b > maxB) maxB = b;
+      }
+    }
+    const key = [p.kind, Math.round(minA / DUP_BOX), Math.round(minB / DUP_BOX), Math.round(maxA / DUP_BOX), Math.round(maxB / DUP_BOX)].join("|");
+    const area = ringsArea(p.rings);
+    const list = seen.get(key) || [];
+    if (list.some((a) => Math.abs(a - area) <= DUP_AREA * Math.max(area, 1))) continue;
+    list.push(area);
+    seen.set(key, list);
+    kept.push(p);
+  }
+  return kept;
 }

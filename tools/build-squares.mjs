@@ -12,10 +12,14 @@ import { squaresTouching, squareBbox, squareId } from "./grid.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const SQUARES_DIR = join(ROOT, "data", "published", "squares");
-const BUILDER_VERSION = "graph-repair-1";
+const BUILDER_VERSION = "graph-repair-2";
 
 // Builds every square touching a bounding box given in lon-first order (as build-area uses).
-export async function buildSquares({ bbox, zoom, log = console.log }) {
+// osm: name of the OSM caches to use for every square (see build-area osmName); builderTag is added to the
+// builder version so squares are rebuilt when OSM data is switched on.
+// maxBuild: build at most this many squares in this call; the rest wait for a later run (the index is the resume point).
+export async function buildSquares({ bbox, zoom, osm, beforeBuild, maxBuild = Infinity, log = console.log }) {
+  const builder = osm ? `${BUILDER_VERSION}+osm1` : BUILDER_VERSION;
   const [minLon, minLat, maxLon, maxLat] = bbox;
   await mkdir(SQUARES_DIR, { recursive: true });
   const indexFile = join(SQUARES_DIR, "index.json");
@@ -29,6 +33,8 @@ export async function buildSquares({ bbox, zoom, log = console.log }) {
   const squares = squaresTouching([minLat, minLon, maxLat, maxLon]);
   let version = null;
   let built = 0;
+  let waiting = 0;
+  let prepared = false;
   for (const sq of squares) {
     const id = squareId(sq);
     const [sMinLat, sMinLon, sMaxLat, sMaxLon] = squareBbox(sq);
@@ -36,16 +42,25 @@ export async function buildSquares({ bbox, zoom, log = console.log }) {
     const fetched = await fetchTiles(sqBbox, zoom, { log: () => {} });
     version = fetched.version;
     const out = join(SQUARES_DIR, `${id}.dmap`);
-    const exists = await stat(out).then(() => true, () => false);
-    if (index[id] && index[id].version === version && index[id].builder === BUILDER_VERSION && exists) continue;
-    await buildArea({ name: id, bbox: sqBbox, zoom, version, log: () => {} });
+    // On a CI runner the .dmap files are not in the checkout (they live in the release), so the index alone says "built".
+    const exists = process.env.TRUST_INDEX === "1" || (await stat(out).then(() => true, () => false));
+    if (index[id] && index[id].version === version && index[id].builder === builder && exists) continue;
+    if (built >= maxBuild) {
+      waiting++;
+      continue;
+    }
+    if (beforeBuild && built === 0 && !prepared) {
+      prepared = true;
+      await beforeBuild();
+    }
+    await buildArea({ name: id, bbox: sqBbox, zoom, version, osmName: osm || id, log: () => {} });
     await copyFile(join(ROOT, "data", "out", `${id}.dmap`), out);
-    index[id] = { version, builder: BUILDER_VERSION, zoom, bbox: sqBbox, bytes: (await stat(out)).size, builtAt: new Date().toISOString() };
+    index[id] = { version, builder, zoom, bbox: sqBbox, bytes: (await stat(out)).size, builtAt: new Date().toISOString() };
     built++;
   }
   await writeFile(indexFile, JSON.stringify(index, null, 2) + "\n");
-  log(`squares: ${squares.length} in area, ${built} built, version ${version}`);
-  return { total: squares.length, built, version };
+  log(`squares: ${squares.length} in area, ${built} built, ${waiting} waiting for a later run, version ${version}`);
+  return { total: squares.length, built, waiting, version };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

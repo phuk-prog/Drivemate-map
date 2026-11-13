@@ -9,6 +9,7 @@ Builds Drivemate's downloadable map areas. Everything here is our own code, with
 3. `tools/build-area.mjs` turns the tiles into one DMAP file in `data/out/` (not committed).
 4. `tools/dmap.mjs` reads and writes the DMAP format, defined in `format/FORMAT.md`.
 5. `tools/preview.mjs` renders a DMAP file to PNG with our own rasteriser, as a check.
+6. `tools/osm-extract.mjs` reads an OpenStreetMap `.osm.pbf` extract (for example from Geofabrik) with our own reader (`tools/osm-pbf.mjs`) and caches turn restrictions and lane tags in `data/osm-cache/restrictions/`, `data/osm-cache/lanes/` and `data/osm-cache/warnings/` (kept apart from the map tiles in `data/cache/`). `tools/build-area.mjs` picks them up by area name and matches them to roads by location (`tools/restrictions.mjs`, `tools/lanes.mjs`). The map tiles do not carry these. `tools/fetch-restrictions.mjs` and `tools/fetch-lanes.mjs` do the same job through the Overpass API, but the public servers refuse GitHub's runners, so use the extract. Run `node tools/test-osm-extract.mjs` to check the reader.
 
 ## Build Greater London
 
@@ -25,6 +26,8 @@ Version 2 holds: 352k routable road edges; 271k non-routed lines (rail, Undergro
 Source: OpenStreetMap, read as OpenFreeMap's vector tiles (OpenMapTiles schema). Map data © OpenStreetMap contributors, licensed under ODbL. Any app that uses this data must show that attribution.
 
 Known limits of this first version:
-- Road topology is built from tile line ends snapped within about 2 m. Roads that cross without a shared end point are not joined. Turn restrictions are not stored yet.
+- Road topology is built from tile line ends snapped within about 2 m. Roads that cross in the middle, with no shared point, are joined at the crossing (`tools/graph.mjs`, `joinCrossings`). Bridges and tunnels are skipped, using the OSM `brunnel` tag only. Roads that cross at a different height without that tag (for example, `layer` tags) are still joined, so this can create false junctions. Run `node tools/test-graph.mjs` to check the rules.
+- Some very short loop roads (two points, same start and end) are kept from the builder. They are harmless for drawing and can be removed later.
+- Turn restrictions are not stored yet.
 - Area features near tile seams can appear twice. This is harmless for drawing and costs some size.
 - Labels are stored in the file. The preview tool does not draw text; the app will draw labels.

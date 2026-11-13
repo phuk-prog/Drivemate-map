@@ -1,0 +1,65 @@
+name: Measure squares
+
+# Measurement only. Prepares the Greater London OSM caches, builds London as one map and as every grid square
+# with the real tools/build-squares.mjs, and reports time, size, memory and how well per-square OSM matching works.
+# Publishes nothing: no commit, no push, no release, no map files uploaded (only a text summary).
+
+on:
+  push:
+    paths:
+      - ".github/workflows/measure-squares.yml"
+      - "tools/measure-squares.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: measure-squares
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare OSM caches for greater-london (as the update workflow does)
+        run: |
+          mkdir -p measure-out
+          /usr/bin/time -v -o measure-out/prepare.time node tools/osm-prepare.mjs --geofabrik=greater-london --name=london --bbox=-0.55,51.28,0.30,51.70
+          cat measure-out/prepare.time | grep -E "Elapsed|Maximum resident"
+          ls -l data/osm-cache/*/london.json
+
+      - name: Build London as one map (the region entry)
+        run: |
+          /usr/bin/time -v -o measure-out/whole.time node --max-old-space-size=8000 tools/measure-squares.mjs --mode=whole --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14 --osm=london
+
+      - name: Build every London square with tools/build-squares.mjs
+        run: |
+          /usr/bin/time -v -o measure-out/squares-london.time node --max-old-space-size=8000 tools/measure-squares.mjs --mode=squares --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14 --osm=london --budget-min=90
+
+      - name: Rebuild the Stockport squares (old builder in the index) to count them
+        continue-on-error: true
+        run: |
+          node --max-old-space-size=8000 tools/measure-squares.mjs --mode=squares --name=stockport --bbox=-2.25,53.34,-2.07,53.46 --zoom=14 --osm=none --budget-min=20
+
+      - name: Write the summary
+        if: always()
+        run: |
+          node tools/measure-squares.mjs --mode=report --name=london | tee measure-out/report-stdout.txt
+          cp measure-out/summary.txt "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload the text summary only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: measure-squares-summary
+          path: |
+            measure-out/summary.txt
+            measure-out/*.time
+          if-no-files-found: warn

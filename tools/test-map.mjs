@@ -7,10 +7,12 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readDmap, fromFixed7 } from "./dmap.mjs";
+import { validateDmap } from "./validate-dmap.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
-const MAX_BYTES = 100 * 1024 * 1024; // GitHub rejects files over 100 MB
+// Map files are release assets (limit 2 GB), never committed (repo limit 100 MB). Greater London alone is 173 MB.
+const MAX_BYTES = 1900 * 1024 * 1024;
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
@@ -46,11 +48,21 @@ for (const file of files) {
   if (map.edges.some((e) => e.from >= map.nodes.length || e.to >= map.nodes.length)) fail(`${id}: edge refers to a missing node`);
   if (map.labels.some((l) => !l.name)) fail(`${id}: label with empty name`);
 
+  for (const problem of validateDmap(map)) fail(`${id}: ${problem}`);
+
   console.log(`${id}: ok (${size} bytes, ${map.nodes.length} nodes, ${map.edges.length} roads, ${map.polygons.length} areas, ${map.labels.length} labels)`);
 }
 
-for (const id of Object.keys(index)) {
-  if (!files.includes(`${id}.dmap`)) fail(`${id}: in index but file is missing`);
+// Map files are published to the maps-latest release, not committed, so a fresh checkout has none
+// of the files an earlier run built. An index entry that points at a release URL is fine without
+// a local file. An entry with no URL and no file is a real fault.
+for (const [id, entry] of Object.entries(index)) {
+  if (files.includes(`${id}.dmap`)) continue;
+  if (entry && typeof entry.url === "string" && entry.url.endsWith(`/${id}.dmap`)) {
+    console.log(`${id}: in index, file is a release asset (not checked here)`);
+  } else {
+    fail(`${id}: in index but file is missing and the entry has no release url`);
+  }
 }
 
 if (failures.length) {
