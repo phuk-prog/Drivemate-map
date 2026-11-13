@@ -15,24 +15,38 @@
 // extract whose boundary touches a square that must be built, so border squares are complete,
 // and only those extracts are downloaded (and only if Geofabrik has a newer copy than ours).
 //
+// Refresh: each run first rebuilds stale squares of finished areas, those whose index entry has
+// another tile version or builder than the current ones, oldest first (by builtAt), at most
+// GROW_REFRESH_SQUARES (default 400) per run and within the same time budget. Each stale square
+// is rebuilt with the extracts its own area would use, and only those are downloaded. A square is
+// replaced only by its newly built file, so a failed refresh loses nothing; the next run tries
+// again. Progress is kept in growth.json "refresh".
+//
+// Large areas (Scotland has 21,390 squares) are built in batches of GROW_BATCH_SQUARES squares
+// (default 1000): the extracts are read once for the whole area, keeping only the nodes of its
+// roads, and each batch then holds only its own roads (see load-osm.mjs).
+//
 // Usage: node tools/grow.mjs [--dry-run] [--no-head]
-//   --dry-run  print the plan (next areas, their squares, their extracts); download and build nothing
+//   --dry-run  print the plan (refresh, next areas, their squares, their extracts); download and build nothing
 //   --no-head  with --dry-run: do not ask Geofabrik for extract sizes
-// Environment: GROW_PER_RUN, GROW_MINUTES, GROW_SHAPE ("boundary" or "bbox"), GROW_STATE (state
-// file), GEOFABRIK_INDEX (index file or URL), GROW_TILE_VERSION (skip asking OpenFreeMap).
+// Environment: GROW_PER_RUN, GROW_MINUTES, GROW_REFRESH_SQUARES, GROW_BATCH_SQUARES, GROW_SHAPE
+// ("boundary" or "bbox"), GROW_STATE (state file), GEOFABRIK_INDEX (index file or URL),
+// GROW_TILE_VERSION (skip asking OpenFreeMap).
 
 import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchIndex, INDEX_GEOM, ringsOf, geometryBbox } from "./geofabrik.mjs";
 import { SQUARES_PER_DEGREE, squareId, squareBbox, squaresTouching, squareRelease, squareUrl } from "./grid.mjs";
-import { buildSquares, readSquaresIndex, isUpToDate, BUILDER_VERSION } from "./build-squares.mjs";
-import { loadAreaRoads, pruneExtracts } from "./osm-area.mjs";
+import { buildSquares, readSquaresIndex, isUpToDate, batchesOf, BUILDER_VERSION } from "./build-squares.mjs";
+import { openAreaRoads, pruneExtracts } from "./osm-area.mjs";
 import { sourceVersion } from "./fetch-tiles.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const STATE_FILE = process.env.GROW_STATE || join(ROOT, "data", "published", "growth.json");
 export const CACHE_DIR = join(ROOT, "data", "cache", "osm");
+export const DEFAULT_REFRESH_SQUARES = 400;
+export const DEFAULT_BATCH_SQUARES = 1000;
 
 export const DEFAULT_STATE = {
   seeds: [
@@ -51,6 +65,7 @@ export const DEFAULT_STATE = {
   current: null,
   finished: [],
   lastRun: null,
+  refresh: { refreshed: 0, lastRun: null },
   extracts: {},
 };
 
@@ -281,6 +296,53 @@ export function planGrowth({ index, state, squaresIndex, version, perRun = 1, sh
   return { steps, order, areas, missing };
 }
 
+// --- refresh -----------------------------------------------------------------------------------
+
+// A built square is stale when it was built from other tiles or by another builder. With the tile
+// version unknown (a dry run that cannot ask OpenFreeMap) only the builder is compared.
+export function isStale(entry, version) {
+  if (!entry) return false; // never built: not a refresh
+  if (entry.builder !== BUILDER_VERSION) return true;
+  return version != null && entry.version !== version;
+}
+
+// The stale squares of finished areas to rebuild this run: oldest first (builtAt, then id), at
+// most cap. A square shared by two finished areas belongs to the one finished first. The
+// selected squares are grouped by area (in order of their oldest square), each group with the
+// extracts its squares need (as a normal build of that area would use).
+// Returns { stale (count), selected: [{ id, sq, area, builtAt }], groups: [{ area, squares, extracts }] }.
+export function planRefresh({ areas, state, squaresIndex, version, cap = DEFAULT_REFRESH_SQUARES, shape = "boundary" }) {
+  const byId = new Map(areas.map((a) => [a.id, a]));
+  const owner = new Map();
+  for (const f of state.finished) {
+    const area = byId.get(f.id);
+    if (!area) continue;
+    for (const sq of squaresForArea(area, shape)) {
+      const id = squareId(sq);
+      if (!owner.has(id)) owner.set(id, { id, sq, area });
+    }
+  }
+  const stale = [];
+  for (const o of owner.values()) {
+    const entry = squaresIndex[o.id];
+    if (isStale(entry, version)) stale.push({ ...o, builtAt: entry.builtAt ?? "" });
+  }
+  stale.sort((a, b) => (a.builtAt < b.builtAt ? -1 : a.builtAt > b.builtAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const selected = stale.slice(0, Math.max(0, cap));
+  const groups = new Map();
+  for (const s of selected) {
+    if (!groups.has(s.area.id)) groups.set(s.area.id, { area: s.area, squares: [] });
+    groups.get(s.area.id).squares.push(s.sq);
+  }
+  const pool = extractPool(areas);
+  const cache = new Map();
+  for (const g of groups.values()) {
+    g.squares.sort((a, b) => a.latIdx - b.latIdx || a.lonIdx - b.lonIdx);
+    g.extracts = extractsFor(g.area, g.squares, pool, cache);
+  }
+  return { stale: stale.length, selected, groups: [...groups.values()] };
+}
+
 // Records an area as finished in the growth state.
 export function recordFinished(state, area, { startedAt, finishedAt, squares, built, bytes, extracts }) {
   state.finished = state.finished.filter((f) => f.id !== area.id);
@@ -292,7 +354,7 @@ export function recordFinished(state, area, { startedAt, finishedAt, squares, bu
 const mb = (n) => `${(n / 1024 / 1024).toFixed(1)} MB`;
 const fmtBbox = (b) => b.map((v) => v.toFixed(2)).join(",");
 
-export function formatPlan(plan, state, { version, perRun, minutes, shape, heads = {} }) {
+export function formatPlan(plan, state, { version, perRun, minutes, shape, heads = {}, refresh = null, refreshCap = DEFAULT_REFRESH_SQUARES, batchSquares = DEFAULT_BATCH_SQUARES }) {
   const lines = [];
   const total = plan.areas.length;
   const finished = state.finished.filter((f) => plan.areas.some((a) => a.id === f.id)).length;
@@ -306,6 +368,13 @@ export function formatPlan(plan, state, { version, perRun, minutes, shape, heads
   });
   lines.push(`finished: ${finished} of ${total} areas (${perPhase.join(", ")})`);
   if (state.current) lines.push(`in progress: ${state.current.id} (started ${state.current.startedAt})`);
+  if (refresh) {
+    lines.push(`refresh: ${refresh.stale} stale square(s) in finished areas${version == null ? " (builder only: tile version unknown)" : ""}, up to ${refreshCap} per run, oldest first`);
+    if (refresh.selected.length) {
+      lines.push(`   next ${refresh.selected.length}, built ${refresh.selected[0].builtAt || "unknown"} .. ${refresh.selected[refresh.selected.length - 1].builtAt || "unknown"}: ` +
+        refresh.groups.map((g) => `${g.area.id} ${g.squares.length} (extracts ${g.extracts.join(", ") || "none"})`).join("; "));
+    }
+  }
   if (plan.steps.length === 0) lines.push("nothing left to build");
   plan.steps.forEach((s, i) => {
     const a = s.area;
@@ -314,6 +383,7 @@ export function formatPlan(plan, state, { version, perRun, minutes, shape, heads
     const rows = [...new Set(s.squares.map(squareRelease))];
     lines.push(`   releases: ${rows.length} rows (${rows[0]} .. ${rows[rows.length - 1]}), e.g. ${s.squares.length ? squareUrl(s.squares[0]) : "-"}`);
     lines.push(`   extracts (${s.extracts.length}): ${s.extracts.join(", ") || "none"}`);
+    if (s.todo.length > batchSquares) lines.push(`   built in ${batchesOf(s.todo, batchSquares).length} batches of up to ${batchSquares} squares`);
     for (const id of s.extracts) {
       const h = heads[id];
       if (!h) continue;
@@ -332,6 +402,8 @@ async function main() {
   const perRun = Math.max(1, Number(process.env.GROW_PER_RUN || 1));
   const minutes = Number(process.env.GROW_MINUTES || 240);
   const shape = process.env.GROW_SHAPE === "bbox" ? "bbox" : "boundary";
+  const refreshCap = Math.max(0, Number(process.env.GROW_REFRESH_SQUARES ?? DEFAULT_REFRESH_SQUARES));
+  const batchSquares = Math.max(1, Number(process.env.GROW_BATCH_SQUARES || DEFAULT_BATCH_SQUARES));
   const started = Date.now();
   const deadline = started + minutes * 60 * 1000;
   const state = await readGrowth();
@@ -349,7 +421,9 @@ async function main() {
   const version = source?.version ?? null;
 
   if (dryRun) {
-    const plan = planGrowth({ index, state, squaresIndex: await readSquaresIndex(), version, perRun, shape });
+    const squaresIndex = await readSquaresIndex();
+    const plan = planGrowth({ index, state, squaresIndex, version, perRun, shape });
+    const refresh = planRefresh({ areas: plan.areas, state, squaresIndex, version, cap: refreshCap, shape });
     const heads = {};
     if (!process.argv.includes("--no-head")) {
       const byId = new Map(extractPool(plan.areas).map((a) => [a.id, a]));
@@ -366,11 +440,57 @@ async function main() {
         }
       }
     }
-    console.log(formatPlan(plan, state, { version, perRun, minutes, shape, heads }));
+    console.log(formatPlan(plan, state, { version, perRun, minutes, shape, heads, refresh, refreshCap, batchSquares }));
     return;
   }
 
-  const run = { startedAt: new Date(started).toISOString(), finishedAt: null, areas: [], built: 0 };
+  const run = { startedAt: new Date(started).toISOString(), finishedAt: null, areas: [], built: 0, refreshed: 0 };
+  const urls = Object.fromEntries(extractPool(candidateAreas(index, state).areas).map((a) => [a.id, a.url]));
+  // Roads for one batch of squares; the extracts are opened once, on the first batch.
+  const roadsFor = (extracts, todo) => {
+    let opened = null;
+    return async (batch) => {
+      opened ??= await openAreaRoads(extracts, CACHE_DIR, console.log, { clip: squaresBbox(todo), batched: todo.length > batchSquares, record: state.extracts, urls });
+      return opened.batch(squaresBbox(batch));
+    };
+  };
+
+  // 1. Refresh stale squares of finished areas.
+  state.refresh ??= { refreshed: 0, lastRun: null };
+  const refresh = planRefresh({ areas: candidateAreas(index, state).areas, state, squaresIndex: await readSquaresIndex(), version, cap: refreshCap, shape });
+  if (refresh.selected.length) {
+    const rec = {
+      startedAt: new Date().toISOString(), finishedAt: null, stale: refresh.stale, selected: refresh.selected.length, built: 0,
+      oldestBuiltAt: refresh.selected[0].builtAt || null, areas: [], extracts: [], errors: [], complete: true,
+    };
+    console.log(`refresh: ${refresh.stale} stale squares in finished areas; rebuilding ${refresh.selected.length}, oldest first`);
+    for (const g of refresh.groups) {
+      if (Date.now() >= deadline) {
+        rec.complete = false;
+        break;
+      }
+      console.log(`refresh: ${g.area.id}: ${g.squares.length} squares, extracts ${g.extracts.join(", ") || "none"}`);
+      try {
+        const result = await buildSquares({ squares: g.squares, zoom: state.zoom, source, deadline, log: console.log, batchSquares, loadOsmRoads: roadsFor(g.extracts, g.squares) });
+        rec.built += result.built;
+        if (!result.complete) rec.complete = false;
+      } catch (err) {
+        // The squares not rebuilt keep their old files and entries, and stay stale for the next run.
+        console.log(`refresh: ${g.area.id} failed: ${err.message}`);
+        rec.errors.push(`${g.area.id}: ${err.message}`);
+      }
+      rec.areas.push(g.area.id);
+      for (const id of g.extracts) if (!rec.extracts.includes(id)) rec.extracts.push(id);
+    }
+    rec.finishedAt = new Date().toISOString();
+    state.refresh.refreshed += rec.built;
+    state.refresh.lastRun = rec;
+    run.refreshed = rec.built;
+    await writeGrowth(state); // progress is kept even when this run rebuilt nothing
+    console.log(`refresh: ${rec.built} of ${rec.selected} rebuilt${rec.errors.length ? `, ${rec.errors.length} failed` : ""}`);
+  }
+
+  // 2. Grow.
   for (let n = 0; n < perRun && Date.now() < deadline; n++) {
     const squaresIndex = await readSquaresIndex();
     const plan = planGrowth({ index, state, squaresIndex, version, perRun: 1, shape });
@@ -382,14 +502,15 @@ async function main() {
     const { area, squares, todo, extracts } = step;
     if (state.current?.id !== area.id) state.current = { id: area.id, startedAt: new Date().toISOString(), built: 0 };
     console.log(`growth: ${area.id} "${area.name}": ${squares.length} squares, ${todo.length} to build, extracts ${extracts.join(", ") || "none"}`);
-    const urls = Object.fromEntries(extractPool(plan.areas).map((a) => [a.id, a.url]));
+    if (todo.length > batchSquares) console.log(`growth: built in batches of up to ${batchSquares} squares`);
     const result = await buildSquares({
       squares,
       zoom: state.zoom,
       source,
       deadline,
       log: console.log,
-      loadOsmRoads: () => loadAreaRoads(extracts, CACHE_DIR, console.log, { clip: squaresBbox(todo), record: state.extracts, urls }),
+      batchSquares,
+      loadOsmRoads: roadsFor(extracts, todo),
     });
     state.current.built += result.built;
     run.built += result.built;
@@ -413,7 +534,7 @@ async function main() {
   }
   await pruneExtracts(CACHE_DIR, state.extracts);
   // A run that built nothing leaves the state file unchanged, so nothing is committed.
-  if (run.areas.length) {
+  if (run.areas.length || run.refreshed) {
     run.finishedAt = new Date().toISOString();
     state.lastRun = run;
     await writeGrowth(state);

@@ -10,9 +10,22 @@
 //   node:     { type: "node", id, lat, lon, tags }
 //   way:      { type: "way", id, tags, nodes: [node ids] }
 //   relation: { type: "relation", id, tags, members: [{ type, ref, role }] }
+// Cheaper node callbacks for large files (no object is made for an untagged node):
+//   coord:      (id, lat, lon, tagged) for every node
+//   taggedNode: { type: "node", id, lat, lon, tags } for nodes with at least one tag
+// A group of elements is decoded only when a callback wants it.
+//
+// readPbfFile returns one entry per data block: { pos, kinds } (pos: file offset; kinds: a
+// bitmask of BLOCK_NODES, BLOCK_WAYS, BLOCK_RELATIONS). Passing that list (or part of it) back
+// as { blocks } reads only those blocks, so a later pass for ways skips the node blocks, which
+// are never inflated. handlers.block(entry), if given, is called after each data block.
 
 import { openSync, readSync, closeSync, fstatSync } from "node:fs";
 import { inflateSync } from "node:zlib";
+
+export const BLOCK_NODES = 1;
+export const BLOCK_WAYS = 2;
+export const BLOCK_RELATIONS = 4;
 
 const TWO_64 = 18446744073709551616; // 2^64
 const TWO_63 = 9223372036854775808; // 2^63
@@ -175,20 +188,34 @@ function readPrimitiveBlock(buf, handlers) {
   const lat = (v) => (latOffset + granularity * v) / 1e9;
   const lon = (v) => (lonOffset + granularity * v) / 1e9;
 
+  const wantNodes = Boolean(handlers.node || handlers.coord || handlers.taggedNode);
+  let kinds = 0;
   for (const g of groups) {
     while (!g.done()) {
       const [field, wire] = g.key();
-      if (field === 1 && wire === 2) readNode(g.sub(), strings, lat, lon, handlers);
-      else if (field === 2 && wire === 2) readDense(g.sub(), strings, lat, lon, handlers);
-      else if (field === 3 && wire === 2) readWay(g.sub(), strings, handlers);
-      else if (field === 4 && wire === 2) readRelation(g.sub(), strings, handlers);
-      else g.skip(wire);
+      if (field === 1 && wire === 2) {
+        kinds |= BLOCK_NODES;
+        if (wantNodes) readNode(g.sub(), strings, lat, lon, handlers);
+        else g.skip(wire);
+      } else if (field === 2 && wire === 2) {
+        kinds |= BLOCK_NODES;
+        if (wantNodes) readDense(g.sub(), strings, lat, lon, handlers);
+        else g.skip(wire);
+      } else if (field === 3 && wire === 2) {
+        kinds |= BLOCK_WAYS;
+        if (handlers.way) readWay(g.sub(), strings, handlers);
+        else g.skip(wire);
+      } else if (field === 4 && wire === 2) {
+        kinds |= BLOCK_RELATIONS;
+        if (handlers.relation) readRelation(g.sub(), strings, handlers);
+        else g.skip(wire);
+      } else g.skip(wire);
     }
   }
+  return kinds;
 }
 
 function readNode(r, strings, lat, lon, handlers) {
-  if (!handlers.node) return;
   let id = 0;
   let keys = [];
   let vals = [];
@@ -203,11 +230,16 @@ function readNode(r, strings, lat, lon, handlers) {
     else if (field === 9 && wire === 0) lo = r.sint();
     else r.skip(wire);
   }
-  handlers.node({ type: "node", id, lat: lat(la), lon: lon(lo), tags: tagsFrom(keys, vals, strings) });
+  const tagged = keys.length > 0;
+  if (handlers.coord) handlers.coord(id, lat(la), lon(lo), tagged);
+  if (handlers.node || (tagged && handlers.taggedNode)) {
+    const node = { type: "node", id, lat: lat(la), lon: lon(lo), tags: tagsFrom(keys, vals, strings) };
+    if (handlers.node) handlers.node(node);
+    if (tagged && handlers.taggedNode) handlers.taggedNode(node);
+  }
 }
 
 function readDense(r, strings, lat, lon, handlers) {
-  if (!handlers.node) return;
   let ids = [];
   let lats = [];
   let lons = [];
@@ -225,24 +257,29 @@ function readDense(r, strings, lat, lon, handlers) {
   let la = 0;
   let lo = 0;
   let kv = 0;
+  const { node: onNode, coord: onCoord, taggedNode: onTagged } = handlers;
   for (let i = 0; i < ids.length; i++) {
     id += ids[i];
     la += lats[i];
     lo += lons[i];
-    const tags = {};
+    const from = kv;
     if (keysVals.length) {
-      while (kv < keysVals.length && keysVals[kv] !== 0) {
-        tags[strings[keysVals[kv]]] = strings[keysVals[kv + 1]];
-        kv += 2;
-      }
+      while (kv < keysVals.length && keysVals[kv] !== 0) kv += 2;
       kv++; // skip the 0 that ends this node's tags
     }
-    handlers.node({ type: "node", id, lat: lat(la), lon: lon(lo), tags });
+    const tagged = kv - from > 1;
+    if (onCoord) onCoord(id, lat(la), lon(lo), tagged);
+    if (onNode || (tagged && onTagged)) {
+      const tags = {};
+      for (let k = from; k + 1 < kv; k += 2) tags[strings[keysVals[k]]] = strings[keysVals[k + 1]];
+      const node = { type: "node", id, lat: lat(la), lon: lon(lo), tags };
+      if (onNode) onNode(node);
+      if (tagged && onTagged) onTagged(node);
+    }
   }
 }
 
 function readWay(r, strings, handlers) {
-  if (!handlers.way) return;
   let id = 0;
   let keys = [];
   let vals = [];
@@ -267,7 +304,6 @@ function readWay(r, strings, handlers) {
 const MEMBER_TYPES = ["node", "way", "relation"];
 
 function readRelation(r, strings, handlers) {
-  if (!handlers.relation) return;
   let id = 0;
   let keys = [];
   let vals = [];
@@ -308,13 +344,16 @@ export function readPbfBuffer(buf, handlers) {
 }
 
 // Reads a .osm.pbf file block by block, so the whole file is never held in memory.
-export function readPbfFile(path, handlers) {
+// options.blocks: read only these blocks (entries returned by an earlier call), in that order.
+// Returns [{ pos, kinds }] for the data blocks read.
+export function readPbfFile(path, handlers, { blocks = null } = {}) {
   const fd = openSync(path, "r");
+  const seen = [];
   try {
     const size = fstatSync(fd).size;
-    let pos = 0;
     const lenBuf = Buffer.alloc(4);
-    while (pos < size) {
+    const readAt = (start) => {
+      let pos = start;
       readSync(fd, lenBuf, 0, 4, pos);
       pos += 4;
       const headerLen = lenBuf.readUInt32BE(0);
@@ -322,12 +361,19 @@ export function readPbfFile(path, handlers) {
       readSync(fd, headerBuf, 0, headerLen, pos);
       pos += headerLen;
       const header = readBlobHeader(headerBuf);
-      const blobBuf = Buffer.alloc(header.datasize);
-      readSync(fd, blobBuf, 0, header.datasize, pos);
-      pos += header.datasize;
-      if (header.type === "OSMData") readPrimitiveBlock(decodeBlob(blobBuf), handlers);
-    }
+      if (header.type === "OSMData") {
+        const blobBuf = Buffer.alloc(header.datasize);
+        readSync(fd, blobBuf, 0, header.datasize, pos);
+        const entry = { pos: start, kinds: readPrimitiveBlock(decodeBlob(blobBuf), handlers) };
+        seen.push(entry);
+        if (handlers.block) handlers.block(entry);
+      }
+      return pos + header.datasize;
+    };
+    if (blocks) for (const b of blocks) readAt(b.pos);
+    else for (let pos = 0; pos < size; ) pos = readAt(pos);
   } finally {
     closeSync(fd);
   }
+  return seen;
 }

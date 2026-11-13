@@ -33,5 +33,9 @@
   "current": null,
   "finished": [],
   "lastRun": null,
+  "refresh": {
+    "refreshed": 0,
+    "lastRun": null
+  },
   "extracts": {}
 }

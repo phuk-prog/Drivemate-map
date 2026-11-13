@@ -4,7 +4,7 @@
 // address it is published at: the GitHub release of its latitude row (see grid.mjs).
 // The square files are published to the GitHub releases, not committed to git.
 
-import { readFile, copyFile, mkdir, writeFile, stat } from "node:fs/promises";
+import { readFile, copyFile, mkdir, writeFile, stat, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchTiles, sourceVersion } from "./fetch-tiles.mjs";
@@ -44,12 +44,25 @@ export function isUpToDate(entry, version) {
 
 // Builds the squares touching a bounding box given in lon-first order (as build-area uses), or
 // the given list of squares ({ latIdx, lonIdx }). Squares that are up to date are skipped.
-// osmRoads: roads for the area, or loadOsmRoads: an async function returning them, called only
-// when at least one square must be built (so no extract is downloaded for nothing).
+// Consecutive groups of at most size squares, in the order given (squares sorted by row, so a
+// group is a band of rows with a compact bbox).
+export function batchesOf(squares, size = Infinity) {
+  if (!(size > 0) || size >= squares.length) return squares.length ? [squares] : [];
+  const out = [];
+  for (let i = 0; i < squares.length; i += size) out.push(squares.slice(i, i + size));
+  return out;
+}
+
+// osmRoads: roads for the area, or loadOsmRoads(squares): an async function returning the roads
+// for those squares, called only when at least one square must be built (so no extract is
+// downloaded for nothing). batchSquares: build at most this many squares per loadOsmRoads call,
+// so a very large area never has all its roads in memory (default: all in one batch).
 // deadline: a time (ms) after which no new square is started; the result then has complete=false.
 // force: rebuild every square, even when up to date.
+// A square's file and index entry are replaced only once its new file is built, and the index is
+// saved even when a build fails part way, so a failure never loses a square.
 export async function buildSquares({
-  bbox, squares = null, zoom, osmRoads = null, loadOsmRoads = null, deadline = Infinity, force = false, source = null, log = console.log,
+  bbox, squares = null, zoom, osmRoads = null, loadOsmRoads = null, batchSquares = Infinity, deadline = Infinity, force = false, source = null, log = console.log,
 }) {
   const index = await readSquaresIndex();
   const list = squares ?? squaresTouching([bbox[1], bbox[0], bbox[3], bbox[2]]);
@@ -59,12 +72,34 @@ export async function buildSquares({
   let built = 0;
   let complete = true;
   const builtIds = [];
-  if (todo.length > 0 && Date.now() < deadline && !osmRoads && loadOsmRoads) osmRoads = await loadOsmRoads();
-  for (const sq of todo) {
-    if (Date.now() >= deadline) {
-      complete = false;
-      break;
+  const batches = osmRoads || !loadOsmRoads ? batchesOf(todo) : batchesOf(todo, batchSquares);
+  try {
+    for (const batch of batches) {
+      if (Date.now() >= deadline) {
+        complete = false;
+        break;
+      }
+      const roads = osmRoads ?? (loadOsmRoads ? await loadOsmRoads(batch) : null);
+      if (!(await buildBatch(batch, roads))) {
+        complete = false;
+        break;
+      }
     }
+  } finally {
+    await writeSquaresIndex(index);
+  }
+  log(`squares: ${list.length} in area, ${list.length - todo.length} up to date, ${built} built${complete ? "" : " (time is up; the rest wait for the next run)"}, version ${version}`);
+  return { total: list.length, built, skipped: list.length - todo.length, version, complete, builtIds, index };
+
+  async function buildBatch(batch, roads) {
+    for (const sq of batch) {
+      if (Date.now() >= deadline) return false;
+      await buildOne(sq, roads);
+    }
+    return true;
+  }
+
+  async function buildOne(sq, osmRoads) {
     const id = squareId(sq);
     const [sMinLat, sMinLon, sMaxLat, sMaxLon] = squareBbox(sq);
     const sqBbox = [sMinLon, sMinLat, sMaxLon, sMaxLat];
@@ -72,7 +107,9 @@ export async function buildSquares({
     await buildArea({ name: id, bbox: sqBbox, zoom, version, osmRoads, log: () => {} });
     const out = join(SQUARES_DIR, `${id}.dmap`);
     await mkdir(SQUARES_DIR, { recursive: true });
-    await copyFile(join(ROOT, "data", "out", `${id}.dmap`), out);
+    // Copied beside the old file and renamed over it, so the old square stays whole until then.
+    await copyFile(join(ROOT, "data", "out", `${id}.dmap`), `${out}.part`);
+    await rename(`${out}.part`, out);
     index[id] = { version, builder: BUILDER_VERSION, zoom, bbox: sqBbox, bytes: (await stat(out)).size, builtAt: new Date().toISOString() };
     built++;
     builtIds.push(id);
@@ -81,9 +118,6 @@ export async function buildSquares({
       log(`squares: ${built}/${todo.length} built`);
     }
   }
-  await writeSquaresIndex(index);
-  log(`squares: ${list.length} in area, ${list.length - todo.length} up to date, ${built} built${complete ? "" : " (time is up; the rest wait for the next run)"}, version ${version}`);
-  return { total: list.length, built, skipped: list.length - todo.length, version, complete, builtIds, index };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

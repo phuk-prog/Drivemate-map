@@ -8,6 +8,48 @@ export const INDEX_GEOM = "https://download.geofabrik.de/index-v1.json";
 
 const loaded = new Map();
 
+// Waits before the 2nd, 3rd and 4th attempt (ms). GEOFABRIK_RETRY_DELAYS ("5000,15000,45000")
+// overrides them.
+export const RETRY_DELAYS_MS = (process.env.GEOFABRIK_RETRY_DELAYS || "5000,15000,45000").split(",").map(Number);
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// fetch, tried again on network errors and on HTTP 5xx and 429: up to delays.length + 1
+// attempts, waiting delays[i] before each retry. consume(res), if given, reads the body inside
+// the same attempt (for example streaming it to a file), so a connection that fails part way
+// is tried again too; its result is returned. Other HTTP errors fail at once. Each retry is
+// logged with the label, the host and the reason (never headers or tokens).
+export async function fetchWithRetry(url, options = {}, { fetchFn = fetch, delays = RETRY_DELAYS_MS, log = console.log, label = "download", consume = null } = {}) {
+  const host = (() => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return "?";
+    }
+  })();
+  for (let attempt = 1; ; attempt++) {
+    let reason;
+    try {
+      const res = await fetchFn(url, options);
+      if (res.status >= 500 || res.status === 429) {
+        reason = `HTTP ${res.status}`;
+        await res.body?.cancel?.().catch(() => {});
+      } else if (!res.ok && options.method !== "HEAD") {
+        throw Object.assign(new Error(`${label}: HTTP ${res.status}`), { final: true });
+      } else {
+        return consume && res.ok ? await consume(res) : res; // a failed HEAD is returned as it is
+      }
+    } catch (err) {
+      if (err.final) throw err;
+      reason = [err.message, err.cause?.code ?? err.cause?.message].filter(Boolean).join(": ");
+    }
+    if (attempt > delays.length) throw new Error(`${label}: failed after ${attempt} attempts (${reason})`);
+    const wait = delays[attempt - 1];
+    log(`${label}: attempt ${attempt} failed (${reason}, ${host}); retrying in ${Math.round(wait / 1000)} s`);
+    await sleep(wait);
+  }
+}
+
 // The index as GeoJSON ({ features: [{ properties: { id, parent, name, urls: { pbf } }, geometry }] }).
 // source: a URL or a local file path. GEOFABRIK_INDEX overrides it (tests use a local fixture).
 // Each source is read once per process.
@@ -16,9 +58,7 @@ export function fetchIndex({ geometry = false, source } = {}) {
   if (!loaded.has(from)) {
     loaded.set(from, (async () => {
       if (!/^https?:/.test(from)) return JSON.parse(await readFile(from, "utf8"));
-      const res = await fetch(from);
-      if (!res.ok) throw new Error(`Geofabrik index: HTTP ${res.status}`);
-      return res.json();
+      return fetchWithRetry(from, {}, { label: "Geofabrik index", consume: (res) => res.json() });
     })());
     loaded.get(from).catch(() => loaded.delete(from));
   }
