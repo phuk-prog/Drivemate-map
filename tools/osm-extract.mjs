@@ -1,8 +1,8 @@
 // Extracts turn restrictions, lane tags and road warnings from an OpenStreetMap .osm.pbf extract,
 // and caches them for the map builder:
-//   data/cache/restrictions/<name>.json  (same records the Overpass fetch made)
-//   data/cache/lanes/<name>.json         (same ways the Overpass fetch made)
-//   data/cache/warnings/<name>.json      (speed cameras, level crossings, roads under construction)
+//   data/osm-cache/restrictions/<name>.json  (same records the Overpass fetch made)
+//   data/osm-cache/lanes/<name>.json         (same ways the Overpass fetch made)
+//   data/osm-cache/warnings/<name>.json      (speed cameras, level crossings, roads under construction)
 // Build-time only: the app never reads OpenStreetMap files. Our own code.
 //
 // Usage: node tools/osm-extract.mjs --pbf=greater-london.osm.pbf --name=london --bbox=-0.55,51.28,0.30,51.70
@@ -227,7 +227,7 @@ async function main() {
   const { restrictions, laneWays, warnings, stats } = await extractFromPbf(pbf, bbox);
 
   for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings]]) {
-    const outDir = join(ROOT, "data", "cache", dir);
+    const outDir = join(ROOT, "data", "osm-cache", dir);
     await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, `${name}.json`), JSON.stringify(data));
   }

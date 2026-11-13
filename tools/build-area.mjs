@@ -276,7 +276,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   // Turn restrictions: from the cache made by tools/fetch-restrictions.mjs. None if there is no cache.
   let restrictionRecords = [];
   try {
-    restrictionRecords = JSON.parse(await readFile(join(ROOT, "data", "cache", "restrictions", `${name}.json`), "utf8"));
+    restrictionRecords = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "restrictions", `${name}.json`), "utf8"));
   } catch {
     log(`no restriction cache for ${name}; run tools/fetch-restrictions.mjs to add turn restrictions`);
   }
@@ -286,7 +286,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   // Lane guidance: from the cache made by tools/fetch-lanes.mjs. None if there is no cache.
   let laneWays = [];
   try {
-    laneWays = JSON.parse(await readFile(join(ROOT, "data", "cache", "lanes", `${name}.json`), "utf8"));
+    laneWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "lanes", `${name}.json`), "utf8"));
   } catch {
     log(`no lane cache for ${name}; run tools/fetch-lanes.mjs to add lane guidance`);
   }
@@ -294,7 +294,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   // Road warnings (speed cameras, level crossings, roadworks): from tools/osm-extract.mjs. None if there is no cache.
   let warnings = [];
   try {
-    warnings = JSON.parse(await readFile(join(ROOT, "data", "cache", "warnings", `${name}.json`), "utf8"));
+    warnings = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "warnings", `${name}.json`), "utf8"));
   } catch {
     log(`no warnings cache for ${name}; run tools/osm-extract.mjs to add road warnings`);
   }
@@ -348,7 +348,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     return hit ? hit.slice(n.length + 3) : def;
   };
   const cacheDir = join(ROOT, "data", "cache");
-  const versions = (await readdir(cacheDir)).sort();
+  // Tile versions are named like 20261101_080013_pt. Ignore any other folder.
+  const versions = (await readdir(cacheDir)).filter((v) => /^\d{8}_\d{6}/.test(v)).sort();
   const version = arg("version", versions[versions.length - 1]);
   const started = Date.now();
   await buildArea({

@@ -1,5 +1,5 @@
 // Fetches OpenStreetMap lane tags (turn:lanes) for a bounding box from the Overpass API,
-// and caches the parsed ways in data/cache/lanes/<name>.json (not committed).
+// and caches the parsed ways in data/osm-cache/lanes/<name>.json (not committed).
 // Build-time only: the app never calls Overpass.
 // Usage: node tools/fetch-lanes.mjs --name=london --bbox=-0.55,51.28,0.30,51.70
 
@@ -32,7 +32,7 @@ async function main() {
   const started = Date.now();
   const json = await fetchOverpass(overpassQuery(bbox));
   const { ways, skipped } = parseLaneOverpass(json);
-  const outDir = join(ROOT, "data", "cache", "lanes");
+  const outDir = join(ROOT, "data", "osm-cache", "lanes");
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, `${name}.json`);
   await writeFile(outFile, JSON.stringify(ways));

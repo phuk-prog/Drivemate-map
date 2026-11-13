@@ -9,7 +9,7 @@ Builds Drivemate's downloadable map areas. Everything here is our own code, with
 3. `tools/build-area.mjs` turns the tiles into one DMAP file in `data/out/` (not committed).
 4. `tools/dmap.mjs` reads and writes the DMAP format, defined in `format/FORMAT.md`.
 5. `tools/preview.mjs` renders a DMAP file to PNG with our own rasteriser, as a check.
-6. `tools/osm-extract.mjs` reads an OpenStreetMap `.osm.pbf` extract (for example from Geofabrik) with our own reader (`tools/osm-pbf.mjs`) and caches turn restrictions and lane tags in `data/cache/restrictions/` and `data/cache/lanes/`. `tools/build-area.mjs` picks them up by area name and matches them to roads by location (`tools/restrictions.mjs`, `tools/lanes.mjs`). The map tiles do not carry these. `tools/fetch-restrictions.mjs` and `tools/fetch-lanes.mjs` do the same job through the Overpass API, but the public servers refuse GitHub's runners, so use the extract. Run `node tools/test-osm-extract.mjs` to check the reader.
+6. `tools/osm-extract.mjs` reads an OpenStreetMap `.osm.pbf` extract (for example from Geofabrik) with our own reader (`tools/osm-pbf.mjs`) and caches turn restrictions and lane tags in `data/osm-cache/restrictions/`, `data/osm-cache/lanes/` and `data/osm-cache/warnings/` (kept apart from the map tiles in `data/cache/`). `tools/build-area.mjs` picks them up by area name and matches them to roads by location (`tools/restrictions.mjs`, `tools/lanes.mjs`). The map tiles do not carry these. `tools/fetch-restrictions.mjs` and `tools/fetch-lanes.mjs` do the same job through the Overpass API, but the public servers refuse GitHub's runners, so use the extract. Run `node tools/test-osm-extract.mjs` to check the reader.
 
 ## Build Greater London
 

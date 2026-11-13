@@ -1,5 +1,5 @@
 // Fetches OpenStreetMap turn restrictions for a bounding box from the Overpass API,
-// and caches them (parsed) in data/cache/restrictions/<name>.json (not committed).
+// and caches them (parsed) in data/osm-cache/restrictions/<name>.json (not committed).
 // Build-time only: the app never calls Overpass.
 // Usage: node tools/fetch-restrictions.mjs --name=london --bbox=-0.55,51.28,0.30,51.70
 
@@ -27,7 +27,7 @@ async function main() {
   const started = Date.now();
   const json = await fetchOverpass(overpassQuery(bbox));
   const { records, skipped } = parseOverpass(json);
-  const outDir = join(ROOT, "data", "cache", "restrictions");
+  const outDir = join(ROOT, "data", "osm-cache", "restrictions");
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, `${name}.json`);
   await writeFile(outFile, JSON.stringify(records));
