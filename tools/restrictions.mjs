@@ -121,11 +121,13 @@ export function matchRestrictions(nodes, edges, records) {
 
   const unmatched = { noVia: 0, noFrom: 0, noTo: 0 };
   const matched = [];
+  const failed = []; // { record, reason } for each unmatched record, for diagnostics
 
   for (const r of records) {
     const v = findNode(r.via[0], r.via[1]);
     if (v < 0) {
       unmatched.noVia++;
+      failed.push({ record: r, reason: "noVia" });
       continue;
     }
     const node = nodes[v];
@@ -162,16 +164,18 @@ export function matchRestrictions(nodes, edges, records) {
     const fromEdge = pick(touching[v], fromRef, true, -1);
     if (fromEdge < 0) {
       unmatched.noFrom++;
+      failed.push({ record: r, reason: "noFrom" });
       continue;
     }
     const toEdge = pick(touching[v], toRef, false, fromEdge);
     if (toEdge < 0) {
       unmatched.noTo++;
+      failed.push({ record: r, reason: "noTo" });
       continue;
     }
     matched.push({ kind: r.kind, from: fromEdge, via: v, to: toEdge });
   }
-  return { matched, unmatched };
+  return { matched, unmatched, failed };
 }
 
 // Index of the point in pts that is nearest to the target point.
