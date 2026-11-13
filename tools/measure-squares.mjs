@@ -381,7 +381,7 @@ async function runReport() {
       p(`  ${label}: ${min(s)} min`);
     }
     p(`  TOTAL about ${min(total)} min of 120 (not measured: release upload, git, checkout, test-map of squares)`);
-    p(`  verdict: ${total <= 96 ? "FITS with margin (under 80% of the limit)" : total <= 120 ? "FITS ONLY WITHOUT MARGIN" : "DOES NOT FIT"}${ldn.incomplete ? " (squares run incomplete, so the real total is higher)" : ""}`);
+    p(`  verdict: ${total <= 96 * 60 ? "FITS with margin (under 80% of the limit)" : total <= 120 * 60 ? "FITS ONLY WITHOUT MARGIN" : "DOES NOT FIT"}${ldn.incomplete ? " (squares run incomplete, so the real total is higher)" : ""}`);
     const perSq = sqBuild / Math.max(1, ldn.squaresBuilt) + sqGzip / Math.max(1, ldn.squaresBuilt);
     const fixed = 2 * prep.wallSec + whole.fetchSec + whole.buildSec + whole.decodeSec + 2 * stkBuild;
     const budget = 90 * 60; // leave 30 minutes of margin
