@@ -2,7 +2,7 @@
 // while parallel roads, bridges and tunnels do not. Exits with code 1 on any failure.
 // Usage: node tools/test-graph.mjs
 
-import { joinCrossings, splitAtSharedVertices, dropSeamDuplicates } from "./graph.mjs";
+import { joinCrossings, splitAtSharedVertices, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
 
 const failures = [];
 const check = (name, ok, detail = "") => {
@@ -104,6 +104,45 @@ const repair = (edges) => {
   check("seam duplicate of the same area is dropped", kept.length === 3, `kept=${kept.length}`);
   check("same place, different size is kept", kept.some((p) => p.kind === 2 && p.rings[0][1][0] === 50000));
   check("same square, other kind is kept", kept.some((p) => p.kind === 1));
+}
+
+// 9. Duplicate roads and two-point loops are dropped; nodes are renumbered; roundabouts are kept.
+{
+  const nodesOf = (edges) => {
+    const nodes = [];
+    const id = new Map();
+    const at = (p) => {
+      const k = p.join(",");
+      if (!id.has(k)) { id.set(k, nodes.length); nodes.push({ lat: p[0], lon: p[1] }); }
+      return id.get(k);
+    };
+    const out = edges.map((e) => ({ ...e, from: at(e.points[0]), to: at(e.points[e.points.length - 1]) }));
+    return { nodes, edges: out };
+  };
+  const a = [10000, 10000], b = [20000, 10000], c = [30000, 10000];
+  const base = nodesOf([road([a, b, c])]);
+  const same = nodesOf([road([a, b, c]), road([a, b, c])]);
+  const r1 = dropDuplicateEdges(same);
+  check("identical road is dropped", r1.edges.length === 1, `edges=${r1.edges.length}`);
+
+  const rev = nodesOf([road([a, b, c]), road([c, b, a])]);
+  check("reversed two-way duplicate is dropped", dropDuplicateEdges(rev).edges.length === 1);
+
+  const revOneWay = nodesOf([road([a, b, c], 1), road([c, b, a], 1)]);
+  check("reversed one-way roads are both kept", dropDuplicateEdges(revOneWay).edges.length === 2);
+
+  const otherClass = nodesOf([road([a, b, c]), { roadClass: 3, flags: 0, points: [a, b, c] }]);
+  check("same points with another road class are kept", dropDuplicateEdges(otherClass).edges.length === 2);
+
+  const loop = nodesOf([road([a, b, c]), { roadClass: 6, flags: 0, points: [c, c] }]);
+  const r2 = dropDuplicateEdges(loop);
+  check("two-point loop is dropped", r2.edges.length === 1 && r2.edges[0].from !== r2.edges[0].to);
+  check("unused nodes are removed", r2.nodes.length === 2, `nodes=${r2.nodes.length}`);
+
+  const ring = [a, [20000, 20000], [10000, 20000], a];
+  const round = nodesOf([road(ring)]);
+  check("roundabout loop is kept", dropDuplicateEdges(round).edges.length === 1);
+  check("base road is untouched", dropDuplicateEdges(base).edges.length === 1 && dropDuplicateEdges(base).nodes.length === 2);
 }
 
 if (failures.length) {

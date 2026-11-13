@@ -249,3 +249,40 @@ export function dropSeamDuplicates(polygons) {
   }
   return kept;
 }
+
+// Road duplicates and loops left after the split. A road can come through twice when a tile
+// edge or two overlapping OSM ways cover the same stretch. Drops a road when another road
+// with the same class and flags has the same points in the same order (or reversed, if the
+// road is not one-way). Also drops two-point loops, which have no length. Renumbers the nodes
+// so that only junctions still used by a road remain. Takes and returns { nodes, edges }.
+const keyOf = (e) => `${e.roadClass}:${e.flags}`;
+const pointsKey = (pts) => pts.map(([a, b]) => `${a},${b}`).join(";");
+
+export function dropDuplicateEdges({ nodes, edges }) {
+  const seen = new Set();
+  const kept = [];
+  for (const e of edges) {
+    if (e.from === e.to && e.points.length < 3) continue; // two-point loop
+    const forward = `${e.from}>${e.to}|${keyOf(e)}|${pointsKey(e.points)}`;
+    if (seen.has(forward)) continue;
+    if (!(e.flags & 1)) {
+      const reversed = `${e.to}>${e.from}|${keyOf(e)}|${pointsKey([...e.points].reverse())}`;
+      if (seen.has(reversed)) continue;
+    }
+    seen.add(forward);
+    kept.push(e);
+  }
+
+  // Renumber nodes so that only the ones still used remain.
+  const newId = new Map();
+  const outNodes = [];
+  const idOf = (v) => {
+    if (!newId.has(v)) {
+      newId.set(v, outNodes.length);
+      outNodes.push(nodes[v]);
+    }
+    return newId.get(v);
+  };
+  const outEdges = kept.map((e) => ({ ...e, from: idOf(e.from), to: idOf(e.to) }));
+  return { nodes: outNodes, edges: outEdges };
+}

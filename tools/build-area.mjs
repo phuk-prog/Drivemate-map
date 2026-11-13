@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
-import { splitAtSharedVertices, joinCrossings, dropSeamDuplicates } from "./graph.mjs";
+import { splitAtSharedVertices, joinCrossings, dropSeamDuplicates, dropDuplicateEdges } from "./graph.mjs";
 import { matchRestrictions } from "./restrictions.mjs";
 import { matchSpeedLimits } from "./speed.mjs";
 import { matchLanes, parseLaneOverpass } from "./lanes.mjs";
@@ -274,7 +274,7 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
   // Make every junction a node, so roads that meet mid-line can be routed across.
   // Roads that cross in the middle get a junction at the crossing point.
   const crossed = joinCrossings(edges);
-  const repaired = splitAtSharedVertices(crossed.edges);
+  const repaired = dropDuplicateEdges(splitAtSharedVertices(crossed.edges));
   // Turn restrictions: from the cache made by tools/fetch-restrictions.mjs. None if there is no cache.
   let restrictionRecords = [];
   try {
