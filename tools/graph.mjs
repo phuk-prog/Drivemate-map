@@ -1,6 +1,7 @@
 // Road graph repair: splits roads wherever another road shares a point with them,
 // so that every junction becomes a node the router can turn at. Also joins roads
-// that cross in the middle. Our own code.
+// that cross in the middle, and road ends that stop short of another road's middle.
+// Our own code.
 
 // Points within SNAP_M metres of each other are the same junction. Points are in 1e-7 degree
 // units: one unit is about 1.11 cm north-south, and about 1.11 cm * cos(latitude) east-west.
@@ -9,11 +10,16 @@ const METRES_PER_UNIT = ((6371000 * Math.PI) / 180) * 1e-7; // Earth radius 6371
 const RADIANS_PER_UNIT = (1e-7 * Math.PI) / 180;
 const INDEX_CELL = 400; // grid cell for the vertex index, in 1e-7 degree units: about 4.4 m north-south
 
-// True when two points are within SNAP_M metres of each other on the ground.
-function near(lat1, lon1, lat2, lon2) {
+// Squared distance in square metres between two points on the ground.
+function dist2(lat1, lon1, lat2, lon2) {
   const dy = (lat1 - lat2) * METRES_PER_UNIT;
   const dx = (lon1 - lon2) * METRES_PER_UNIT * Math.cos(((lat1 + lat2) / 2) * RADIANS_PER_UNIT);
-  return dx * dx + dy * dy <= SNAP_M * SNAP_M;
+  return dx * dx + dy * dy;
+}
+
+// True when two points are within SNAP_M metres of each other on the ground.
+function near(lat1, lon1, lat2, lon2) {
+  return dist2(lat1, lon1, lat2, lon2) <= SNAP_M * SNAP_M;
 }
 
 class VertexIndex {
@@ -22,42 +28,81 @@ class VertexIndex {
     this.cells = new Map();
   }
 
-  // Returns the vertex id for a point, creating one if no vertex is within SNAP_M metres.
+  // The vertex that a vertex id now stands for. Merged vertices point at the one they joined.
+  find(v) {
+    while (this.verts[v].parent !== v) v = this.verts[v].parent;
+    return v;
+  }
+
+  // Returns the vertex id for a point. Every point keeps its own position in the index, so a point is
+  // compared with each earlier point, not with the merged position of a group. Points within SNAP_M
+  // metres of it are merged into one vertex, whatever order the points were added in. The vertex
+  // keeps the coordinates of the root of the nearest point. A new vertex is made if none is within SNAP_M.
   id(lat, lon) {
+    const v = this.verts.length;
+    this.verts.push({ lat, lon, uses: new Set(), parent: v });
     const ci = Math.floor(lat / INDEX_CELL);
     const cj = Math.floor(lon / INDEX_CELL);
     // Cells to search each way. East-west distance per unit grows as 1/cos(latitude), so this can be more than 1.
     const reach = Math.ceil(SNAP_M / (METRES_PER_UNIT * Math.cos(lat * RADIANS_PER_UNIT)) / INDEX_CELL);
+    const roots = [];
+    let best = -1;
+    let bestD = Infinity;
     for (let di = -reach; di <= reach; di++) {
       for (let dj = -reach; dj <= reach; dj++) {
         const ids = this.cells.get(`${ci + di},${cj + dj}`);
         if (!ids) continue;
-        for (const v of ids) {
-          const w = this.verts[v];
-          if (near(w.lat, w.lon, lat, lon)) return v;
+        for (const u of ids) {
+          const w = this.verts[u];
+          if (!near(w.lat, w.lon, lat, lon)) continue;
+          const r = this.find(u);
+          if (!roots.includes(r)) roots.push(r);
+          const d = dist2(w.lat, w.lon, lat, lon);
+          if (d < bestD) {
+            bestD = d;
+            best = r;
+          }
         }
       }
     }
-    const v = this.verts.length;
-    this.verts.push({ lat, lon, uses: new Set() });
     const key = `${ci},${cj}`;
     if (!this.cells.has(key)) this.cells.set(key, []);
     this.cells.get(key).push(v);
-    return v;
+    if (best < 0) return v;
+    for (const r of [...roots, v]) {
+      if (r === best) continue;
+      this.verts[r].parent = best;
+      for (const e of this.verts[r].uses) this.verts[best].uses.add(e);
+    }
+    return best;
   }
+}
+
+// Removes consecutive repeated points from a piece of road, keeping its first and last point.
+// Tile data can repeat a vertex, which gives a zero-length step the router does not need.
+function dropRepeats(points) {
+  const out = [];
+  for (const p of points) {
+    const last = out[out.length - 1];
+    if (last && last[0] === p[0] && last[1] === p[1]) continue;
+    out.push(p);
+  }
+  return out.length < 2 ? [points[0], points[points.length - 1]] : out;
 }
 
 // edges: [{ roadClass, flags, points: [[lat, lon], ...] }] in fixed-point units.
 // Returns { nodes, edges } where each edge runs between two junction nodes.
 export function splitAtSharedVertices(edges) {
   const index = new VertexIndex();
-  const pointIds = edges.map((e, ei) =>
+  const rawIds = edges.map((e, ei) =>
     e.points.map(([lat, lon]) => {
       const v = index.id(lat, lon);
       index.verts[v].uses.add(ei);
       return v;
     }),
   );
+  // Later points can merge earlier vertices, so resolve every id to its final vertex.
+  const pointIds = rawIds.map((ids) => ids.map((v) => index.find(v)));
 
   const pieces = [];
   edges.forEach((e, ei) => {
@@ -82,7 +127,7 @@ export function splitAtSharedVertices(edges) {
         to: ids[b],
         roadClass: e.roadClass,
         flags: e.flags,
-        points,
+        points: dropRepeats(points),
       });
     }
   });
@@ -110,8 +155,10 @@ export function splitAtSharedVertices(edges) {
 // Crossings: finds where two at-grade roads cross in the middle of a line, with no
 // shared point, and inserts the crossing point into both roads. splitAtSharedVertices
 // then makes it a junction. Bridges and tunnels are skipped, since they pass over or
-// under other roads without meeting them. Returns { edges, joins } where joins is the
-// number of crossings found.
+// under other roads without meeting them. Roads with different OSM layer values (edge.layer,
+// missing means 0) are skipped too: the layer tag says one passes above the other. Returns
+// { edges, joins, layerSkipped } where joins is the number of crossings joined and
+// layerSkipped the number of crossings left apart because the layers differ.
 const CELL = 20000; // grid cell in 1e-7 degree units: about 220 m
 const BRIDGE_OR_TUNNEL = 2 | 4;
 
@@ -136,6 +183,9 @@ function segmentCrossing(p, q, r, s) {
 function nearPoint(a, b) {
   return near(a[0], a[1], b[0], b[1]);
 }
+
+// OSM layer of a road: 0 when the tile does not carry one.
+const layerOf = (e) => e.layer ?? 0;
 
 export function joinCrossings(edges) {
   // Index every at-grade segment by the grid cells its bounding box covers.
@@ -173,6 +223,7 @@ export function joinCrossings(edges) {
   // where their boxes first overlap, so no pair is tested twice and no set is needed.
   const inserts = edges.map(() => []); // per edge: { seg, t, point }
   let joins = 0;
+  let layerSkipped = 0;
   for (const cell of grid.values()) {
     const ids = cell.ids;
     for (let x = 0; x < ids.length; x++) {
@@ -190,21 +241,33 @@ export function joinCrossings(edges) {
         const r = edges[e2].points;
         const hit = segmentCrossing(p[i1], p[i1 + 1], r[i2], r[i2 + 1]);
         if (!hit) continue;
-        joins++;
         // A crossing right at a road end is already a shared point (or a near miss
         // that the vertex index merges), so no point is added at that end.
-        if (!nearPoint(hit.point, p[i1]) && !nearPoint(hit.point, p[i1 + 1])) {
-          inserts[e1].push({ seg: i1, t: hit.t, point: hit.point });
+        const addTo1 = !nearPoint(hit.point, p[i1]) && !nearPoint(hit.point, p[i1 + 1]);
+        const addTo2 = !nearPoint(hit.point, r[i2]) && !nearPoint(hit.point, r[i2 + 1]);
+        if (!addTo1 && !addTo2) {
+          joins++; // already a shared point: nothing to insert
+          continue;
         }
-        if (!nearPoint(hit.point, r[i2]) && !nearPoint(hit.point, r[i2 + 1])) {
-          inserts[e2].push({ seg: i2, t: hit.u, point: hit.point });
+        // Roads at different layers pass over or under each other, so no junction is made.
+        if (layerOf(edges[e1]) !== layerOf(edges[e2])) {
+          layerSkipped++;
+          continue;
         }
+        joins++;
+        if (addTo1) inserts[e1].push({ seg: i1, t: hit.t, point: hit.point });
+        if (addTo2) inserts[e2].push({ seg: i2, t: hit.u, point: hit.point });
       }
     }
   }
 
-  // Rebuild each edge's points with the crossing points in order along the road.
-  const out = edges.map((e, ei) => {
+  return { edges: applyInserts(edges, inserts), joins, layerSkipped };
+}
+
+// Rebuilds each edge's points with the inserted points, in order along the road. An insert is
+// { seg, t, point }: the point goes after point seg of the edge, at position t along that segment.
+function applyInserts(edges, inserts) {
+  return edges.map((e, ei) => {
     const add = inserts[ei];
     if (add.length === 0) return e;
     add.sort((a, b) => a.seg - b.seg || a.t - b.t);
@@ -223,7 +286,113 @@ export function joinCrossings(edges) {
     }
     return { ...e, points: pts };
   });
-  return { edges: out, joins };
+}
+
+// The point on segment a->b nearest to p, rounded to 1e-7 degree units, and its position t
+// (0 to 1) along a->b. East-west distances are scaled at p's latitude, as near() does.
+function nearestOnSegment(p, a, b) {
+  const k = Math.cos(p[0] * RADIANS_PER_UNIT);
+  const dx = (b[1] - a[1]) * k;
+  const dy = b[0] - a[0];
+  const L2 = dx * dx + dy * dy;
+  let t = L2 === 0 ? 0 : (((p[1] - a[1]) * k) * dx + (p[0] - a[0]) * dy) / L2;
+  t = Math.min(1, Math.max(0, t));
+  return { t, point: [Math.round(a[0] + t * (b[0] - a[0])), Math.round(a[1] + t * (b[1] - a[1]))] };
+}
+
+// Road ends that stop short of another road. An end within SNAP_M metres of another road's
+// middle segment is joined to it: the nearest point on that segment is inserted into the other road,
+// and splitAtSharedVertices merges it with the end. An end that already has another road's point
+// within SNAP_M is shared already, so it is left alone. Bridges and tunnels are skipped, and roads
+// with different OSM layer values are not joined, as for crossings. Returns { edges, joins, layerSkipped }
+// where joins is the number of road ends joined and layerSkipped the number left apart by layer.
+export function joinRoadEnds(edges) {
+  const pointCells = new Map(); // "ci,cj" -> [point ids], every point of every road
+  const pointEdge = [];
+  const pointAt = [];
+  const segCells = new Map(); // "ci,cj" -> [segment ids], at-grade segments by bounding box
+  const segEdge = [];
+  const segIndex = [];
+  const addTo = (map, key, id) => {
+    let list = map.get(key);
+    if (!list) map.set(key, (list = []));
+    list.push(id);
+  };
+  edges.forEach((e, ei) => {
+    const pts = e.points;
+    for (const p of pts) {
+      const id = pointEdge.length;
+      pointEdge.push(ei);
+      pointAt.push(p);
+      addTo(pointCells, `${Math.floor(p[0] / CELL)},${Math.floor(p[1] / CELL)}`, id);
+    }
+    if (e.flags & BRIDGE_OR_TUNNEL) return;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const id = segEdge.length;
+      segEdge.push(ei);
+      segIndex.push(i);
+      const [a, b] = [pts[i], pts[i + 1]];
+      const minI = Math.floor(Math.min(a[0], b[0]) / CELL);
+      const maxI = Math.floor(Math.max(a[0], b[0]) / CELL);
+      const minJ = Math.floor(Math.min(a[1], b[1]) / CELL);
+      const maxJ = Math.floor(Math.max(a[1], b[1]) / CELL);
+      for (let ci = minI; ci <= maxI; ci++) {
+        for (let cj = minJ; cj <= maxJ; cj++) addTo(segCells, `${ci},${cj}`, id);
+      }
+    }
+  });
+
+  // Ids in the 3 by 3 cells around p. Anything within SNAP_M of p is in these cells, since SNAP_M is far below CELL.
+  const around = (map, p) => {
+    const ci = Math.floor(p[0] / CELL);
+    const cj = Math.floor(p[1] / CELL);
+    const out = [];
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        const list = map.get(`${ci + di},${cj + dj}`);
+        if (list) for (const id of list) out.push(id);
+      }
+    }
+    return out;
+  };
+
+  const inserts = edges.map(() => []); // per edge: { seg, t, point }
+  let joins = 0;
+  let layerSkipped = 0;
+  edges.forEach((e, ei) => {
+    if (e.flags & BRIDGE_OR_TUNNEL) return;
+    const last = e.points.length - 1;
+    if (last < 1) return;
+    for (const k of [0, last]) {
+      const p = e.points[k];
+      if (around(pointCells, p).some((id) => pointEdge[id] !== ei && nearPoint(pointAt[id], p))) continue; // already shared
+
+      let best = null;
+      let otherLayer = false;
+      for (const sid of around(segCells, p)) {
+        const te = segEdge[sid];
+        if (te === ei) continue;
+        const i = segIndex[sid];
+        const q = edges[te].points;
+        const hit = nearestOnSegment(p, q[i], q[i + 1]);
+        if (!nearPoint(hit.point, p)) continue; // the nearest point is more than SNAP_M from the end
+        // Roads at different layers pass over or under each other, so the end is not joined to them.
+        if (layerOf(edges[te]) !== layerOf(e)) {
+          otherLayer = true;
+          continue;
+        }
+        const d = dist2(p[0], p[1], hit.point[0], hit.point[1]);
+        if (!best || d < best.d) best = { d, te, i, t: hit.t, point: hit.point };
+      }
+      if (best) {
+        joins++;
+        inserts[best.te].push({ seg: best.i, t: best.t, point: best.point });
+      } else if (otherLayer) {
+        layerSkipped++;
+      }
+    }
+  });
+  return { edges: applyInserts(edges, inserts), joins, layerSkipped };
 }
 
 // Seam duplicates: a tile edge can give the same area twice, from two neighbouring

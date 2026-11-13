@@ -15,7 +15,7 @@ import { squaresTouching, squareBbox, squareId } from "./grid.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const SQUARES_DIR = join(ROOT, "data", "published", "squares");
-const BUILDER_VERSION = "graph-repair-3";
+const BUILDER_VERSION = "graph-repair-4";
 
 // Compressed size of a square file, made the way the update workflow makes its .dmap.gz:
 // "gzip -9 -c <file>". The release uploads that file, so this is the size the app downloads.
