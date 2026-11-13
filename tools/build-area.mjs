@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
-import { splitAtSharedVertices, joinCrossings } from "./graph.mjs";
+import { splitAtSharedVertices, joinCrossings, dropSeamDuplicates } from "./graph.mjs";
 import { matchRestrictions } from "./restrictions.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
@@ -280,12 +280,14 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     log(`no restriction cache for ${name}; run tools/fetch-restrictions.mjs to add turn restrictions`);
   }
   const restrictions = matchRestrictions(repaired.nodes, repaired.edges, restrictionRecords);
+  // Drop seam duplicates: the same area from two neighbouring tiles.
+  const keptPolygons = dropSeamDuplicates(polygons);
   const bytes = writeDmap({
     bbox: bboxFixed,
     nodes: repaired.nodes,
     edges: repaired.edges,
     lines,
-    polygons,
+    polygons: keptPolygons,
     labels,
     restrictions: restrictions.matched,
   });
@@ -308,7 +310,8 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     restrictionsMatched: restrictions.matched.length,
     restrictionsUnmatched: restrictions.unmatched,
     lines: lines.length,
-    polygons: polygons.length,
+    polygons: keptPolygons.length,
+    seamDuplicatesDropped: polygons.length - keptPolygons.length,
     labels: labels.length,
     dropped,
     counts,

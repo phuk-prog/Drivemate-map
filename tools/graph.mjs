@@ -204,3 +204,48 @@ export function joinCrossings(edges) {
   });
   return { edges: out, joins };
 }
+
+// Seam duplicates: a tile edge can give the same area twice, from two neighbouring
+// tiles. Keeps the first of each group of areas that have the same kind, the same
+// place (bounding box to about 11 m) and the same size (area within 1%). Areas with the
+// same place but a different shape are kept. Returns the kept areas.
+const DUP_BOX = 1000; // 1e-7 degree units: about 1.1 cm grid for the place key
+const DUP_AREA = 0.01;
+
+function ringsArea(rings) {
+  let total = 0;
+  for (const ring of rings) {
+    let twice = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const [x1, y1] = ring[i];
+      const [x2, y2] = ring[(i + 1) % ring.length];
+      twice += x1 * y2 - x2 * y1;
+    }
+    total += Math.abs(twice) / 2;
+  }
+  return total;
+}
+
+export function dropSeamDuplicates(polygons) {
+  const seen = new Map(); // place key -> [areas already kept]
+  const kept = [];
+  for (const p of polygons) {
+    let minA = Infinity, minB = Infinity, maxA = -Infinity, maxB = -Infinity;
+    for (const ring of p.rings) {
+      for (const [a, b] of ring) {
+        if (a < minA) minA = a;
+        if (a > maxA) maxA = a;
+        if (b < minB) minB = b;
+        if (b > maxB) maxB = b;
+      }
+    }
+    const key = [p.kind, Math.round(minA / DUP_BOX), Math.round(minB / DUP_BOX), Math.round(maxA / DUP_BOX), Math.round(maxB / DUP_BOX)].join("|");
+    const area = ringsArea(p.rings);
+    const list = seen.get(key) || [];
+    if (list.some((a) => Math.abs(a - area) <= DUP_AREA * Math.max(area, 1))) continue;
+    list.push(area);
+    seen.set(key, list);
+    kept.push(p);
+  }
+  return kept;
+}

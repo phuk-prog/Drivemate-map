@@ -2,7 +2,7 @@
 // while parallel roads, bridges and tunnels do not. Exits with code 1 on any failure.
 // Usage: node tools/test-graph.mjs
 
-import { joinCrossings, splitAtSharedVertices } from "./graph.mjs";
+import { joinCrossings, splitAtSharedVertices, dropSeamDuplicates } from "./graph.mjs";
 
 const failures = [];
 const check = (name, ok, detail = "") => {
@@ -87,6 +87,23 @@ const repair = (edges) => {
   ]);
   const distinct = new Set(r.nodes.map((n) => `${n.lat},${n.lon}`)).size;
   check("three roads through one point share one junction", distinct === r.nodes.length, `distinct=${distinct} nodes=${r.nodes.length}`);
+}
+
+// 8. Seam duplicates: the same square twice is kept once; the same place with a
+//    different shape is kept; a different kind at the same place is kept.
+{
+  const square = (x0, y0, s) => [[x0, y0], [x0 + s, y0], [x0 + s, y0 + s], [x0, y0 + s]];
+  const polys = [
+    { kind: 2, rings: [square(0, 0, 100000)] },
+    { kind: 2, rings: [square(0, 0, 100000).slice().reverse()] }, // same square, other winding
+    { kind: 2, rings: [square(0, 0, 100000).map(([a, b]) => [a + 1, b])] }, // shifted 1 unit: same place
+    { kind: 2, rings: [square(0, 0, 50000)] }, // same corner, half the size: kept
+    { kind: 1, rings: [square(0, 0, 100000)] }, // other kind: kept
+  ];
+  const kept = dropSeamDuplicates(polys);
+  check("seam duplicate of the same area is dropped", kept.length === 3, `kept=${kept.length}`);
+  check("same place, different size is kept", kept.some((p) => p.kind === 2 && p.rings[0][1][0] === 50000));
+  check("same square, other kind is kept", kept.some((p) => p.kind === 1));
 }
 
 if (failures.length) {
