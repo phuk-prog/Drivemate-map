@@ -300,6 +300,8 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
   } catch {
     log(`no warnings cache for ${osmName}; run tools/osm-extract.mjs to add road warnings`);
   }
+  // The cache covers the whole area, but a square (or any smaller build) keeps only the warnings inside its own box.
+  warnings = warnings.filter((w) => w.lat >= bboxFixed[0] && w.lat <= bboxFixed[2] && w.lon >= bboxFixed[1] && w.lon <= bboxFixed[3]);
   // Road speed limits (OSM maxspeed): from tools/osm-extract.mjs. None if there is no cache.
   let speedWays = [];
   try {
