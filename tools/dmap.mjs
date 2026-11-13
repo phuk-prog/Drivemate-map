@@ -1,8 +1,14 @@
-// Reader and writer for the DMAP map format, version 2 (see format/FORMAT.md).
+// Reader and writer for the DMAP map format, version 4 (see format/FORMAT.md).
+// Version 3 files (no restrictions section) can still be read.
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 3;
+const VERSION = 4;
+const READABLE_VERSIONS = [3, 4];
+
+// Turn restriction kinds stored in the restrictions section.
+export const RESTRICTION_NO = 1; // this turn is not allowed
+export const RESTRICTION_ONLY = 2; // this is the only turn allowed from the edge at the via node
 const COORD_SCALE = 1e7;
 
 export function toFixed7(deg) {
@@ -71,7 +77,7 @@ function writePoints(w, points) {
 }
 
 export function writeDmap(model) {
-  const { bbox, nodes, edges, lines, polygons, labels } = model;
+  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [] } = model;
   const w = new ByteWriter();
   w.bytes(Buffer.from(MAGIC, "ascii"));
   w.u16(VERSION);
@@ -129,6 +135,15 @@ export function writeDmap(model) {
     w.bytes(name);
   }
 
+  // Version 4: turn restrictions, after the labels.
+  w.u32(restrictions.length);
+  for (const r of restrictions) {
+    w.u8(r.kind);
+    w.u32(r.from);
+    w.u32(r.to);
+    w.u32(r.via);
+  }
+
   return w.result();
 }
 
@@ -171,7 +186,7 @@ export function readDmap(buf) {
   if (buf.toString("ascii", 0, 4) !== MAGIC) throw new Error("DMAP: bad magic");
   pos = 4;
   const version = u16();
-  if (version !== VERSION) throw new Error("DMAP: unsupported version " + version);
+  if (!READABLE_VERSIONS.includes(version)) throw new Error("DMAP: unsupported version " + version);
   u16();
   const bbox = [i32(), i32(), i32(), i32()];
   const nodeCount = u32();
@@ -226,5 +241,18 @@ export function readDmap(buf) {
     labels[i] = { kind, category, lat, lon, name };
   }
 
-  return { bbox, nodes, edges, lines, polygons, labels };
+  // Version 4 files have a restrictions section. Version 3 files have none.
+  const restrictions = [];
+  if (version >= 4) {
+    const count = u32();
+    for (let i = 0; i < count; i++) {
+      const kind = u8();
+      const from = u32();
+      const to = u32();
+      const via = u32();
+      restrictions.push({ kind, from, to, via });
+    }
+  }
+
+  return { bbox, nodes, edges, lines, polygons, labels, restrictions };
 }

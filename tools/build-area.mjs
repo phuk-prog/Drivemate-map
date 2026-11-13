@@ -2,13 +2,14 @@
 // Usage: node tools/build-area.mjs --name=london --bbox=-0.55,51.28,0.30,51.70 --zoom=14
 // Output: data/out/<name>.dmap (not committed; published to static hosting later)
 
-import { readdir, writeFile, mkdir, stat } from "node:fs/promises";
+import { readdir, readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
 import { splitAtSharedVertices, joinCrossings } from "./graph.mjs";
+import { matchRestrictions } from "./restrictions.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -271,7 +272,23 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
   // Roads that cross in the middle get a junction at the crossing point.
   const crossed = joinCrossings(edges);
   const repaired = splitAtSharedVertices(crossed.edges);
-  const bytes = writeDmap({ bbox: bboxFixed, nodes: repaired.nodes, edges: repaired.edges, lines, polygons, labels });
+  // Turn restrictions: from the cache made by tools/fetch-restrictions.mjs. None if there is no cache.
+  let restrictionRecords = [];
+  try {
+    restrictionRecords = JSON.parse(await readFile(join(ROOT, "data", "cache", "restrictions", `${name}.json`), "utf8"));
+  } catch {
+    log(`no restriction cache for ${name}; run tools/fetch-restrictions.mjs to add turn restrictions`);
+  }
+  const restrictions = matchRestrictions(repaired.nodes, repaired.edges, restrictionRecords);
+  const bytes = writeDmap({
+    bbox: bboxFixed,
+    nodes: repaired.nodes,
+    edges: repaired.edges,
+    lines,
+    polygons,
+    labels,
+    restrictions: restrictions.matched,
+  });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, `${name}.dmap`);
@@ -287,6 +304,9 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     nodes: repaired.nodes.length,
     routableEdges: repaired.edges.length,
     crossingsFound: crossed.joins,
+    restrictionsFetched: restrictionRecords.length,
+    restrictionsMatched: restrictions.matched.length,
+    restrictionsUnmatched: restrictions.unmatched,
     lines: lines.length,
     polygons: polygons.length,
     labels: labels.length,

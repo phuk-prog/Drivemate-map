@@ -114,6 +114,20 @@ Categories:
 
 Only named features produce labels. Labels are drawn by the app, not stored as images.
 
+## Turn restrictions (version 4 only, after the labels)
+
+A u32 count, then that many records. Version 3 files have no restrictions section.
+
+| Type | Field | Meaning |
+|------|-------|---------|
+| u8   | kind  | 1 no: this turn is not allowed. 2 only: this is the only turn allowed from the edge at the via node. |
+| u32  | from  | edge ID the traveller comes in on |
+| u32  | to    | edge ID the traveller leaves on |
+| u32  | via   | node ID of the junction where the turn happens |
+
+Restrictions come from OpenStreetMap restriction relations (simple ones only: one from road, one via node, one to road).
+They are matched to edges by location at build time, since the map tiles do not carry them.
+
 ## Source and licence
 
 Source data: OpenStreetMap, through OpenFreeMap's vector tiles (OpenMapTiles
