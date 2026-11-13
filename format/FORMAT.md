@@ -1,4 +1,4 @@
-# Drivemate map file format (DMAP), version 4
+# Drivemate map file format (DMAP), version 5
 
 Our own binary format for one downloadable map area. All numbers are little-endian.
 Coordinates are stored as signed 32-bit integers in units of 1e-7 degree
@@ -7,16 +7,17 @@ Coordinates are stored as signed 32-bit integers in units of 1e-7 degree
 The app's Kotlin reader must follow this document exactly. The JavaScript
 reference reader is `tools/dmap.mjs`. Class-to-code tables are in `tools/classes.mjs`.
 
-Readers must also accept version 3 files. Version 3 has a 44-byte header (no
+Readers must also accept versions 3 and 4. Version 3 has a 44-byte header (no
 stringCount or restrictionCount), no strings or restrictions sections, and edges
-without the version 4 fields marked "(v4)" below.
+without the fields marked "(v4)" or "(v5)" below. Version 4 is version 5 without the
+edge fields marked "(v5)".
 
 ## Header (fixed, 52 bytes)
 
 | Offset | Type      | Field            | Meaning                              |
 |--------|-----------|------------------|--------------------------------------|
 | 0      | 4 bytes   | magic            | ASCII `DMAP`                         |
-| 4      | u16       | version          | `4`                                  |
+| 4      | u16       | version          | `5`                                  |
 | 6      | u16       | reserved         | `0`                                  |
 | 8      | i32 x 4   | bbox             | minLat, minLon, maxLat, maxLon       |
 | 24     | u32       | nodeCount        | number of road nodes                 |
@@ -64,6 +65,10 @@ than about 2 m share one node. Node IDs are the record index (0-based).
 | u32       | ref          | (v4) string index of the road number (for example "A6"), 0 for none |
 | u32       | turnLanesFwd | (v4) string index of the turn lanes when travelling fromNode to toNode, 0 for none |
 | u32       | turnLanesBwd | (v4) string index of the turn lanes when travelling toNode to fromNode, 0 for none |
+| u32       | destinationFwd | (v5) string index of the signposted destination when travelling fromNode to toNode, 0 for none |
+| u32       | destinationBwd | (v5) string index of the signposted destination when travelling toNode to fromNode, 0 for none |
+| u8        | lanesFwd     | (v5) lanes in the fromNode to toNode direction, 0 when unknown |
+| u8        | lanesBwd     | (v5) lanes in the toNode to fromNode direction, 0 when unknown |
 | u16       | pointCount   | number of points, at least 2 |
 | i32 x 2 x pointCount | points | lat, lon pairs in travel order; first point = fromNode, last point = toNode |
 
@@ -83,6 +88,11 @@ Edge flags (bit set = true):
 | 3   | toll |
 | 4   | no motor access (access tag `no` or `private`). Drawn, never routed. |
 | 5   | roundabout (v4) |
+| 6   | link road: a slip road or connector such as `motorway_link` (v5) |
+
+Destinations are ready to show: road numbers first, then places, for example
+`M60 Manchester, Stockport`. They come from the OpenStreetMap `destination` and
+`destination:ref` tags (or their `:forward` and `:backward` forms).
 
 ## Lines (lineCount records): drawn, not routed
 

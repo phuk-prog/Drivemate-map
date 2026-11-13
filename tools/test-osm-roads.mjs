@@ -6,6 +6,7 @@ import { readFile, rm } from "node:fs/promises";
 import {
   buildRoadGraph, parseMaxspeed, onewayOf, EDGE_FLAG, RESTRICTION_KIND,
   parseDirection, isSpeedCamera, enforcementDevices, speedCameraOf, speedCameraLabels,
+  destinationOf, lanesOf,
 } from "./osm-roads.mjs";
 import { loadOsmRoads } from "./load-osm.mjs";
 import { writeDmap, readDmap, toFixed7 } from "./dmap.mjs";
@@ -139,7 +140,7 @@ check(parseMaxspeed(undefined) === 0, "missing maxspeed is unknown");
   });
   const bytes = writeDmap({ bbox: [0, 0, 1, 1], nodes: g.nodes, edges: g.edges, lines: [], polygons: [], labels: [], strings: g.strings, restrictions: g.restrictions });
   const back = readDmap(bytes);
-  check(back.version === 4, "round trip: version 4");
+  check(back.version === 5, "round trip: current version");
   check(back.edges.length === g.edges.length, "round trip: edge count");
   check(back.strings[back.edges[0].name] === "High Street", "round trip: street name");
   check(back.edges[0].maxspeed === 32, `round trip: 20 mph is 32 km/h, got ${back.edges[0].maxspeed}`);
@@ -221,6 +222,28 @@ if (fixtures) {
   console.log(`loader: ${data.ways.length} road, ${g.edges.length} edge(s), ${data.relations.length} restriction relation(s), ${data.cameras.length} speed camera(s)`);
 } else {
   console.log("loader check skipped (no fixtures folder given)");
+}
+
+// 11. Destinations, lanes per direction and link roads (DMAP v5).
+check(destinationOf({ "destination:ref": "M60", destination: "Manchester;Stockport" }, "forward", 1) === "M60 Manchester, Stockport", "destination text for a one-way road");
+check(destinationOf({ destination: "Manchester" }, "forward", 0) === "", "plain destination ignored on a two-way road");
+check(destinationOf({ "destination:backward": "Buxton" }, "backward", 0) === "Buxton", "backward destination");
+check(lanesOf({ lanes: "3" }, "forward", 1) === 3, "all lanes forward on a one-way road");
+check(lanesOf({ lanes: "4", "lanes:forward": "2", "lanes:backward": "2" }, "backward", 0) === 2, "lanes backward");
+check(lanesOf({ lanes: "4" }, "forward", 0) === 0, "lanes per direction unknown on a two-way road without lanes:forward");
+{
+  const g = buildRoadGraph({
+    ways: [{ id: 1, tags: { highway: "motorway_link", oneway: "-1", lanes: "2", destination: "Stockport" }, nodes: [1, 2, 3] }],
+    coords,
+    bbox: BBOX,
+  });
+  const e = g.edges[0];
+  check((e.flags & EDGE_FLAG.LINK) !== 0, "link road flag");
+  check(g.strings[e.destinationFwd] === "Stockport", "reversed one-way keeps its destination in travel direction");
+  check(e.lanesFwd === 2 && e.lanesBwd === 0, "reversed one-way keeps its lanes in travel direction");
+  const back = readDmap(writeDmap({ bbox: [0, 0, 1, 1], nodes: g.nodes, edges: g.edges, lines: [], polygons: [], labels: [], strings: g.strings, restrictions: g.restrictions }));
+  check(back.version === 5, "round trip: version 5");
+  check(back.strings[back.edges[0].destinationFwd] === "Stockport" && back.edges[0].lanesFwd === 2, "round trip: destination and lanes");
 }
 
 if (failures.length) {

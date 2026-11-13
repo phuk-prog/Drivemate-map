@@ -1,8 +1,8 @@
 // Reader and writer for the DMAP map format (see format/FORMAT.md).
-// Writes version 4. Reads versions 3 and 4. Our own code. No third-party dependencies.
+// Writes version 5. Reads versions 3, 4 and 5. Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 4;
+const VERSION = 5;
 const COORD_SCALE = 1e7;
 
 export function toFixed7(deg) {
@@ -112,6 +112,10 @@ export function writeDmap(model) {
     w.u32(e.ref ?? 0);
     w.u32(e.turnLanesFwd ?? 0);
     w.u32(e.turnLanesBwd ?? 0);
+    w.u32(e.destinationFwd ?? 0);
+    w.u32(e.destinationBwd ?? 0);
+    w.u8(e.lanesFwd ?? 0);
+    w.u8(e.lanesBwd ?? 0);
     w.u16(e.points.length);
     writePoints(w, e.points);
   }
@@ -197,7 +201,7 @@ export function readDmap(buf) {
   if (buf.toString("ascii", 0, 4) !== MAGIC) throw new Error("DMAP: bad magic");
   pos = 4;
   const version = u16();
-  if (version !== 3 && version !== 4) throw new Error("DMAP: unsupported version " + version);
+  if (version < 3 || version > 5) throw new Error("DMAP: unsupported version " + version);
   u16();
   const bbox = [i32(), i32(), i32(), i32()];
   const nodeCount = u32();
@@ -232,6 +236,10 @@ export function readDmap(buf) {
     let ref = 0;
     let turnLanesFwd = 0;
     let turnLanesBwd = 0;
+    let destinationFwd = 0;
+    let destinationBwd = 0;
+    let lanesFwd = 0;
+    let lanesBwd = 0;
     if (version >= 4) {
       maxspeed = u8();
       lanes = u8();
@@ -240,8 +248,14 @@ export function readDmap(buf) {
       turnLanesFwd = u32();
       turnLanesBwd = u32();
     }
+    if (version >= 5) {
+      destinationFwd = u32();
+      destinationBwd = u32();
+      lanesFwd = u8();
+      lanesBwd = u8();
+    }
     const n = u16();
-    edges[i] = { from, to, roadClass, flags, maxspeed, lanes, name, ref, turnLanesFwd, turnLanesBwd, points: points(n) };
+    edges[i] = { from, to, roadClass, flags, maxspeed, lanes, name, ref, turnLanesFwd, turnLanesBwd, destinationFwd, destinationBwd, lanesFwd, lanesBwd, points: points(n) };
   }
 
   const lines = new Array(lineCount);

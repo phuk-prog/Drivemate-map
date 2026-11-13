@@ -26,6 +26,7 @@ export const EDGE_FLAG = {
   TOLL: 8,
   NO_MOTOR: 16,
   ROUNDABOUT: 32,
+  LINK: 64, // slip road or link (motorway_link, trunk_link, ...)
 };
 
 export const RESTRICTION_KIND = { NO: 1, ONLY: 2 };
@@ -123,6 +124,27 @@ export function onewayOf(tags) {
   return 0;
 }
 
+// Signposted destination for one direction, ready to show: road numbers then places,
+// for example "M60 Manchester, Stockport". dir is "forward" or "backward". Plain
+// destination tags apply to the forward direction of one-way roads.
+export function destinationOf(tags, dir, oneway) {
+  const plain = (dir === "forward" && oneway === 1) || (dir === "backward" && oneway === -1);
+  const pick = (key) => tags[`${key}:${dir}`] ?? (plain ? tags[key] : undefined);
+  const list = (v) => (v ? v.split(";").map((x) => x.trim()).filter(Boolean) : []);
+  const refs = list(pick("destination:ref"));
+  const places = list(pick("destination"));
+  return [refs.join(", "), places.join(", ")].filter(Boolean).join(" ");
+}
+
+// Lanes in one direction: lanes:forward / lanes:backward, or all lanes of a one-way road.
+export function lanesOf(tags, dir, oneway) {
+  const n = (v) => Math.min(255, Number.parseInt(v ?? "0", 10) || 0);
+  const tagged = n(tags[`lanes:${dir}`]);
+  if (tagged) return tagged;
+  if ((dir === "forward" && oneway === 1) || (dir === "backward" && oneway === -1)) return n(tags.lanes);
+  return 0;
+}
+
 function flagsOf(tags, oneway) {
   let flags = 0;
   if (oneway !== 0) flags |= EDGE_FLAG.ONEWAY;
@@ -132,6 +154,7 @@ function flagsOf(tags, oneway) {
   const access = tags.motor_vehicle ?? tags.motorcar ?? tags.vehicle ?? tags.access;
   if (access === "no" || access === "private") flags |= EDGE_FLAG.NO_MOTOR;
   if (tags.junction === "roundabout" || tags.junction === "circular") flags |= EDGE_FLAG.ROUNDABOUT;
+  if (typeof tags.highway === "string" && tags.highway.endsWith("_link")) flags |= EDGE_FLAG.LINK;
   return flags;
 }
 
@@ -205,11 +228,18 @@ export function buildRoadGraph({ ways, coords, relations = [], bbox }) {
     let turnFwd = w.tags["turn:lanes:forward"] ?? (oneway === 1 ? w.tags["turn:lanes"] : undefined);
     let turnBwd = w.tags["turn:lanes:backward"] ?? (oneway === -1 ? w.tags["turn:lanes"] : undefined);
 
+    let destFwd = destinationOf(w.tags, "forward", oneway);
+    let destBwd = destinationOf(w.tags, "backward", oneway);
+    let lanesFwd = lanesOf(w.tags, "forward", oneway);
+    let lanesBwd = lanesOf(w.tags, "backward", oneway);
+
     // Reverse one-way roads are stored in their travel direction.
     let seq = w.nodes;
     if (oneway === -1) {
       seq = [...w.nodes].reverse();
       [turnFwd, turnBwd] = [turnBwd, turnFwd];
+      [destFwd, destBwd] = [destBwd, destFwd];
+      [lanesFwd, lanesBwd] = [lanesBwd, lanesFwd];
     }
 
     const list = [];
@@ -232,6 +262,10 @@ export function buildRoadGraph({ ways, coords, relations = [], bbox }) {
           ref,
           turnLanesFwd: strings.id(turnFwd ?? ""),
           turnLanesBwd: strings.id(turnBwd ?? ""),
+          destinationFwd: strings.id(destFwd),
+          destinationBwd: strings.id(destBwd),
+          lanesFwd,
+          lanesBwd,
           points: part.map((n) => {
             const [lat, lon] = coords.get(n);
             return [toFixed7(lat), toFixed7(lon)];
