@@ -1,10 +1,10 @@
-// Reader and writer for the DMAP map format, version 6 (see format/FORMAT.md).
-// Version 3, 4 and 5 files (older files without some of the later sections) can still be read.
+// Reader and writer for the DMAP map format, version 7 (see format/FORMAT.md).
+// Version 3 to 6 files (older files without some of the later sections) can still be read.
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 6;
-const READABLE_VERSIONS = [3, 4, 5, 6];
+const VERSION = 7;
+const READABLE_VERSIONS = [3, 4, 5, 6, 7];
 
 // Warning kinds stored in the warnings section.
 export const WARNING_SPEED_CAMERA = 1;
@@ -82,7 +82,7 @@ function writePoints(w, points) {
 }
 
 export function writeDmap(model) {
-  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [], lanes = [], warnings = [] } = model;
+  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [], lanes = [], warnings = [], speedLimits = [] } = model;
   const w = new ByteWriter();
   w.bytes(Buffer.from(MAGIC, "ascii"));
   w.u16(VERSION);
@@ -164,6 +164,15 @@ export function writeDmap(model) {
     w.u8(x.kind);
     w.i32(x.lat);
     w.i32(x.lon);
+  }
+
+  // Version 7: road speed limits, after the warnings. Each record is an edge, the displayed number
+  // and the unit (0 km/h, 1 mph).
+  w.u32(speedLimits.length);
+  for (const s of speedLimits) {
+    w.u32(s.edge);
+    w.u8(s.value);
+    w.u8(s.unit);
   }
 
   return w.result();
@@ -302,5 +311,17 @@ export function readDmap(buf) {
     }
   }
 
-  return { bbox, nodes, edges, lines, polygons, labels, restrictions, lanes, warnings };
+  // Version 7 files have a speed limits section.
+  const speedLimits = [];
+  if (version >= 7) {
+    const count = u32();
+    for (let i = 0; i < count; i++) {
+      const edge = u32();
+      const value = u8();
+      const unit = u8();
+      speedLimits.push({ edge, value, unit });
+    }
+  }
+
+  return { bbox, nodes, edges, lines, polygons, labels, restrictions, lanes, warnings, speedLimits };
 }

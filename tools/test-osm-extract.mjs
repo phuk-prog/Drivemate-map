@@ -119,6 +119,12 @@ function wayBlock() {
     way(12, [1, 2], [["highway", "residential"]]), // restriction to way
     way(13, [6, 7], [["highway", "primary"], ["turn:lanes:forward", "left|right"], ["oneway", "yes"]]), // far away
     way(14, [10, 11], [["highway", "construction"]]), // road under construction, in the box
+    way(15, [2, 1, 3], [["highway", "primary"], ["maxspeed", "30 mph"]]), // speed limit in mph
+    way(16, [4, 1], [["highway", "residential"], ["maxspeed", "50"], ["maxspeed:backward", "30"]]), // two records
+    way(17, [1, 2], [["highway", "residential"], ["maxspeed", "national"]]), // not a number: dropped
+    way(18, [6, 7], [["highway", "primary"], ["maxspeed", "50"]]), // far away
+    way(19, [4, 5], [["building", "yes"], ["maxspeed", "40"]]), // no highway tag: ignored
+    way(20, [2, 1, 3, 2, 1, 3, 2, 1, 3, 2, 1, 3, 2, 1, 3, 2, 1, 3, 2, 1, 3], [["highway", "primary"], ["maxspeed", "20 mph"], ["oneway", "-1"]]), // long: thinned
   ];
   return block(st, [Buffer.concat(ways.map((w) => lenField(3, w)))]);
 }
@@ -204,10 +210,25 @@ check("the far lane way was found but dropped for being outside the box", stats.
   check("the far speed camera is not counted", stats.warningsSpeedCamera === 1, JSON.stringify(stats));
 }
 
+// 4b. Speed limits: parsed, thinned, in the box only.
+{
+  const { speedWays } = await extractFromPbf(path, [-0.2, 51.4, 0.0, 51.6]);
+  const by = (way) => speedWays.filter((r) => r.way === way);
+  check("mph limit is kept with unit 1", by(15).length === 1 && by(15)[0].value === 30 && by(15)[0].unit === 1 && by(15)[0].direction === "both", JSON.stringify(by(15)));
+  check("plain and backward limits give two records", by(16).length === 2 && by(16).some((r) => r.direction === "both" && r.value === 50 && r.unit === 0) && by(16).some((r) => r.direction === "backward" && r.value === 30), JSON.stringify(by(16)));
+  check("a non-numeric limit is dropped", by(17).length === 0);
+  check("a limit far outside the box is dropped", by(18).length === 0);
+  check("a way without a highway tag is ignored", by(19).length === 0);
+  check("a long way is thinned to at most 12 points, keeping the ends", by(20).length === 1 && by(20)[0].geom.length === 12 && by(20)[0].oneway === -1, JSON.stringify(by(20).map((r) => r.geom.length)));
+  check("short way keeps all points", by(15)[0].geom.length === 3);
+  const st = (await extractFromPbf(path, [-0.2, 51.4, 0.0, 51.6])).stats;
+  check("speed stats count ways found, dropped values and outside the box", st.speedWaysFound === 5 && st.speedValuesDropped === 1 && st.speedWaysOutsideBox === 1, JSON.stringify(st));
+}
+
 // 5. A box that does not contain the crossroads drops everything.
 {
   const empty = await extractFromPbf(path, [10, 10, 11, 11]);
-  check("a box away from the crossroads gives nothing", empty.restrictions.length === 0 && empty.laneWays.length === 0 && empty.warnings.length === 0, JSON.stringify(empty.stats));
+  check("a box away from the crossroads gives nothing", empty.restrictions.length === 0 && empty.laneWays.length === 0 && empty.warnings.length === 0 && empty.speedWays.length === 0, JSON.stringify(empty.stats));
 }
 
 if (failures.length) {

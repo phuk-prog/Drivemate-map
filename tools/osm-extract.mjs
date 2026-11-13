@@ -3,6 +3,7 @@
 //   data/osm-cache/restrictions/<name>.json  (same records the Overpass fetch made)
 //   data/osm-cache/lanes/<name>.json         (same ways the Overpass fetch made)
 //   data/osm-cache/warnings/<name>.json      (speed cameras, level crossings, roads under construction)
+//   data/osm-cache/speed/<name>.json         (maxspeed ways, thinned geometry, see tools/speed.mjs)
 // Build-time only: the app never reads OpenStreetMap files. Our own code.
 //
 // Usage: node tools/osm-extract.mjs --pbf=greater-london.osm.pbf --name=london --bbox=-0.55,51.28,0.30,51.70
@@ -17,15 +18,27 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readPbf } from "./osm-pbf.mjs";
+import { parseMaxspeed, parseOneway } from "./speed.mjs";
 import { RESTRICTION_NO, RESTRICTION_ONLY, WARNING_SPEED_CAMERA, WARNING_LEVEL_CROSSING, WARNING_ROADWORKS } from "./dmap.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const SPEED_KEYS = [["maxspeed", "both"], ["maxspeed:forward", "forward"], ["maxspeed:backward", "backward"]];
+const SPEED_GEOM_POINTS = 12; // a maxspeed way keeps at most this many points, always the first and last
 const LANE_KEYS = ["turn:lanes", "turn:lanes:forward", "turn:lanes:backward"];
 
 // The nodes next to the via node on a way: the point before, the via node, the point after.
 function around(refs, viaId) {
   const i = refs.indexOf(viaId);
   return i < 0 ? null : refs.slice(Math.max(0, i - 1), i + 2);
+}
+
+// Picks at most SPEED_GEOM_POINTS items evenly along a list, always keeping the first and last.
+// Keeps memory low: a country has hundreds of thousands of maxspeed ways.
+function thin(refs) {
+  if (refs.length <= SPEED_GEOM_POINTS) return Array.from(refs);
+  const out = [];
+  for (let i = 0; i < SPEED_GEOM_POINTS; i++) out.push(refs[Math.round((i * (refs.length - 1)) / (SPEED_GEOM_POINTS - 1))]);
+  return out;
 }
 
 // bbox is [minLon, minLat, maxLon, maxLat] in degrees. Returns { restrictions, laneWays, stats }.
@@ -44,6 +57,10 @@ export async function extractFromPbf(path, bbox) {
     laneWaysFound: 0,
     laneWaysMissingGeometry: 0,
     laneWaysOutsideBox: 0,
+    speedWaysFound: 0,
+    speedValuesDropped: 0,
+    speedWaysMissingGeometry: 0,
+    speedWaysOutsideBox: 0,
     warningsSpeedCamera: 0,
     warningsLevelCrossing: 0,
     warningsRoadworks: 0,
@@ -92,6 +109,7 @@ export async function extractFromPbf(path, bbox) {
   const wayRefs = new Map();
   const laneRaw = [];
   const constructionNodes = []; // one middle node per road under construction
+  const speedRaw = [];
   await readPbf(path, {
     onWay(way, block) {
       // Roads under construction (highway=construction) become one roadworks warning each.
@@ -103,6 +121,32 @@ export async function extractFromPbf(path, bbox) {
             constructionNodes.push(way.refs[Math.floor(way.refs.length / 2)]);
             break;
           }
+        }
+      }
+      // Speed limits: highway ways with a maxspeed tag (plain, forward or backward).
+      const speedIndexes = SPEED_KEYS.map(([k]) => block.find(k));
+      if (speedIndexes.some((i) => i >= 0) && way.refs.length >= 2) {
+        const highwayKey = block.find("highway");
+        const onewayKey = block.find("oneway");
+        let highway = false;
+        let oneway = 0;
+        const found = [];
+        for (let k = 0; k < way.keys.length; k++) {
+          const key = way.keys[k];
+          const at = speedIndexes.indexOf(key);
+          if (at >= 0) found.push([SPEED_KEYS[at][1], block.str(way.vals[k])]);
+          else if (key === highwayKey) highway = true;
+          else if (key === onewayKey) oneway = parseOneway(block.str(way.vals[k]));
+        }
+        if (highway && found.length > 0) {
+          stats.speedWaysFound++;
+          const parsed = [];
+          for (const [direction, text] of found) {
+            const p = parseMaxspeed(text);
+            if (p) parsed.push({ direction, value: p.value, unit: p.unit });
+            else stats.speedValuesDropped++;
+          }
+          if (parsed.length > 0) speedRaw.push({ way: way.id, oneway, parsed, refs: thin(way.refs) });
         }
       }
       const needed = neededWays.has(way.id);
@@ -146,6 +190,7 @@ export async function extractFromPbf(path, bbox) {
   }
   for (const w of laneRaw) for (const id of w.refs) neededNodes.add(id);
   for (const id of constructionNodes) neededNodes.add(id);
+  for (const w of speedRaw) for (const id of w.refs) neededNodes.add(id);
 
   // Pass 3: node coordinates.
   const coords = new Map();
@@ -203,6 +248,20 @@ export async function extractFromPbf(path, bbox) {
     laneWays.push({ tags: w.tags, oneway: w.oneway, geom });
   }
 
+  const speedWays = [];
+  for (const w of speedRaw) {
+    const geom = w.refs.map((id) => coords.get(id));
+    if (geom.some((p) => !p)) {
+      stats.speedWaysMissingGeometry++;
+      continue;
+    }
+    if (!geom.some(inBox)) {
+      stats.speedWaysOutsideBox++;
+      continue;
+    }
+    for (const r of w.parsed) speedWays.push({ way: w.way, value: r.value, unit: r.unit, direction: r.direction, oneway: w.oneway, geom });
+  }
+
   for (const id of constructionNodes) {
     const p = coords.get(id);
     if (p && inBox(p)) {
@@ -211,7 +270,7 @@ export async function extractFromPbf(path, bbox) {
     }
   }
 
-  return { restrictions, laneWays, warnings, stats };
+  return { restrictions, laneWays, warnings, speedWays, stats };
 }
 
 async function main() {
@@ -224,14 +283,14 @@ async function main() {
   const name = arg("name", "london");
   const bbox = arg("bbox", "-0.55,51.28,0.30,51.70").split(",").map(Number);
   const started = Date.now();
-  const { restrictions, laneWays, warnings, stats } = await extractFromPbf(pbf, bbox);
+  const { restrictions, laneWays, warnings, speedWays, stats } = await extractFromPbf(pbf, bbox);
 
-  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings]]) {
+  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings], ["speed", speedWays]]) {
     const outDir = join(ROOT, "data", "osm-cache", dir);
     await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, `${name}.json`), JSON.stringify(data));
   }
-  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, warnings: warnings.length, stats }, null, 2));
+  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, warnings: warnings.length, speedWays: speedWays.length, stats }, null, 2));
   console.log(`extracted in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

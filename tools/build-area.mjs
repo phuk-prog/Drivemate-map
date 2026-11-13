@@ -10,6 +10,7 @@ import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
 import { splitAtSharedVertices, joinCrossings, dropSeamDuplicates } from "./graph.mjs";
 import { matchRestrictions } from "./restrictions.mjs";
+import { matchSpeedLimits } from "./speed.mjs";
 import { matchLanes, parseLaneOverpass } from "./lanes.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
@@ -299,6 +300,14 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
   } catch {
     log(`no warnings cache for ${osmName}; run tools/osm-extract.mjs to add road warnings`);
   }
+  // Road speed limits (OSM maxspeed): from tools/osm-extract.mjs. None if there is no cache.
+  let speedWays = [];
+  try {
+    speedWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "speed", `${osmName}.json`), "utf8"));
+  } catch {
+    log(`no speed cache for ${osmName}; run tools/osm-extract.mjs to add speed limits`);
+  }
+  const speedMatch = matchSpeedLimits(repaired.edges, speedWays);
   const bytes = writeDmap({
     bbox: bboxFixed,
     nodes: repaired.nodes,
@@ -309,6 +318,7 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     restrictions: restrictions.matched,
     lanes: laneMatch.lanes,
     warnings,
+    speedLimits: speedMatch.speedLimits,
   });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
@@ -332,6 +342,11 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     laneEdgesMatched: laneMatch.stats.matched,
     laneStats: laneMatch.stats,
     warnings: warnings.length,
+    speedRecords: speedWays.length,
+    speedWaysUsed: speedMatch.stats.waysUsed,
+    speedEdgesMatched: speedMatch.stats.matched,
+    speedEdgesUnmatched: repaired.edges.length - speedMatch.stats.matched,
+    speedStats: speedMatch.stats,
     lines: lines.length,
     polygons: keptPolygons.length,
     seamDuplicatesDropped: polygons.length - keptPolygons.length,

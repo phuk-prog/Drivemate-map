@@ -1,4 +1,4 @@
-# Drivemate map file format (DMAP), version 3
+# Drivemate map file format (DMAP), versions 3 to 7
 
 Our own binary format for one downloadable map area. All numbers are little-endian.
 Coordinates are stored as signed 32-bit integers in units of 1e-7 degree
@@ -12,7 +12,7 @@ reference reader is `tools/dmap.mjs`. Class-to-code tables are in `tools/classes
 | Offset | Type      | Field        | Meaning                              |
 |--------|-----------|--------------|--------------------------------------|
 | 0      | 4 bytes   | magic        | ASCII `DMAP`                         |
-| 4      | u16       | version      | `3`                                  |
+| 4      | u16       | version      | `7` (3 to 6 can still be read)       |
 | 6      | u16       | reserved     | `0`                                  |
 | 8      | i32 x 4   | bbox         | minLat, minLon, maxLat, maxLon       |
 | 24     | u32       | nodeCount    | number of road nodes                 |
@@ -155,6 +155,24 @@ A u32 count, then that many records. Version 5 and earlier files have no warning
 Warnings are fixed things read from OpenStreetMap (`highway=speed_camera`, `railway=level_crossing`,
 `highway=construction`). They are not live: they show only what OpenStreetMap had when the map was built.
 A road under construction gets one point, at the middle node of the road.
+
+## Road speed limits (version 7 only, after the warnings)
+
+A u32 count, then that many records. Version 6 and earlier files have no speed limit section.
+
+| Type | Field | Meaning |
+|------|-------|---------|
+| u32  | edge  | index of the road edge |
+| u8   | value | the number shown on the sign, 1 to 255 |
+| u8   | unit  | 0 km/h, 1 mph |
+
+One limit per edge, in the direction the edge is travelled. The limit comes from the OpenStreetMap
+`maxspeed` tag (and `maxspeed:forward` / `maxspeed:backward` on two-way roads), matched to edges by
+location and direction at build time. Only plain numbers are stored (`50`, `30 mph`). Words such as
+`national`, `signals`, `none`, `walk` and `variable`, country defaults, lists and conditional limits
+are dropped, and no default limit is ever guessed. An edge that is not listed has no known limit,
+and the app shows no speed sign for it. Coverage is partial. The value is stored as shown, so a
+limit in mph is not converted: the app converts between units only for display.
 
 ## Source and licence
 
