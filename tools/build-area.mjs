@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { decodeTile } from "./mvt.mjs";
 import { readCachedTile, tilesForBbox } from "./fetch-tiles.mjs";
 import { writeDmap, toFixed7 } from "./dmap.mjs";
-import { splitAtSharedVertices } from "./graph.mjs";
+import { splitAtSharedVertices, joinCrossings } from "./graph.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -268,7 +268,9 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
 
   const bboxFixed = [toFixed7(bbox[1]), toFixed7(bbox[0]), toFixed7(bbox[3]), toFixed7(bbox[2])];
   // Make every junction a node, so roads that meet mid-line can be routed across.
-  const repaired = splitAtSharedVertices(edges);
+  // Roads that cross in the middle get a junction at the crossing point.
+  const crossed = joinCrossings(edges);
+  const repaired = splitAtSharedVertices(crossed.edges);
   const bytes = writeDmap({ bbox: bboxFixed, nodes: repaired.nodes, edges: repaired.edges, lines, polygons, labels });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
@@ -284,6 +286,7 @@ export async function buildArea({ name, bbox, zoom, version, log = console.log }
     bytes: size,
     nodes: repaired.nodes.length,
     routableEdges: repaired.edges.length,
+    crossingsFound: crossed.joins,
     lines: lines.length,
     polygons: polygons.length,
     labels: labels.length,

@@ -12,7 +12,7 @@ import { squaresTouching, squareBbox, squareId } from "./grid.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const SQUARES_DIR = join(ROOT, "data", "published", "squares");
-const BUILDER_VERSION = "graph-repair-1";
+const BUILDER_VERSION = "graph-repair-2";
 
 // Builds every square touching a bounding box given in lon-first order (as build-area uses).
 export async function buildSquares({ bbox, zoom, log = console.log }) {

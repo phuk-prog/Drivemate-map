@@ -14,7 +14,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLISHED = join(ROOT, "data", "published");
 const MAX_REGIONS_PER_RUN = Number(process.env.MAX_REGIONS_PER_RUN ?? 2);
 // Change this when the builder changes output, so existing regions are rebuilt.
-const BUILDER_VERSION = "graph-repair-1";
+const BUILDER_VERSION = "graph-repair-2";
 
 const config = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
 const regions = Array.isArray(config) ? config : config.regions;
