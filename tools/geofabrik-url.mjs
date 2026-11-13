@@ -11,12 +11,27 @@ if (!wanted) {
   process.exit(1);
 }
 
-const res = await fetch(INDEX_URL);
-if (!res.ok) {
-  console.error(`Could not read the Geofabrik index: HTTP ${res.status}`);
+// GitHub's runners sometimes cannot connect to Geofabrik for a moment (ECONNREFUSED seen once),
+// so try up to 6 times with a growing pause.
+let features = null;
+let lastError = "";
+for (let attempt = 1; attempt <= 6 && !features; attempt++) {
+  try {
+    const res = await fetch(INDEX_URL);
+    if (res.ok) features = (await res.json()).features || [];
+    else lastError = `HTTP ${res.status}`;
+  } catch (err) {
+    lastError = err.cause && err.cause.code ? err.cause.code : err.message;
+  }
+  if (!features && attempt < 6) {
+    console.error(`Geofabrik index attempt ${attempt} failed (${lastError}); retrying`);
+    await new Promise((r) => setTimeout(r, attempt * 5000));
+  }
+}
+if (!features) {
+  console.error(`Could not read the Geofabrik index: ${lastError}`);
   process.exit(1);
 }
-const features = (await res.json()).features || [];
 const hit = features.find((f) => f.properties && f.properties.id === wanted);
 if (hit && hit.properties.urls && hit.properties.urls.pbf) {
   console.log(hit.properties.urls.pbf);
