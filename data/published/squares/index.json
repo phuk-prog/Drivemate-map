@@ -1,7 +1,7 @@
 {
   "lat1066_lon-45": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.25,
@@ -9,13 +9,13 @@
       -2.2,
       53.35
     ],
-    "bytes": 1050486,
-    "gzBytes": 594979,
-    "builtAt": "2026-11-13T21:31:58.758Z"
+    "bytes": 1067246,
+    "gzBytes": 600096,
+    "builtAt": "2026-11-13T22:15:06.328Z"
   },
   "lat1066_lon-44": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.2,
@@ -23,13 +23,13 @@
       -2.15,
       53.35
     ],
-    "bytes": 752878,
-    "gzBytes": 443965,
-    "builtAt": "2026-11-13T21:31:59.372Z"
+    "bytes": 764138,
+    "gzBytes": 447407,
+    "builtAt": "2026-11-13T22:15:07.003Z"
   },
   "lat1066_lon-43": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.15,
@@ -37,13 +37,13 @@
       -2.1,
       53.35
     ],
-    "bytes": 661925,
-    "gzBytes": 372036,
-    "builtAt": "2026-11-13T21:31:59.781Z"
+    "bytes": 668549,
+    "gzBytes": 374069,
+    "builtAt": "2026-11-13T22:15:07.406Z"
   },
   "lat1066_lon-42": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.1,
@@ -51,13 +51,13 @@
       -2.05,
       53.35
     ],
-    "bytes": 496860,
-    "gzBytes": 278969,
-    "builtAt": "2026-11-13T21:32:00.149Z"
+    "bytes": 500568,
+    "gzBytes": 280287,
+    "builtAt": "2026-11-13T22:15:07.757Z"
   },
   "lat1067_lon-45": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.25,
@@ -65,13 +65,13 @@
       -2.2,
       53.4
     ],
-    "bytes": 1566656,
-    "gzBytes": 842489,
-    "builtAt": "2026-11-13T21:32:00.607Z"
+    "bytes": 1590324,
+    "gzBytes": 849558,
+    "builtAt": "2026-11-13T22:15:08.208Z"
   },
   "lat1067_lon-44": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.2,
@@ -79,13 +79,13 @@
       -2.15,
       53.4
     ],
-    "bytes": 3417111,
-    "gzBytes": 1628183,
-    "builtAt": "2026-11-13T21:32:01.680Z"
+    "bytes": 3476231,
+    "gzBytes": 1649413,
+    "builtAt": "2026-11-13T22:15:09.421Z"
   },
   "lat1067_lon-43": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.15,
@@ -93,13 +93,13 @@
       -2.1,
       53.4
     ],
-    "bytes": 1522323,
-    "gzBytes": 759532,
-    "builtAt": "2026-11-13T21:32:02.175Z"
+    "bytes": 1547923,
+    "gzBytes": 768996,
+    "builtAt": "2026-11-13T22:15:09.985Z"
   },
   "lat1067_lon-42": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.1,
@@ -107,13 +107,13 @@
       -2.05,
       53.4
     ],
-    "bytes": 989428,
-    "gzBytes": 542651,
-    "builtAt": "2026-11-13T21:32:02.611Z"
+    "bytes": 998668,
+    "gzBytes": 545525,
+    "builtAt": "2026-11-13T22:15:10.441Z"
   },
   "lat1068_lon-45": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.25,
@@ -121,13 +121,13 @@
       -2.2,
       53.45
     ],
-    "bytes": 3303319,
-    "gzBytes": 1574473,
-    "builtAt": "2026-11-13T21:32:03.339Z"
+    "bytes": 3339759,
+    "gzBytes": 1586520,
+    "builtAt": "2026-11-13T22:15:11.171Z"
   },
   "lat1068_lon-44": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.2,
@@ -135,13 +135,13 @@
       -2.15,
       53.45
     ],
-    "bytes": 5027552,
-    "gzBytes": 2371672,
-    "builtAt": "2026-11-13T21:32:04.718Z"
+    "bytes": 5102488,
+    "gzBytes": 2396994,
+    "builtAt": "2026-11-13T22:15:12.791Z"
   },
   "lat1068_lon-43": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.15,
@@ -149,13 +149,13 @@
       -2.1,
       53.45
     ],
-    "bytes": 1946826,
-    "gzBytes": 967689,
-    "builtAt": "2026-11-13T21:32:05.364Z"
+    "bytes": 1978406,
+    "gzBytes": 978967,
+    "builtAt": "2026-11-13T22:15:13.421Z"
   },
   "lat1068_lon-42": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.1,
@@ -163,13 +163,13 @@
       -2.05,
       53.45
     ],
-    "bytes": 1112536,
-    "gzBytes": 598808,
-    "builtAt": "2026-11-13T21:32:05.879Z"
+    "bytes": 1126308,
+    "gzBytes": 603091,
+    "builtAt": "2026-11-13T22:15:13.920Z"
   },
   "lat1069_lon-45": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.25,
@@ -177,13 +177,13 @@
       -2.2,
       53.5
     ],
-    "bytes": 4344415,
-    "gzBytes": 2098010,
-    "builtAt": "2026-11-13T21:32:07.964Z"
+    "bytes": 4423971,
+    "gzBytes": 2126032,
+    "builtAt": "2026-11-13T22:15:15.444Z"
   },
   "lat1069_lon-44": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.2,
@@ -191,13 +191,13 @@
       -2.15,
       53.5
     ],
-    "bytes": 2308285,
-    "gzBytes": 1189630,
-    "builtAt": "2026-11-13T21:32:09.233Z"
+    "bytes": 2354201,
+    "gzBytes": 1204093,
+    "builtAt": "2026-11-13T22:15:16.379Z"
   },
   "lat1069_lon-43": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.15,
@@ -205,13 +205,13 @@
       -2.1,
       53.5
     ],
-    "bytes": 1139199,
-    "gzBytes": 613241,
-    "builtAt": "2026-11-13T21:32:10.151Z"
+    "bytes": 1161023,
+    "gzBytes": 619747,
+    "builtAt": "2026-11-13T22:15:16.962Z"
   },
   "lat1069_lon-42": {
     "version": "20261101_080013_pt",
-    "builder": "graph-repair-3",
+    "builder": "graph-repair-4",
     "zoom": 14,
     "bbox": [
       -2.1,
@@ -219,8 +219,8 @@
       -2.05,
       53.5
     ],
-    "bytes": 1103524,
-    "gzBytes": 599145,
-    "builtAt": "2026-11-13T21:32:10.668Z"
+    "bytes": 1126268,
+    "gzBytes": 606428,
+    "builtAt": "2026-11-13T22:15:17.490Z"
   }
 }
