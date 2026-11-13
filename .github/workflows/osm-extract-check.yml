@@ -33,7 +33,9 @@ jobs:
 
       - name: Download the Greater London extract
         run: |
-          curl -fL --retry 5 --retry-delay 10 -o london.osm.pbf https://download.geofabrik.de/europe/great-britain/england/greater-london-latest.osm.pbf
+          URL=$(node tools/geofabrik-url.mjs greater-london)
+          echo "extract: $URL"
+          curl -fL --retry 5 --retry-delay 10 -o london.osm.pbf "$URL"
           ls -l london.osm.pbf
 
       - name: Extract restrictions and lane tags
