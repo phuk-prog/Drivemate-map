@@ -1,0 +1,102 @@
+diff -ruN a/.github/workflows/update-maps.yml b/.github/workflows/update-maps.yml
+--- a/.github/workflows/update-maps.yml	2026-11-13 15:35:25.886098556 +0000
++++ b/.github/workflows/update-maps.yml	2026-11-13 15:35:25.918805316 +0000
+@@ -27,6 +27,8 @@
+       - name: Build new and changed regions
+         env:
+           MAX_REGIONS_PER_RUN: "2"
++          MAX_SQUARES_PER_RUN: "100"
++          TRUST_INDEX: "1"
+         run: node --max-old-space-size=8000 tools/update-regions.mjs
+ 
+       - name: Test every published map file
+diff -ruN a/tools/build-area.mjs b/tools/build-area.mjs
+--- a/tools/build-area.mjs	2026-11-13 15:35:25.886098556 +0000
++++ b/tools/build-area.mjs	2026-11-13 15:35:25.918719399 +0000
+@@ -308,6 +308,8 @@
+     log(`no speed cache for ${osmName}; run tools/osm-extract.mjs to add speed limits`);
+   }
+   const speedMatch = matchSpeedLimits(repaired.edges, speedWays);
++  // The warnings cache covers a whole region; keep only the ones inside this map's own box (a square must not carry all of London).
++  warnings = warnings.filter((w) => w.lat >= bboxFixed[0] && w.lat <= bboxFixed[2] && w.lon >= bboxFixed[1] && w.lon <= bboxFixed[3]);
+   const bytes = writeDmap({
+     bbox: bboxFixed,
+     nodes: repaired.nodes,
+diff -ruN a/tools/build-squares.mjs b/tools/build-squares.mjs
+--- a/tools/build-squares.mjs	2026-11-13 15:35:25.878098556 +0000
++++ b/tools/build-squares.mjs	2026-11-13 15:35:34.421862360 +0000
+@@ -17,7 +17,8 @@
+ // Builds every square touching a bounding box given in lon-first order (as build-area uses).
+ // osm: name of the OSM caches to use for every square (see build-area osmName); builderTag is added to the
+ // builder version so squares are rebuilt when OSM data is switched on.
+-export async function buildSquares({ bbox, zoom, osm, beforeBuild, log = console.log }) {
++// maxBuild: build at most this many squares in this call; the rest wait for a later run (the index is the resume point).
++export async function buildSquares({ bbox, zoom, osm, beforeBuild, maxBuild = Infinity, log = console.log }) {
+   const builder = osm ? `${BUILDER_VERSION}+osm1` : BUILDER_VERSION;
+   const [minLon, minLat, maxLon, maxLat] = bbox;
+   await mkdir(SQUARES_DIR, { recursive: true });
+@@ -32,6 +33,7 @@
+   const squares = squaresTouching([minLat, minLon, maxLat, maxLon]);
+   let version = null;
+   let built = 0;
++  let waiting = 0;
+   let prepared = false;
+   for (const sq of squares) {
+     const id = squareId(sq);
+@@ -40,8 +42,13 @@
+     const fetched = await fetchTiles(sqBbox, zoom, { log: () => {} });
+     version = fetched.version;
+     const out = join(SQUARES_DIR, `${id}.dmap`);
+-    const exists = await stat(out).then(() => true, () => false);
++    // On a CI runner the .dmap files are not in the checkout (they live in the release), so the index alone says "built".
++    const exists = process.env.TRUST_INDEX === "1" || (await stat(out).then(() => true, () => false));
+     if (index[id] && index[id].version === version && index[id].builder === builder && exists) continue;
++    if (built >= maxBuild) {
++      waiting++;
++      continue;
++    }
+     if (beforeBuild && built === 0 && !prepared) {
+       prepared = true;
+       await beforeBuild();
+@@ -52,8 +59,8 @@
+     built++;
+   }
+   await writeFile(indexFile, JSON.stringify(index, null, 2) + "\n");
+-  log(`squares: ${squares.length} in area, ${built} built, version ${version}`);
+-  return { total: squares.length, built, version };
++  log(`squares: ${squares.length} in area, ${built} built, ${waiting} waiting for a later run, version ${version}`);
++  return { total: squares.length, built, waiting, version };
+ }
+ 
+ if (process.argv[1] === fileURLToPath(import.meta.url)) {
+diff -ruN a/tools/update-regions.mjs b/tools/update-regions.mjs
+--- a/tools/update-regions.mjs	2026-11-13 15:35:25.882098556 +0000
++++ b/tools/update-regions.mjs	2026-11-13 15:35:25.918583227 +0000
+@@ -14,6 +14,10 @@
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+ const PUBLISHED = join(ROOT, "data", "published");
+ const MAX_REGIONS_PER_RUN = Number(process.env.MAX_REGIONS_PER_RUN ?? 2);
++// Squares built in one run over all square areas. Measured: about 1 s per square, so this is about upload size, not build time.
++let squaresLeft = Number(process.env.MAX_SQUARES_PER_RUN ?? 100);
++// On CI the .dmap files are not in the checkout; trust the index (the release holds the files).
++const TRUST_INDEX = process.env.TRUST_INDEX === "1";
+ // Change this when the builder changes output, so existing regions are rebuilt.
+ const BUILDER_VERSION = "graph-repair-2";
+ 
+@@ -44,7 +48,7 @@
+   }
+   const builder = builderFor(region);
+   const out = join(PUBLISHED, `${region.id}.dmap`);
+-  const exists = await stat(out).then(() => true, () => false);
++  const exists = TRUST_INDEX || (await stat(out).then(() => true, () => false));
+   const previous = index[region.id];
+ 
+   if (previous && previous.version === version && previous.builder === builder && exists) {
+@@ -84,5 +88,6 @@
+     continue;
+   }
+   const bbox = [area.bbox[0], area.bbox[1], area.bbox[2], area.bbox[3]];
+-  await buildSquares({ bbox, zoom: area.zoom, osm: area.osm ? area.id : undefined, beforeBuild: area.osm ? () => prepareOsm({ geofabrik: area.osm.geofabrik, name: area.id, bbox: area.bbox }) : undefined, log: console.log });
++  const r = await buildSquares({ bbox, zoom: area.zoom, osm: area.osm ? area.id : undefined, maxBuild: squaresLeft, beforeBuild: area.osm ? () => prepareOsm({ geofabrik: area.osm.geofabrik, name: area.id, bbox: area.bbox }) : undefined, log: console.log });
+ }
++  squaresLeft -= r.built;
