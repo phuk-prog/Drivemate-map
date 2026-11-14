@@ -102,7 +102,16 @@ check("crossroads has a centre node", centre >= 0, `nodes=${JSON.stringify(nodes
   check("duplicate restriction is emitted once", r.matched.length === 2 && r.duplicates === 1, JSON.stringify(r.matched));
 }
 
-// 4c. A junction split into several nearby nodes (tile data does this): the roads meet on a node a few
+// 4c. A same-way U-turn (from way and to way are the same) is skipped, not matched to a side road.
+{
+  const pts = [[-10000, 0], [0, 0], [10000, 0]];
+  const uTurnRecord = { kind: RESTRICTION_NO, from: pts, via: [0, 0], to: pts };
+  const r = matchRestrictions(nodes, edges, [uTurnRecord]);
+  check("U-turn record is skipped", r.matched.length === 0 && r.uTurns === 1, JSON.stringify(r));
+  check("U-turn is not counted as unmatched", r.unmatched.noVia === 0 && r.unmatched.noFrom === 0 && r.unmatched.noTo === 0, JSON.stringify(r.unmatched));
+}
+
+// 4d. A junction split into several nearby nodes (tile data does this): the roads meet on a node a few
 //     metres from the OSM via point, while the nearest node (within 3 m) holds only an unrelated road.
 {
   const ns = [
@@ -134,7 +143,7 @@ check("crossroads has a centre node", centre >= 0, `nodes=${JSON.stringify(nodes
   check("split junction: wrong-direction roads are not matched", r3.matched.length === 0, JSON.stringify(r3.matched));
 }
 
-// 4d. Longitude is scaled by cos(latitude): a road 50 degrees off on the ground is not 60+ in raw units.
+// 4e. Longitude is scaled by cos(latitude): a road 50 degrees off on the ground is not 60+ in raw units.
 {
   // At London's latitude a degree of longitude is about 0.62 of a degree of latitude on the ground.
   const lat0 = 515000000;

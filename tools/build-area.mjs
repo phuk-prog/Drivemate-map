@@ -388,6 +388,7 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     restrictionsFetched: restrictionRecords.length,
     restrictionsMatched: restrictions.matched.length,
     restrictionsUnmatched: restrictions.unmatched,
+    restrictionsUTurns: restrictions.uTurns,
     laneWays: laneWays.length,
     laneEdgesMatched: laneMatch.stats.matched,
     laneStats: laneMatch.stats,

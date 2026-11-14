@@ -135,8 +135,16 @@ function armPoint(pts, atEnd, node, k) {
   return atEnd ? pts[0] : pts[n - 1];
 }
 
+// True when a record's from way and to way are the same OSM way: a U-turn on that road. The records
+// carry no OSM IDs, so their points are compared, in any order.
+function isSameWay(r) {
+  if (r.from.length !== r.to.length) return false;
+  const key = (pts) => pts.map((p) => `${p[0]},${p[1]}`).sort().join("|");
+  return key(r.from) === key(r.to);
+}
+
 // Matches restriction records to edges. nodes and edges are the final, split graph.
-// Returns { matched: [{ kind, from, via, to }], unmatched: { noVia, noFrom, noTo }, failed, duplicates }.
+// Returns { matched: [{ kind, from, via, to }], unmatched: { noVia, noFrom, noTo }, failed, duplicates, uTurns }.
 export function matchRestrictions(nodes, edges, records) {
   const { nearest, within } = buildNodeGrid(nodes);
   // For each node, the edges that touch it.
@@ -154,6 +162,7 @@ export function matchRestrictions(nodes, edges, records) {
   const matched = [];
   const seen = new Set();
   let duplicates = 0; // records that matched the same turn as an earlier one
+  let uTurns = 0; // records whose from way and to way are the same way; not matched, not unmatched
   const failed = []; // { record, reason } for each unmatched record, for diagnostics
 
   // The edge at node v whose direction best fits `refDir` (the OSM way's direction at the OSM via point).
@@ -187,6 +196,13 @@ export function matchRestrictions(nodes, edges, records) {
   };
 
   for (const r of records) {
+    // A U-turn is not a turn between two different roads. The app's router turns back along the edge it
+    // arrived on only at a dead end, so these records need nothing stored. Matching them anyway can pick
+    // a side road within the angle limit and store a wrong turn ban (or a wrong only-turn).
+    if (isSameWay(r)) {
+      uTurns++;
+      continue;
+    }
     const k = Math.cos((r.via[0] / 1e7) * (Math.PI / 180));
     // Directions of the OSM ways at the OSM via point: towards their points next to it.
     const fromDir = vec(r.via, neighbourOf(r.from, indexNearest(r.from, r.via)), k);
@@ -232,7 +248,7 @@ export function matchRestrictions(nodes, edges, records) {
     seen.add(key);
     matched.push({ kind: r.kind, from: result.from, via: result.v, to: result.to });
   }
-  return { matched, unmatched, failed, duplicates };
+  return { matched, unmatched, failed, duplicates, uTurns };
 }
 
 // Index of the point in pts that is nearest to the target point.

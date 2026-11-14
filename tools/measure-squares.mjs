@@ -157,7 +157,7 @@ async function runSquares() {
   const errors = [];
   const matchCount = new Int16Array(records.length); // in how many squares each record matched
   const tally = { inside: { both: 0, wholeOnly: 0, squareOnly: 0, neither: 0 }, straddle: { both: 0, wholeOnly: 0, squareOnly: 0, neither: 0 } };
-  const lostReasons = { noVia: 0, noFrom: 0, noTo: 0, matchesWhenAlone: 0 };
+  const lostReasons = { noVia: 0, noFrom: 0, noTo: 0, matchesWhenAlone: 0, uTurn: 0 };
   const lostBorder = { "<50m": 0, "50-200m": 0, "200-500m": 0, ">=500m": 0 };
   const lostExamples = [];
   let skipped = 0;
@@ -221,7 +221,7 @@ async function runSquares() {
         else cell.neither++;
         if (w && !o) {
           const why = matchRestrictions(map.nodes, map.edges, [r]);
-          const reason = why.unmatched.noVia ? "noVia" : why.unmatched.noFrom ? "noFrom" : why.unmatched.noTo ? "noTo" : "matchesWhenAlone";
+          const reason = why.uTurns ? "uTurn" : why.unmatched.noVia ? "noVia" : why.unmatched.noFrom ? "noFrom" : why.unmatched.noTo ? "noTo" : "matchesWhenAlone";
           lostReasons[reason]++;
           const d = borderMetres(r.via[0], r.via[1], bb);
           lostBorder[d < 50 ? "<50m" : d < 200 ? "50-200m" : d < 500 ? "200-500m" : ">=500m"]++;

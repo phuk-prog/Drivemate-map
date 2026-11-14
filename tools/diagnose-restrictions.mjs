@@ -161,7 +161,7 @@ const { nodes, edges } = await buildGraph(bbox, zoom);
 console.log(`matcher version: split-junction + ground angles\ngraph: ${nodes.length} nodes, ${edges.length} edges; ${records.length} restriction records`);
 
 const res = matchRestrictions(nodes, edges, records);
-console.log(`matched ${res.matched.length} (${((100 * res.matched.length) / records.length).toFixed(1)}%), unmatched ${JSON.stringify(res.unmatched)}`);
+console.log(`matched ${res.matched.length} (${((100 * res.matched.length) / records.length).toFixed(1)}%), unmatched ${JSON.stringify(res.unmatched)}, U-turn records skipped ${res.uTurns}`);
 {
   const keys = new Map();
   for (const r of records) {
