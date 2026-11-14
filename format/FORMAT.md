@@ -1,4 +1,4 @@
-# Drivemate map file format (DMAP), versions 3 to 7
+# Drivemate map file format (DMAP), versions 3 to 8
 
 Our own binary format for one downloadable map area. All numbers are little-endian.
 Coordinates are stored as signed 32-bit integers in units of 1e-7 degree
@@ -12,7 +12,7 @@ reference reader is `tools/dmap.mjs`. Class-to-code tables are in `tools/classes
 | Offset | Type      | Field        | Meaning                              |
 |--------|-----------|--------------|--------------------------------------|
 | 0      | 4 bytes   | magic        | ASCII `DMAP`                         |
-| 4      | u16       | version      | `7` (3 to 6 can still be read)       |
+| 4      | u16       | version      | `8` (3 to 7 can still be read)       |
 | 6      | u16       | reserved     | `0`                                  |
 | 8      | i32 x 4   | bbox         | minLat, minLon, maxLat, maxLon       |
 | 24     | u32       | nodeCount    | number of road nodes                 |
@@ -21,7 +21,8 @@ reference reader is `tools/dmap.mjs`. Class-to-code tables are in `tools/classes
 | 36     | u32       | polygonCount | number of area features              |
 | 40     | u32       | labelCount   | number of names and places           |
 
-Sections follow in this order: nodes, edges, lines, polygons, labels.
+Sections follow in this order: nodes, edges, lines, polygons, labels, restrictions (v4+),
+lanes (v5+), warnings (v6+), speedLimits (v7+), roadNames (v8+).
 
 ## Nodes (nodeCount records, 8 bytes each)
 
@@ -156,7 +157,7 @@ Warnings are fixed things read from OpenStreetMap (`highway=speed_camera`, `rail
 `highway=construction`). They are not live: they show only what OpenStreetMap had when the map was built.
 A road under construction gets one point, at the middle node of the road.
 
-## Road speed limits (version 7 only, after the warnings)
+## Road speed limits (version 7 only, after the warnings, before road names)
 
 A u32 count, then that many records. Version 6 and earlier files have no speed limit section.
 
@@ -174,6 +175,21 @@ location and direction at build time. Only plain numbers are stored (`50`, `30 m
 are dropped, and no default limit is ever guessed. An edge that is not listed has no known limit,
 and the app shows no speed sign for it. Coverage is partial. The value is stored as shown, so a
 limit in mph is not converted: the app converts between units only for display.
+
+## Road names (version 8 only, after the speed limits)
+
+A u32 count, then that many records. Version 7 and earlier files have no road names section.
+
+| Type  | Field    | Meaning |
+|-------|----------|---------|
+| u32   | edge     | index of the road edge |
+| u8    | nameLen  | byte length of the name, at most 255 |
+| bytes | name     | UTF-8 name of the road |
+
+One name per edge, for the edge's entire length. The name comes from the OpenStreetMap `name` tag,
+matched to edges by location during the build. An edge that is not listed has no known name (the app
+may fall back to snapping labels to edges for display). Coverage is partial. The name is stored as-is
+from the OSM tag, with no normalisation.
 
 ## Source and licence
 

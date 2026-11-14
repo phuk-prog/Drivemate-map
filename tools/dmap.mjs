@@ -3,8 +3,8 @@
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
-const VERSION = 7;
-const READABLE_VERSIONS = [3, 4, 5, 6, 7];
+const VERSION = 8;
+const READABLE_VERSIONS = [3, 4, 5, 6, 7, 8];
 
 // Warning kinds stored in the warnings section.
 export const WARNING_SPEED_CAMERA = 1;
@@ -82,7 +82,7 @@ function writePoints(w, points) {
 }
 
 export function writeDmap(model) {
-  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [], lanes = [], warnings = [], speedLimits = [] } = model;
+  const { bbox, nodes, edges, lines, polygons, labels, restrictions = [], lanes = [], warnings = [], speedLimits = [], roadNames = [] } = model;
   const w = new ByteWriter();
   w.bytes(Buffer.from(MAGIC, "ascii"));
   w.u16(VERSION);
@@ -173,6 +173,15 @@ export function writeDmap(model) {
     w.u32(s.edge);
     w.u8(s.value);
     w.u8(s.unit);
+  }
+
+  // Version 8: road names, after the speed limits. Each record is an edge and its name.
+  w.u32(roadNames.length);
+  for (const n of roadNames) {
+    const name = Buffer.from(n.name, "utf8").subarray(0, 255);
+    w.u32(n.edge);
+    w.u8(name.length);
+    w.bytes(name);
   }
 
   return w.result();
@@ -323,5 +332,19 @@ export function readDmap(buf) {
     }
   }
 
-  return { bbox, nodes, edges, lines, polygons, labels, restrictions, lanes, warnings, speedLimits };
+  // Version 8 files have a road names section.
+  const roadNames = [];
+  if (version >= 8) {
+    const count = u32();
+    for (let i = 0; i < count; i++) {
+      const edge = u32();
+      const len = u8();
+      need(len);
+      const name = buf.toString("utf8", pos, pos + len);
+      pos += len;
+      roadNames.push({ edge, name });
+    }
+  }
+
+  return { bbox, nodes, edges, lines, polygons, labels, restrictions, lanes, warnings, speedLimits, roadNames };
 }
