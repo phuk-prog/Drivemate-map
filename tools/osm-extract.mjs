@@ -64,6 +64,9 @@ export async function extractFromPbf(path, bbox) {
     warningsSpeedCamera: 0,
     warningsLevelCrossing: 0,
     warningsRoadworks: 0,
+    roundaboutWaysFound:0,
+    roundaboutWaysMissingGeometry:0,
+    roundaboutWaysOutsideBox:0,
   };
 
   // Pass 1: restriction relations.
@@ -108,6 +111,7 @@ export async function extractFromPbf(path, bbox) {
   // Pass 2: the from and to ways, and the ways with lane tags.
   const wayRefs = new Map();
   const laneRaw = [];
+  const roundaboutRaw = []; // original OSM junction tags, unavailable in basic vector tiles
   const constructionNodes = []; // one middle node per road under construction
   const speedRaw = [];
   await readPbf(path, {
@@ -147,6 +151,15 @@ export async function extractFromPbf(path, bbox) {
             else stats.speedValuesDropped++;
           }
           if (parsed.length > 0) speedRaw.push({ way: way.id, oneway, parsed, refs: thin(way.refs) });
+        }
+      }
+      const junctionKey = block.find('junction');
+      const highwayForCircle = block.find('highway');
+      if(junctionKey>=0&&highwayForCircle>=0&&way.refs.length>=2&&way.keys.includes(highwayForCircle)){
+        for(let k=0;k<way.keys.length;k++){
+          if(way.keys[k]!==junctionKey)continue;
+          const value=block.str(way.vals[k]);
+          if(value==='roundabout'||value==='circular')roundaboutRaw.push({way:way.id,refs:way.refs});
         }
       }
       const needed = neededWays.has(way.id);
@@ -191,6 +204,7 @@ export async function extractFromPbf(path, bbox) {
   for (const w of laneRaw) for (const id of w.refs) neededNodes.add(id);
   for (const id of constructionNodes) neededNodes.add(id);
   for (const w of speedRaw) for (const id of w.refs) neededNodes.add(id);
+  for (const w of roundaboutRaw) for (const id of w.refs) neededNodes.add(id);
 
   // Pass 3: node coordinates.
   const coords = new Map();
@@ -262,6 +276,14 @@ export async function extractFromPbf(path, bbox) {
     for (const r of w.parsed) speedWays.push({ way: w.way, value: r.value, unit: r.unit, direction: r.direction, oneway: w.oneway, geom });
   }
 
+  const roundaboutWays=[];
+  for(const w of roundaboutRaw){
+    const geom=w.refs.map(id=>coords.get(id));
+    if(geom.length<2||geom.some(p=>!p)){stats.roundaboutWaysMissingGeometry++;continue;}
+    if(!geom.some(inBox)){stats.roundaboutWaysOutsideBox++;continue;}
+    roundaboutWays.push({way:w.way,geom});
+  }
+  stats.roundaboutWaysFound=roundaboutWays.length;
   for (const id of constructionNodes) {
     const p = coords.get(id);
     if (p && inBox(p)) {
@@ -270,7 +292,7 @@ export async function extractFromPbf(path, bbox) {
     }
   }
 
-  return { restrictions, laneWays, warnings, speedWays, stats };
+  return { restrictions, laneWays, warnings, speedWays, roundaboutWays, stats };
 }
 
 async function main() {
@@ -283,14 +305,14 @@ async function main() {
   const name = arg("name", "london");
   const bbox = arg("bbox", "-0.55,51.28,0.30,51.70").split(",").map(Number);
   const started = Date.now();
-  const { restrictions, laneWays, warnings, speedWays, stats } = await extractFromPbf(pbf, bbox);
+  const { restrictions, laneWays, warnings, speedWays, roundaboutWays, stats } = await extractFromPbf(pbf, bbox);
 
-  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings], ["speed", speedWays]]) {
+  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings], ["speed", speedWays],["roundabouts",roundaboutWays]]) {
     const outDir = join(ROOT, "data", "osm-cache", dir);
     await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, `${name}.json`), JSON.stringify(data));
   }
-  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, warnings: warnings.length, speedWays: speedWays.length, stats }, null, 2));
+  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, warnings: warnings.length, speedWays: speedWays.length, roundaboutWays:roundaboutWays.length, stats }, null, 2));
   console.log(`extracted in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 
