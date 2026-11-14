@@ -1,0 +1,14 @@
+{
+  "version": "20261101_080013_pt",
+  "zoom": 14,
+  "bbox": [
+    -2.25,
+    53.34,
+    -2.07,
+    53.46
+  ],
+  "count": 1280,
+  "downloaded": 1250,
+  "missing": 30,
+  "source": "https://tiles.openfreemap.org/planet"
+}
