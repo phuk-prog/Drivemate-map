@@ -7,3 +7,6 @@ data/published/squares/*.gz
 data/test-tmp/
 data/osm-cache/
 data/tiles/
+
+# Local agent worktrees (not project files)
+.claude/
