@@ -30,9 +30,9 @@ jobs:
       - name: Download the Greater Manchester extract (Geofabrik, bounded retries)
         run: |
           mkdir -p data/osm
-          curl -fsSL --retry 4 --retry-delay 20 --retry-all-errors \
-            -o data/osm/greater-manchester.osm.pbf \
-            https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf
+          URL=$(node tools/geofabrik-url.mjs greater-manchester)
+          echo "Extract: $URL"
+          curl -fsSL --retry 4 --retry-delay 20 --retry-all-errors -o data/osm/greater-manchester.osm.pbf "$URL"
           ls -l data/osm/greater-manchester.osm.pbf
 
       - name: Build Stockport tiles, zoom 0 to 14
