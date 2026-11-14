@@ -12,6 +12,7 @@ import { splitAtSharedVertices, joinCrossings, joinRoadEnds, dropSeamDuplicates,
 import { matchRestrictions } from "./restrictions.mjs";
 import { matchSpeedLimits } from "./speed.mjs";
 import { matchLanes, parseLaneOverpass } from "./lanes.mjs";
+import { matchRoadNames, matchSignposts } from "./roadnames.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -355,6 +356,22 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     log(`no speed cache for ${osmName}; run tools/osm-extract.mjs to add speed limits`);
   }
   const speedMatch = matchSpeedLimits(repaired.edges, speedWays);
+  // Road names (OSM name tag): from tools/osm-extract.mjs. None if there is no cache.
+  let roadNameWays = [];
+  try {
+    roadNameWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "roadNames", `${osmName}.json`), "utf8"));
+  } catch {
+    log(`no road names cache for ${osmName}; run tools/osm-extract.mjs to add road names`);
+  }
+  const roadNameMatch = matchRoadNames(repaired.edges, roadNameWays);
+  // Signposts (OSM destination/exit tags): from tools/osm-extract.mjs. None if there is no cache.
+  let signpostWays = [];
+  try {
+    signpostWays = JSON.parse(await readFile(join(ROOT, "data", "osm-cache", "signposts", `${osmName}.json`), "utf8"));
+  } catch {
+    log(`no signposts cache for ${osmName}; run tools/osm-extract.mjs to add signposts`);
+  }
+  const signpostMatch = matchSignposts(repaired.edges, signpostWays);
   const bytes = writeDmap({
     bbox: bboxFixed,
     nodes: repaired.nodes,
@@ -366,6 +383,7 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     lanes: laneMatch.lanes,
     warnings,
     speedLimits: speedMatch.speedLimits,
+    roadNames: roadNameMatch.roadNames,
   });
   const outDir = join(ROOT, "data", "out");
   await mkdir(outDir, { recursive: true });
@@ -398,6 +416,12 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     speedEdgesMatched: speedMatch.stats.matched,
     speedEdgesUnmatched: repaired.edges.length - speedMatch.stats.matched,
     speedStats: speedMatch.stats,
+    roadNameWays: roadNameWays.length,
+    roadNamesMatched: roadNameMatch.stats.matched,
+    roadNameStats: roadNameMatch.stats,
+    signpostWays: signpostWays.length,
+    signpostsMatched: signpostMatch.stats.matched,
+    signpostStats: signpostMatch.stats,
     lines: lines.length,
     polygons: keptPolygons.length,
     seamDuplicatesDropped: polygons.length - keptPolygons.length,
