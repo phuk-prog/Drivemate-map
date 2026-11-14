@@ -2,8 +2,9 @@ name: Update map regions
 
 on:
   schedule:
-    # Four runs a day, at slightly off-peak minutes.
-    - cron: "17 1,7,13,19 * * *"
+    # Every 5 minutes, the shortest interval GitHub allows. A run that finds nothing new exits in under a minute,
+    # and the public repo has no Actions minute limit. Scheduled starts are delayed under load, so they are not exact.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
