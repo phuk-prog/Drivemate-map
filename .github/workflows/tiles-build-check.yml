@@ -1,12 +1,10 @@
-name: Tiles build check (real region, no publish)
+name: Map tiles build check (Planetiler, real region, no publish)
 
-# Manual only. Builds the offline vector tiles for Stockport from the real Greater Manchester
-# extract, with our own builder, and keeps the file as a run artifact. Nothing is published
-# to the maps-latest release, and nothing is committed.
+# Builds the Stockport map tiles as one PMTiles file from the real Greater Manchester extract,
+# using Planetiler (open-source, Apache 2.0). Keeps the file as a run artifact. Publishes nothing.
 
 on:
   workflow_dispatch:
-  # Runs on pushes to this category branch only, so it can run before the file reaches the default branch.
   push:
     branches: [category-3-map-drawing]
 
@@ -24,43 +22,45 @@ jobs:
         with:
           node-version: 22
 
-      - name: Run the tile builder tests
-        run: node --test tools/test-mvt-encode.mjs tools/test-build-tiles.mjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
 
-      - name: Download the Greater Manchester extract (Geofabrik, bounded retries)
+      - name: Download the Greater Manchester extract (Geofabrik index, bounded retries)
         run: |
-          mkdir -p data/osm
+          mkdir -p data/osm data/planetiler
           URL=$(node tools/geofabrik-url.mjs greater-manchester)
           echo "Extract: $URL"
           curl -fsSL --retry 4 --retry-delay 20 --retry-all-errors -o data/osm/greater-manchester.osm.pbf "$URL"
           ls -l data/osm/greater-manchester.osm.pbf
 
-      - name: Build Stockport tiles, zoom 0 to 14
+      - name: Download Planetiler
         run: |
-          node --max-old-space-size=6000 tools/build-tiles.mjs \
-            --pbf=data/osm/greater-manchester.osm.pbf --name=stockport \
-            --bbox=-2.25,53.34,-2.07,53.46 --minzoom=0 --maxzoom=14 2>&1 | tee build-report.txt
+          URL=$(curl -fsSL https://api.github.com/repos/onthegomap/planetiler/releases/latest | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);const a=r.assets.find(x=>x.name==="planetiler.jar");console.log(a.browser_download_url)})')
+          echo "Planetiler: $URL"
+          curl -fsSL -o data/planetiler/planetiler.jar "$URL"
+          java -jar data/planetiler/planetiler.jar --help 2>&1 | head -5 || true
 
-      - name: Check the file reads back and has the expected layers
+      - name: Build Stockport PMTiles (zoom 0 to 14)
         run: |
-          node -e '
-            const fs = require("fs");
-            const buf = fs.readFileSync("data/tiles/stockport.dmtile");
-            const jsonLen = buf.readUInt32BE(8);
-            const index = JSON.parse(buf.toString("utf8", 12, 12 + jsonLen));
-            const zooms = {};
-            for (const [z] of index.tiles) zooms[z] = (zooms[z] || 0) + 1;
-            console.log(JSON.stringify({ tiles: index.tiles.length, layers: index.layers, zooms, bytes: buf.length }, null, 2));
-            if (index.tiles.length === 0) { console.error("no tiles"); process.exit(1); }
-            for (const l of ["road", "water", "landuse", "building"]) {
-              if (!index.layers.includes(l)) { console.error("missing layer " + l); process.exit(1); }
-            }
-          '
+          java -Xmx6g -jar data/planetiler/planetiler.jar \
+            --osm-path=data/osm/greater-manchester.osm.pbf \
+            --bounds=-2.25,53.34,-2.07,53.46 \
+            --minzoom=0 --maxzoom=14 \
+            --output=data/planetiler/stockport.pmtiles \
+            --force 2>&1 | tee build-report.txt
+          ls -l data/planetiler/stockport.pmtiles
+
+      - name: Check the tiles read back and list the layers
+        run: |
+          npm install --no-save pmtiles@3
+          node tools/pmtiles-check.mjs data/planetiler/stockport.pmtiles | tee -a build-report.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: stockport-dmtile
+          name: stockport-pmtiles
           path: |
-            data/tiles/stockport.dmtile
+            data/planetiler/stockport.pmtiles
             build-report.txt
           retention-days: 7
