@@ -12,6 +12,7 @@ import { splitAtSharedVertices, joinCrossings, joinRoadEnds, dropSeamDuplicates,
 import { matchRestrictions } from "./restrictions.mjs";
 import { matchSpeedLimits } from "./speed.mjs";
 import { matchLanes, parseLaneOverpass } from "./lanes.mjs";
+import { markRoundaboutEdges, FLAG_ROUNDABOUT } from "./roundabouts.mjs";
 import { ROAD_CLASS, LINE_KIND, POLYGON_KIND, PLACE_CATEGORY, POI_CATEGORY, LABEL_KIND, roadLineKind } from "./classes.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -199,6 +200,7 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
         if (f.tags.brunnel === "tunnel") flags |= 4;
         if (f.tags.toll) flags |= 8;
         if (f.tags.access === "no" || f.tags.access === "private") flags |= 16;
+        if (f.tags.junction === 'roundabout' || f.tags.junction === 'circular') flags |= FLAG_ROUNDABOUT;
         const ow = f.tags.oneway;
         const reverse = ow === -1;
         if (ow === 1 || ow === -1) flags |= 1;
@@ -320,6 +322,11 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
   const crossed = joinCrossings(edges);
   const ended = joinRoadEnds(crossed.edges);
   const repaired = dropDuplicateEdges(splitAtSharedVertices(ended.edges));
+  let roundaboutWays=[];
+  try{
+    roundaboutWays=JSON.parse(await readFile(join(ROOT,'data','osm-cache','roundabouts',osmName+'.json'),'utf8'));
+  }catch{log('no tagged OSM roundabout cache for '+osmName+'; legacy turn logic will apply');}
+  const circleMatch=markRoundaboutEdges(repaired.edges,roundaboutWays);
   // Turn restrictions: from the cache made by tools/fetch-restrictions.mjs. None if there is no cache.
   let restrictionRecords = [];
   try {
@@ -391,6 +398,8 @@ export async function buildArea({ name, bbox, zoom, version, osmName = name, log
     laneWays: laneWays.length,
     laneEdgesMatched: laneMatch.stats.matched,
     laneStats: laneMatch.stats,
+    roundaboutWays:roundaboutWays.length,
+    roundaboutEdgesMatched:circleMatch.marked,
     warnings: warnings.length,
     speedRecords: speedWays.length,
     speedWaysUsed: speedMatch.stats.waysUsed,

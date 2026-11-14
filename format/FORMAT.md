@@ -56,6 +56,7 @@ Edge flags (bit set = true):
 | 2   | tunnel |
 | 3   | toll |
 | 4   | no motor access (access tag `no` or `private`). Drawn, never routed. |
+| 5   | explicitly tagged `junction=roundabout` / `junction=circular` OSM road; stored only when matched against original OSM ways (or if supplied directly by a source tile). Legacy files leave this bit unset. |
 
 ## Lines (lineCount records): drawn, not routed
 

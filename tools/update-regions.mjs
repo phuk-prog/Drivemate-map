@@ -19,7 +19,7 @@ let squaresLeft = Number(process.env.MAX_SQUARES_PER_RUN ?? 100);
 // On CI the .dmap files are not in the checkout; trust the index (the release holds the files).
 const TRUST_INDEX = process.env.TRUST_INDEX === "1";
 // Change this when the builder changes output, so existing regions are rebuilt.
-const BUILDER_VERSION = "graph-repair-4";
+const BUILDER_VERSION = "graph-repair-5-roundabouts";
 
 const config = JSON.parse(await readFile(join(ROOT, "regions.json"), "utf8"));
 const regions = Array.isArray(config) ? config : config.regions;

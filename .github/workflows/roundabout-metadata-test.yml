@@ -1,0 +1,17 @@
+name: Roundabout metadata checks
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  roundabout-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tools/test-roundabout-flags.mjs
+      - run: node --check tools/osm-extract.mjs && node --check tools/build-area.mjs
