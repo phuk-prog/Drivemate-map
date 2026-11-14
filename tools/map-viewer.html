@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drivemate Offline Map Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0ede7;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #ddd;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        input[type="file"],
+        input[type="range"],
+        button {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: #0051D5;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        input[type="range"] {
+            width: 150px;
+        }
+
+        .info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .map-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f0ede7;
+            position: relative;
+        }
+
+        canvas {
+            flex: 1;
+            display: block;
+            cursor: grab;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-left: 1px solid #ddd;
+            overflow-y: auto;
+            padding: 16px;
+            font-size: 13px;
+        }
+
+        .sidebar h3 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .sidebar h3:first-child {
+            margin-top: 0;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .stat-label {
+            color: #666;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .layer-toggle {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 4px 0;
+            background: #f9f9f9;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .layer-toggle input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .layer-toggle label {
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .error {
+            padding: 16px;
+            background: #FFE5E5;
+            color: #C60000;
+            border-radius: 4px;
+            margin: 12px;
+        }
+
+        .status {
+            padding: 12px 16px;
+            background: #E8F5E9;
+            color: #2E7D32;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid #ddd;
+                max-height: 30%;
+            }
+
+            .controls {
+                font-size: 12px;
+            }
+
+            input[type="range"] {
+                width: 100px;
+            }
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #1a1a1a;
+                color: #fff;
+            }
+
+            .header {
+                background: #2a2a2a;
+                border-bottom-color: #444;
+            }
+
+            .header h1 {
+                color: #fff;
+            }
+
+            input[type="file"],
+            input[type="range"],
+            button {
+                background: #333;
+                border-color: #444;
+                color: #fff;
+            }
+
+            button {
+                background: #007AFF;
+            }
+
+            .info {
+                color: #aaa;
+            }
+
+            .sidebar {
+                background: #2a2a2a;
+                border-left-color: #444;
+            }
+
+            .sidebar h3 {
+                color: #fff;
+            }
+
+            .stat-label {
+                color: #aaa;
+            }
+
+            .stat-value {
+                color: #fff;
+            }
+
+            .layer-toggle {
+                background: #333;
+            }
+
+            .map-area {
+                background: #1a1a1a;
+            }
+
+            canvas {
+                background: #1a1a1a;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Drivemate Offline Map Viewer - Category 3.1 Reference Implementation</h1>
+        <div class="controls">
+            <input type="file" id="dmapFile" accept=".dmap" title="Select a DMAP file to load">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="zoomControl">Zoom:</label>
+                <input type="range" id="zoomControl" min="0.1" max="10" step="0.1" value="1" style="width: 150px;">
+                <span id="zoomDisplay">100%</span>
+            </div>
+            <button id="resetView">Reset View</button>
+            <button id="toggleLayers" title="Toggle sidebar">Layers</button>
+        </div>
+        <div class="info" id="infoText">Load a DMAP file to get started. Drag to pan, scroll to zoom.</div>
+    </div>
+
+    <div class="container">
+        <div class="map-area">
+            <canvas id="mapCanvas"></canvas>
+        </div>
+        <div class="sidebar" id="sidebar">
+            <div id="sidebar-content">
+                <div class="status">No map loaded</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DMAP File Format Constants and Reader
+        const READABLE_VERSIONS = [3, 4, 5, 6, 7, 8];
+        const COORD_SCALE = 1e7;
+
+        function fromFixed7(v) {
+            return v / COORD_SCALE;
+        }
+
+        function readDmap(buf) {
+            let pos = 0;
+            const need = (n) => {
+                if (pos + n > buf.length) throw new Error("DMAP: truncated file");
+            };
+
+            const u8 = () => {
+                need(1);
+                const v = buf[pos];
+                pos += 1;
+                return v;
+            };
+
+            const u16 = () => {
+                need(2);
+                const v = buf[pos] | (buf[pos + 1] << 8);
+                pos += 2;
+                return v;
+            };
+
+            const u32 = () => {
+                need(4);
+                const v = buf[pos] | (buf[pos + 1] << 8) | (buf[pos + 2] << 16) | (buf[pos + 3] << 24);
+                pos += 4;
+                return v >>> 0;
+            };
+
+            const i32 = () => {
+                need(4);
+                let v = buf[pos] | (buf[pos + 1] << 8) | (buf[pos + 2] << 16) | (buf[pos + 3] << 24);
+                pos += 4;
+                if (v & 0x80000000) v = -(0x100000000 - v);
+                return v;
+            };
+
+            const points = (n) => {
+                need(n * 8);
+                const out = new Array(n);
+                for (let k = 0; k < n; k++) out[k] = [i32(), i32()];
+                return out;
+            };
+
+            if (buf[0] !== 68 || buf[1] !== 77 || buf[2] !== 65 || buf[3] !== 80) // "DMAP"
+                throw new Error("DMAP: bad magic");
+            pos = 4;
+
+            const version = u16();
+            if (!READABLE_VERSIONS.includes(version)) throw new Error("DMAP: unsupported version " + version);
+            u16(); // reserved
+
+            const bbox = [i32(), i32(), i32(), i32()];
+            const nodeCount = u32();
+            const edgeCount = u32();
+            const lineCount = u32();
+            const polygonCount = u32();
+            const labelCount = u32();
+
+            const nodes = new Array(nodeCount);
+            for (let i = 0; i < nodeCount; i++) nodes[i] = { lat: i32(), lon: i32() };
+
+            const edges = new Array(edgeCount);
+            for (let i = 0; i < edgeCount; i++) {
+                const from = u32();
+                const to = u32();
+                const roadClass = u8();
+                const flags = u8();
+                const n = u16();
+                edges[i] = { from, to, roadClass, flags, points: points(n) };
+            }
+
+            const lines = new Array(lineCount);
+            for (let i = 0; i < lineCount; i++) {
+                const kind = u8();
+                const level = u8();
+                const n = u32();
+                lines[i] = { kind, level, points: points(n) };
+            }
+
+            const polygons = new Array(polygonCount);
+            for (let i = 0; i < polygonCount; i++) {
+                const kind = u8();
+                const height = u16();
+                const minHeight = u16();
+                const colour = (u8() << 16) | (u8() << 8) | u8();
+                const ringCount = u16();
+                const rings = new Array(ringCount);
+                for (let r = 0; r < ringCount; r++) rings[r] = points(u32());
+                polygons[i] = { kind, height, minHeight, colour, rings };
+            }
+
+            const labels = new Array(labelCount);
+            for (let i = 0; i < labelCount; i++) {
+                const kind = u8();
+                const category = u8();
+                const lat = i32();
+                const lon = i32();
+                const len = u8();
+                need(len);
+                const nameBytes = buf.slice(pos, pos + len);
+                const name = new TextDecoder().decode(nameBytes);
+                pos += len;
+                labels[i] = { kind, category, lat, lon, name };
+            }
+
+            const restrictions = [];
+            if (version >= 4) {
+                const count = u32();
+                for (let i = 0; i < count; i++) {
+                    restrictions.push({
+                        kind: u8(),
+                        from: u32(),
+                        to: u32(),
+                        via: u32()
+                    });
+                }
+            }
+
+            const lanes = [];
+            if (version >= 5) {
+                const count = u32();
+                for (let i = 0; i < count; i++) {
+                    const edge = u32();
+                    const len = u16();
+                    need(len);
+                    const textBytes = buf.slice(pos, pos + len);
+                    const text = new TextDecoder().decode(textBytes);
+                    pos += len;
+                    lanes.push({ edge, text });
+                }
+            }
+
+            const warnings = [];
+            if (version >= 6) {
+                const count = u32();
+                for (let i = 0; i < count; i++) {
+                    warnings.push({ kind: u8(), lat: i32(), lon: i32() });
+                }
+            }
+
+            const speedLimits = [];
+            if (version >= 7) {
+                const count = u32();
+                for (let i = 0; i < count; i++) {
+                    speedLimits.push({ edge: u32(), value: u8(), unit: u8() });
+                }
+            }
+
+            const roadNames = [];
+            if (version >= 8) {
+                const count = u32();
+                for (let i = 0; i < count; i++) {
+                    const edge = u32();
+                    const len = u8();
+                    need(len);
+                    const nameBytes = buf.slice(pos, pos + len);
+                    const name = new TextDecoder().decode(nameBytes);
+                    pos += len;
+                    roadNames.push({ edge, name });
+                }
+            }
+
+            return {
+                version,
+                bbox,
+                nodes,
+                edges,
+                lines,
+                polygons,
+                labels,
+                restrictions,
+                lanes,
+                warnings,
+                speedLimits,
+                roadNames
+            };
+        }
+
+        // Styling constants (matching preview.mjs)
+        const AREA_STYLE = {
+            1: "#AAD3DF", // water
+            2: "#DAD0C4", // building
+            3: "#CDE6BE", // park
+            4: "#A8D0A0", // wood
+            5: "#D4EABC", // grass
+            6: "#ECE8CC", // farmland
+            7: "#F6EACC", // sand
+            8: "#C8DED2", // wetland
+            9: "#ECE4DC", // residential
+            10: "#E0DADE", // industrial
+            11: "#F2DED8", // commercial
+            12: "#E6E0F0", // institutional
+            13: "#C4E8CC", // sports
+            14: "#CCE4CC", // cemetery
+            15: "#D8D2CC", // rock
+            16: "#BEB4AA", // pier
+        };
+
+        const AREA_ORDER = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 3, 1, 2, 16];
+
+        const LINE_STYLE = {
+            1: { color: "#969696", width: 1 }, // rail
+            2: { color: "#AA82BE", width: 1, dash: true }, // transit
+            3: { color: "#78A0D2", width: 1, dash: true }, // ferry
+            4: { color: "#96C8E6", width: 2 }, // river
+            5: { color: "#96C8E6", width: 1 }, // canal
+            6: { color: "#AAD7F0", width: 1 }, // stream
+            7: { color: "#C8BEB4", width: 1, dash: true }, // footpath
+            9: { color: "#A0968C", width: 1 }, // pier
+            11: { color: "#C85A96", width: 1, dash: true }, // boundary
+        };
+
+        const ROAD_STYLE = {
+            1: { color: "#E97878", width: 3 }, // motorway
+            2: { color: "#F0A06E", width: 3 }, // trunk
+            3: { color: "#FAC878", width: 3 }, // primary
+            4: { color: "#FAE196", width: 2 }, // secondary
+            5: { color: "#FFFFFF", width: 2 }, // tertiary
+            6: { color: "#FFFFFF", width: 2 }, // minor
+            7: { color: "#EBEBEB", width: 1 }, // service
+            8: { color: "#BEB4AA", width: 1 }, // track
+        };
+
+        // Application State
+        let map = null;
+        let canvas, ctx;
+        let viewport = {
+            centerLat: 0,
+            centerLon: 0,
+            zoom: 1,
+            panX: 0,
+            panY: 0
+        };
+
+        let layers = {
+            areas: true,
+            lines: true,
+            roads: true,
+            labels: true,
+            warnings: true,
+        };
+
+        let dragging = false;
+        let dragStart = { x: 0, y: 0 };
+
+        function init() {
+            canvas = document.getElementById("mapCanvas");
+            ctx = canvas.getContext("2d", { willReadFrequently: false });
+
+            // Set canvas size
+            function resizeCanvas() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                render();
+            }
+
+            resizeCanvas();
+            window.addEventListener("resize", resizeCanvas);
+
+            // File loading
+            document.getElementById("dmapFile").addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const buf = new Uint8Array(event.target.result);
+                        map = readDmap(buf);
+
+                        // Initialize viewport to show entire map
+                        const [minLat, minLon, maxLat, maxLon] = map.bbox.map(fromFixed7);
+                        viewport.centerLat = (minLat + maxLat) / 2;
+                        viewport.centerLon = (minLon + maxLon) / 2;
+
+                        // Calculate zoom to fit
+                        const height = maxLat - minLat;
+                        const width = (maxLon - minLon) * Math.cos(viewport.centerLat * Math.PI / 180);
+                        const zoomX = canvas.width / (width * 111319.5); // pixels per degree
+                        const zoomY = canvas.height / (height * 111319.5);
+                        viewport.zoom = Math.min(zoomX, zoomY) * 0.95;
+                        viewport.panX = 0;
+                        viewport.panY = 0;
+
+                        document.getElementById("zoomControl").value = viewport.zoom;
+                        updateUI();
+                        render();
+                    } catch (error) {
+                        alert("Error loading DMAP: " + error.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            // Zoom control
+            document.getElementById("zoomControl").addEventListener("input", (e) => {
+                viewport.zoom = parseFloat(e.target.value);
+                document.getElementById("zoomDisplay").textContent = Math.round(viewport.zoom * 100) + "%";
+                render();
+            });
+
+            // Reset view
+            document.getElementById("resetView").addEventListener("click", () => {
+                if (map) {
+                    const [minLat, minLon, maxLat, maxLon] = map.bbox.map(fromFixed7);
+                    viewport.centerLat = (minLat + maxLat) / 2;
+                    viewport.centerLon = (minLon + maxLon) / 2;
+                    viewport.panX = 0;
+                    viewport.panY = 0;
+
+                    const height = maxLat - minLat;
+                    const width = (maxLon - minLon) * Math.cos(viewport.centerLat * Math.PI / 180);
+                    const zoomX = canvas.width / (width * 111319.5);
+                    const zoomY = canvas.height / (height * 111319.5);
+                    viewport.zoom = Math.min(zoomX, zoomY) * 0.95;
+
+                    document.getElementById("zoomControl").value = viewport.zoom;
+                    document.getElementById("zoomDisplay").textContent = Math.round(viewport.zoom * 100) + "%";
+                    render();
+                }
+            });
+
+            // Toggle layers sidebar
+            document.getElementById("toggleLayers").addEventListener("click", () => {
+                const sidebar = document.getElementById("sidebar");
+                sidebar.style.display = sidebar.style.display === "none" ? "block" : "none";
+            });
+
+            // Mouse controls
+            canvas.addEventListener("mousedown", (e) => {
+                dragging = true;
+                dragStart = { x: e.clientX, y: e.clientY };
+            });
+
+            canvas.addEventListener("mousemove", (e) => {
+                if (dragging) {
+                    const dx = e.clientX - dragStart.x;
+                    const dy = e.clientY - dragStart.y;
+                    viewport.panX += dx;
+                    viewport.panY += dy;
+                    dragStart = { x: e.clientX, y: e.clientY };
+                    render();
+                }
+            });
+
+            canvas.addEventListener("mouseup", () => {
+                dragging = false;
+            });
+
+            canvas.addEventListener("wheel", (e) => {
+                e.preventDefault();
+                const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+                viewport.zoom *= zoomFactor;
+                viewport.zoom = Math.max(0.1, Math.min(10, viewport.zoom));
+                document.getElementById("zoomControl").value = viewport.zoom;
+                document.getElementById("zoomDisplay").textContent = Math.round(viewport.zoom * 100) + "%";
+                render();
+            });
+
+            // Touch controls (mobile)
+            let touchDist = 0;
+            canvas.addEventListener("touchstart", (e) => {
+                if (e.touches.length === 1) {
+                    dragging = true;
+                    dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                } else if (e.touches.length === 2) {
+                    dragging = false;
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    touchDist = Math.sqrt(dx * dx + dy * dy);
+                }
+            });
+
+            canvas.addEventListener("touchmove", (e) => {
+                e.preventDefault();
+                if (e.touches.length === 1 && dragging) {
+                    const dx = e.touches[0].clientX - dragStart.x;
+                    const dy = e.touches[0].clientY - dragStart.y;
+                    viewport.panX += dx;
+                    viewport.panY += dy;
+                    dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    render();
+                } else if (e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const newDist = Math.sqrt(dx * dx + dy * dy);
+                    if (touchDist > 0) {
+                        const zoomFactor = newDist / touchDist;
+                        viewport.zoom *= zoomFactor;
+                        viewport.zoom = Math.max(0.1, Math.min(10, viewport.zoom));
+                        document.getElementById("zoomControl").value = viewport.zoom;
+                        document.getElementById("zoomDisplay").textContent = Math.round(viewport.zoom * 100) + "%";
+                        touchDist = newDist;
+                        render();
+                    }
+                }
+            });
+
+            canvas.addEventListener("touchend", () => {
+                dragging = false;
+                touchDist = 0;
+            });
+        }
+
+        function updateUI() {
+            if (!map) {
+                document.getElementById("sidebar-content").innerHTML = '<div class="status">No map loaded</div>';
+                return;
+            }
+
+            const [minLat, minLon, maxLat, maxLon] = map.bbox.map(fromFixed7);
+            const html = `
+                <h3>Map Statistics</h3>
+                <div class="stat">
+                    <span class="stat-label">Version</span>
+                    <span class="stat-value">${map.version}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Bounds</span>
+                    <span class="stat-value">${minLat.toFixed(3)}°</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Nodes</span>
+                    <span class="stat-value">${map.nodes.length.toLocaleString()}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Roads</span>
+                    <span class="stat-value">${map.edges.length.toLocaleString()}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Lines</span>
+                    <span class="stat-value">${map.lines.length.toLocaleString()}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Areas</span>
+                    <span class="stat-value">${map.polygons.length.toLocaleString()}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Labels</span>
+                    <span class="stat-value">${map.labels.length.toLocaleString()}</span>
+                </div>
+
+                <h3>Render Layers</h3>
+                ${Object.entries(layers).map(([key, enabled]) => `
+                    <div class="layer-toggle" onclick="toggleLayer('${key}')">
+                        <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleLayer('${key}')">
+                        <label>${key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                    </div>
+                `).join('')}
+
+                ${map.warnings && map.warnings.length > 0 ? `
+                    <h3>Warnings</h3>
+                    <div class="stat">
+                        <span class="stat-label">Count</span>
+                        <span class="stat-value">${map.warnings.length}</span>
+                    </div>
+                ` : ''}
+            `;
+            document.getElementById("sidebar-content").innerHTML = html;
+        }
+
+        function toggleLayer(layer) {
+            layers[layer] = !layers[layer];
+            render();
+        }
+
+        function project(latF, lonF) {
+            const lat = fromFixed7(latF);
+            const lon = fromFixed7(lonF);
+
+            const midLat = viewport.centerLat * Math.PI / 180;
+            const kx = Math.cos(midLat);
+
+            const pixelsPerDegree = 111319.5; // approximate
+            const x = ((lon - viewport.centerLon) * kx * pixelsPerDegree * viewport.zoom) + canvas.width / 2 + viewport.panX;
+            const y = ((viewport.centerLat - lat) * pixelsPerDegree * viewport.zoom) + canvas.height / 2 + viewport.panY;
+
+            return [x, y];
+        }
+
+        function drawFilledPolygon(rings, color) {
+            if (rings.length === 0) return;
+
+            ctx.fillStyle = color;
+            ctx.beginPath();
+
+            for (const ring of rings) {
+                if (ring.length < 2) continue;
+                const [x0, y0] = project(ring[0][0], ring[0][1]);
+                ctx.moveTo(x0, y0);
+                for (let i = 1; i < ring.length; i++) {
+                    const [x, y] = project(ring[i][0], ring[i][1]);
+                    ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+            }
+
+            ctx.fill("evenodd");
+        }
+
+        function drawPolyline(points, style) {
+            if (points.length < 2) return;
+
+            ctx.strokeStyle = style.color;
+            ctx.lineWidth = style.width;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+
+            if (style.dash) {
+                ctx.setLineDash([4, 4]);
+            }
+
+            ctx.beginPath();
+            const [x0, y0] = project(points[0][0], points[0][1]);
+            ctx.moveTo(x0, y0);
+
+            for (let i = 1; i < points.length; i++) {
+                const [x, y] = project(points[i][0], points[i][1]);
+                ctx.lineTo(x, y);
+            }
+
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function render() {
+            if (!canvas) return;
+
+            // Clear canvas
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg-color") || "#f0ede7";
+            if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+                ctx.fillStyle = "#1a1a1a";
+            }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!map) {
+                ctx.fillStyle = "#999";
+                ctx.font = "16px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("Load a DMAP file to display", canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            // Draw areas (back to front)
+            if (layers.areas) {
+                for (const kind of AREA_ORDER) {
+                    for (const p of map.polygons) {
+                        if (p.kind === kind) {
+                            drawFilledPolygon(p.rings, AREA_STYLE[kind]);
+                        }
+                    }
+                }
+            }
+
+            // Draw lines
+            if (layers.lines) {
+                for (const l of map.lines) {
+                    const style = LINE_STYLE[l.kind];
+                    if (style) drawPolyline(l.points, style);
+                }
+            }
+
+            // Draw roads (back to front)
+            if (layers.roads) {
+                const drawOrder = [8, 7, 6, 5, 4, 3, 2, 1];
+                for (const roadClass of drawOrder) {
+                    for (const e of map.edges) {
+                        if (e.roadClass === roadClass) {
+                            drawPolyline(e.points, ROAD_STYLE[roadClass]);
+                        }
+                    }
+                }
+            }
+
+            // Draw warnings
+            if (layers.warnings && map.warnings) {
+                ctx.fillStyle = "#FF6B6B";
+                for (const w of map.warnings) {
+                    const [x, y] = project(w.lat, w.lon);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Draw grid for reference
+            if (viewport.zoom > 1) {
+                ctx.strokeStyle = "rgba(0,0,0,0.1)";
+                ctx.lineWidth = 0.5;
+                ctx.setLineDash([5, 5]);
+
+                // Simple grid
+                for (let i = -2; i <= 2; i++) {
+                    const lon = viewport.centerLon + i * 0.01;
+                    const [x1, y1] = project(viewport.centerLat - 0.01, lon);
+                    const [x2, y2] = project(viewport.centerLat + 0.01, lon);
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                }
+                ctx.setLineDash([]);
+            }
+
+            // Update info
+            document.getElementById("infoText").textContent =
+                `Zoom: ${Math.round(viewport.zoom * 100)}% | ` +
+                `Center: ${viewport.centerLat.toFixed(4)}°, ${viewport.centerLon.toFixed(4)}° | ` +
+                `Edges: ${map.edges.length} | Lines: ${map.lines.length} | Polygons: ${map.polygons.length}`;
+        }
+
+        init();
+    </script>
+</body>
+</html>
