@@ -78,7 +78,7 @@ const way = (extra) => ({ way: 1, value: 50, unit: 0, direction: "both", oneway:
   const speedLimits = [{ edge: 0, value: 30, unit: 1 }, { edge: 0, value: 120, unit: 0 }];
   const base = { bbox: [0, 0, 0, 0], nodes, edges, lines: [], polygons: [], labels: [] };
   const bytes = writeDmap({ ...base, speedLimits });
-  check("file is version 7", bytes.readUInt16LE(4) === 7);
+  check("file is version 8", bytes.readUInt16LE(4) === 8);
   check("round trip keeps speed limits", same(readDmap(bytes).speedLimits, speedLimits), JSON.stringify(readDmap(bytes).speedLimits));
   const v6 = Buffer.from(bytes.subarray(0, bytes.length - (4 + speedLimits.length * 6)));
   v6.writeUInt16LE(6, 4);
@@ -89,11 +89,13 @@ const way = (extra) => ({ way: 1, value: 50, unit: 0, direction: "both", oneway:
   const v3 = Buffer.from(empty.subarray(0, empty.length - 16));
   v3.writeUInt16LE(3, 4);
   check("version 3 file reads", readDmap(v3).speedLimits.length === 0 && readDmap(v3).restrictions.length === 0);
-  const bad = Buffer.from(bytes);
-  bad.writeUInt16LE(8, 4);
+  const v8 = writeDmap({ ...base, speedLimits, roadNames: [{ edge: 0, name: "Test Road" }] });
+  check("version 8 file reads with road names", v8.readUInt16LE(4) === 8 && readDmap(v8).roadNames.length === 1);
+  const bad = Buffer.from(v8);
+  bad.writeUInt16LE(9, 4);
   let threw = false;
   try { readDmap(bad); } catch { threw = true; }
-  check("version 8 is refused", threw);
+  check("version 9 is refused", threw);
 }
 
 if (failures.length) {

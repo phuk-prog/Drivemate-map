@@ -1,5 +1,5 @@
-// Reader and writer for the DMAP map format, version 7 (see format/FORMAT.md).
-// Version 3 to 6 files (older files without some of the later sections) can still be read.
+// Reader and writer for the DMAP map format, version 8 (see format/FORMAT.md).
+// Version 3 to 7 files (older files without some of the later sections) can still be read.
 // Our own code. No third-party dependencies.
 
 const MAGIC = "DMAP";
