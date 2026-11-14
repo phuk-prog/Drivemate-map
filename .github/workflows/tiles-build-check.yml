@@ -49,7 +49,7 @@ jobs:
             --bounds=-2.25,53.34,-2.07,53.46 \
             --minzoom=0 --maxzoom=14 \
             --output=data/planetiler/stockport.pmtiles \
-            --force 2>&1 | tee build-report.txt
+            --download --force 2>&1 | tee build-report.txt
           ls -l data/planetiler/stockport.pmtiles
 
       - name: Check the tiles read back and list the layers
