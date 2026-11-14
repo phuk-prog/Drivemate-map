@@ -1,0 +1,63 @@
+name: Tiles build check (real region, no publish)
+
+# Manual only. Builds the offline vector tiles for Stockport from the real Greater Manchester
+# extract, with our own builder, and keeps the file as a run artifact. Nothing is published
+# to the maps-latest release, and nothing is committed.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run the tile builder tests
+        run: node --test tools/test-mvt-encode.mjs tools/test-build-tiles.mjs
+
+      - name: Download the Greater Manchester extract (Geofabrik, bounded retries)
+        run: |
+          mkdir -p data/osm
+          curl -fsSL --retry 4 --retry-delay 20 --retry-all-errors \
+            -o data/osm/greater-manchester.osm.pbf \
+            https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf
+          ls -l data/osm/greater-manchester.osm.pbf
+
+      - name: Build Stockport tiles, zoom 0 to 14
+        run: |
+          node --max-old-space-size=6000 tools/build-tiles.mjs \
+            --pbf=data/osm/greater-manchester.osm.pbf --name=stockport \
+            --bbox=-2.25,53.34,-2.07,53.46 --minzoom=0 --maxzoom=14 2>&1 | tee build-report.txt
+
+      - name: Check the file reads back and has the expected layers
+        run: |
+          node -e '
+            const fs = require("fs");
+            const buf = fs.readFileSync("data/tiles/stockport.dmtile");
+            const jsonLen = buf.readUInt32BE(8);
+            const index = JSON.parse(buf.toString("utf8", 12, 12 + jsonLen));
+            const zooms = {};
+            for (const [z] of index.tiles) zooms[z] = (zooms[z] || 0) + 1;
+            console.log(JSON.stringify({ tiles: index.tiles.length, layers: index.layers, zooms, bytes: buf.length }, null, 2));
+            if (index.tiles.length === 0) { console.error("no tiles"); process.exit(1); }
+            for (const l of ["road", "water", "landuse", "building"]) {
+              if (!index.layers.includes(l)) { console.error("missing layer " + l); process.exit(1); }
+            }
+          '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockport-dmtile
+          path: |
+            data/tiles/stockport.dmtile
+            build-report.txt
+          retention-days: 7
