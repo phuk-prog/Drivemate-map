@@ -35,8 +35,18 @@ function key(field, wire) {
   return varint(field * 8 + wire);
 }
 
+// Appends by loop, not by spread: spreading a long array into push() overflows the call stack.
+function append(dst, src) {
+  for (const x of src) dst.push(x);
+  return dst;
+}
+
 function bytesField(field, data) {
-  return [...key(field, WIRE_BYTES), ...varint(data.length), ...data];
+  const out = [];
+  append(out, key(field, WIRE_BYTES));
+  append(out, varint(data.length));
+  append(out, data);
+  return out;
 }
 
 function varintField(field, n) {
@@ -128,24 +138,24 @@ function encodeLayer(layer) {
       tagIds.push(kIdx, vIdx);
     }
     const feature = [];
-    if (tagIds.length) feature.push(...bytesField(2, tagIds.flatMap((n) => varint(n))));
-    feature.push(...varintField(3, f.type));
-    feature.push(...bytesField(4, encodeGeometry(f.type, f.parts)));
+    if (tagIds.length) append(feature, bytesField(2, tagIds.flatMap((n) => varint(n))));
+    append(feature, varintField(3, f.type));
+    append(feature, bytesField(4, encodeGeometry(f.type, f.parts)));
     featureBytes.push(feature);
   }
 
-  const out = [...bytesField(1, utf8(layer.name))];
-  for (const fb of featureBytes) out.push(...bytesField(2, fb));
-  for (const k of keys) out.push(...bytesField(3, utf8(k)));
-  for (const v of values) out.push(...bytesField(4, v));
-  out.push(...varintField(5, layer.extent || 4096));
-  out.push(...varintField(15, 2));
+  const out = append([], bytesField(1, utf8(layer.name)));
+  for (const fb of featureBytes) append(out, bytesField(2, fb));
+  for (const k of keys) append(out, bytesField(3, utf8(k)));
+  for (const v of values) append(out, bytesField(4, v));
+  append(out, varintField(5, layer.extent || 4096));
+  append(out, varintField(15, 2));
   return out;
 }
 
 /** Encode layers into one tile. Returns a Buffer. */
 export function encodeTile(layers) {
   const out = [];
-  for (const layer of layers) out.push(...bytesField(3, encodeLayer(layer)));
+  for (const layer of layers) append(out, bytesField(3, encodeLayer(layer)));
   return Buffer.from(out);
 }

@@ -91,6 +91,17 @@ test("several layers and many features in one tile", () => {
   assert.equal(layers[0].features[123].tags.i, 123 % 7);
 });
 
+test("a very large tile encodes without overflowing the call stack (regression)", () => {
+  // Spreading a long array into push() overflowed the stack on a real region; this is far longer.
+  const line = [];
+  for (let i = 0; i < 300000; i++) line.push([i % 4096, (i * 7) % 4096]);
+  const buf = encodeTile([{ name: "big", features: [{ type: 2, tags: { n: 1 }, parts: [line] }] }]);
+  const f = decodeTile(buf)[0].features[0];
+  assert.equal(f.parts[0].length, 300000);
+  assert.deepEqual(f.parts[0][0], [0, 0]);
+  assert.deepEqual(f.parts[0][299999], [299999 % 4096, (299999 * 7) % 4096]);
+});
+
 test("large coordinates and counts use multi-byte varints", () => {
   const big = [[16000, 16000], [16380, 1], [2, 16380]];
   const buf = encodeTile([{ name: "big", extent: 16384, features: [{ type: 2, tags: { n: 1234567 }, parts: [big] }] }]);
