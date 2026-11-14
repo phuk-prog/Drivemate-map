@@ -189,7 +189,7 @@ try {
   console.log('\nEmpty Tile Handling (2.3):');
 
   // Create an empty tile (represents missing data/sea)
-  const emptyPath = join(TEST_CACHE, 'empty-test', '14', '1', '1');
+  const emptyPath = join(TEST_CACHE, 'empty-test', '14', '1');
   await mkdir(emptyPath, { recursive: true });
   await writeFile(join(emptyPath, '2.pbf'), Buffer.alloc(0));
 

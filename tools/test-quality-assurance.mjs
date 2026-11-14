@@ -9,8 +9,10 @@ const check = (name, ok, detail = '') => {
 };
 
 // Create mock DMAP data for testing
+// bbox format in DMAP: [minLat, minLon, maxLat, maxLon]
+// All coordinates in 1e-7 degree units
 const createMockMap = (overrides = {}) => ({
-  bbox: [-2.25, 53.34, -2.07, 53.46],
+  bbox: [533400000, -225000000, 533460000, -224700000], // [minLat, minLon, maxLat, maxLon] in 1e-7 degrees
   nodes: [
     { lat: 533400000, lon: -225000000 },
     { lat: 533400100, lon: -224950000 },
@@ -98,12 +100,8 @@ console.log('\n=== Quality Assurance Tests (Category 6) ===\n');
     const map = createMockMap();
     const node = map.nodes[0];
     const bbox = map.bbox;
-    // bbox is in degrees, node coordinates are in 1e-7 degree units
-    const bboxLat0 = Math.round(bbox[0] * 1e7);
-    const bboxLon0 = Math.round(bbox[1] * 1e7);
-    const bboxLat1 = Math.round(bbox[2] * 1e7);
-    const bboxLon1 = Math.round(bbox[3] * 1e7);
-    const inBbox = node.lat >= bboxLat0 && node.lat <= bboxLat1 && node.lon >= bboxLon0 && node.lon <= bboxLon1;
+    // Both bbox and node coordinates are in 1e-7 degree units in DMAP format
+    const inBbox = node.lat >= bbox[0] && node.lat <= bbox[2] && node.lon >= bbox[1] && node.lon <= bbox[3];
     check('Nodes within bbox', inBbox);
 
     // Test out-of-bounds node
