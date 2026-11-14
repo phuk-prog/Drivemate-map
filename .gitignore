@@ -6,3 +6,4 @@ data/published/squares/*.dmap
 data/published/squares/*.gz
 data/test-tmp/
 data/osm-cache/
+data/tiles/
