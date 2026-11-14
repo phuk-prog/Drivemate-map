@@ -6,6 +6,9 @@ name: Tiles build check (real region, no publish)
 
 on:
   workflow_dispatch:
+  # Runs on pushes to this category branch only, so it can run before the file reaches the default branch.
+  push:
+    branches: [category-3-map-drawing]
 
 permissions:
   contents: read
