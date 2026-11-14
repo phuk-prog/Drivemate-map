@@ -21,6 +21,17 @@ Tile download takes about 15 seconds for London (1,280 tiles). The build takes a
 
 Version 2 holds: 352k routable road edges; 271k non-routed lines (rail, Underground, rivers, footpaths, boundaries, piers, ferries); 204k areas (water, buildings, parks, woods, grass, farmland, land use); and 241k named labels (places, roads, water, parks, points of interest).
 
+## Release & Testing Phases
+
+The Drivemate map project follows a structured release pipeline:
+
+- **Category 10.1: Packaging** ✓ Complete - Maps automatically built and published to [maps-latest release](https://github.com/phuk-prog/Drivemate-map/releases/tag/maps-latest)
+- **Category 10.2: Real Phone Testing** ◈ In Progress - See [`PHONE_TESTING_GUIDE.md`](PHONE_TESTING_GUIDE.md) and [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
+- **Category 10.3: App Identity** - Branding and app metadata
+- **Category 10.4: Release** - App store submission
+
+For comprehensive details, see [`CATEGORY_10_SUMMARY.md`](CATEGORY_10_SUMMARY.md).
+
 ## Data source and licence
 
 Source: OpenStreetMap, read as OpenFreeMap's vector tiles (OpenMapTiles schema). Map data © OpenStreetMap contributors, licensed under ODbL. Any app that uses this data must show that attribution.
