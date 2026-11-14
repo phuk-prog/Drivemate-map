@@ -1,16 +1,18 @@
-// Extracts turn restrictions, lane tags and road warnings from an OpenStreetMap .osm.pbf extract,
+// Extracts turn restrictions, lane tags, road warnings, road names and signposts from an OpenStreetMap .osm.pbf extract,
 // and caches them for the map builder:
 //   data/osm-cache/restrictions/<name>.json  (same records the Overpass fetch made)
 //   data/osm-cache/lanes/<name>.json         (same ways the Overpass fetch made)
 //   data/osm-cache/warnings/<name>.json      (speed cameras, level crossings, roads under construction)
 //   data/osm-cache/speed/<name>.json         (maxspeed ways, thinned geometry, see tools/speed.mjs)
+//   data/osm-cache/roadNames/<name>.json     (ways with name and/or ref tags)
+//   data/osm-cache/signposts/<name>.json     (ways with destination and/or exit tags)
 // Build-time only: the app never reads OpenStreetMap files. Our own code.
 //
 // Usage: node tools/osm-extract.mjs --pbf=greater-london.osm.pbf --name=london --bbox=-0.55,51.28,0.30,51.70
 //
 // A .osm.pbf file lists nodes, then ways, then relations, so this reads the file three times:
 //   1. relations: find the simple turn restrictions (one from way, one via node, one to way)
-//   2. ways: keep the from and to ways, and the ways that carry lane tags
+//   2. ways: keep the from and to ways, the ways that carry lane tags, and ways with name/ref or destination/exit tags
 //   3. nodes: look up the coordinates of the nodes those ways use
 // Memory stays small, because only the nodes that are needed are kept.
 
@@ -64,6 +66,12 @@ export async function extractFromPbf(path, bbox) {
     warningsSpeedCamera: 0,
     warningsLevelCrossing: 0,
     warningsRoadworks: 0,
+    roadNamesFound: 0,
+    roadNamesMissingGeometry: 0,
+    roadNamesOutsideBox: 0,
+    signpostsFound: 0,
+    signpostsMissingGeometry: 0,
+    signpostsOutsideBox: 0,
   };
 
   // Pass 1: restriction relations.
@@ -105,11 +113,13 @@ export async function extractFromPbf(path, bbox) {
     },
   });
 
-  // Pass 2: the from and to ways, and the ways with lane tags.
+  // Pass 2: the from and to ways, the ways with lane tags, and ways with name/ref or destination/exit tags.
   const wayRefs = new Map();
   const laneRaw = [];
   const constructionNodes = []; // one middle node per road under construction
   const speedRaw = [];
+  const roadNamesRaw = [];
+  const signpostsRaw = [];
   await readPbf(path, {
     onWay(way, block) {
       // Roads under construction (highway=construction) become one roadworks warning each.
@@ -152,30 +162,74 @@ export async function extractFromPbf(path, bbox) {
       const needed = neededWays.has(way.id);
       const laneIndexes = LANE_KEYS.map((k) => block.find(k));
       const hasLaneKey = laneIndexes.some((i) => i >= 0);
-      if (!needed && !hasLaneKey) return;
+
+      // Road names: ways with name and/or ref tags
+      const nameKey = block.find("name");
+      const refKey = block.find("ref");
+      const hasNameOrRef = nameKey >= 0 || refKey >= 0;
+
+      // Signposts: ways with destination and/or exit tags
+      const destinationKey = block.find("destination");
+      const exitKey = block.find("exit");
+      const hasDestinationOrExit = destinationKey >= 0 || exitKey >= 0;
+
+      if (!needed && !hasLaneKey && !hasNameOrRef && !hasDestinationOrExit) return;
       if (needed) wayRefs.set(way.id, way.refs);
-      if (!hasLaneKey) return;
 
       const highwayKey = block.find("highway");
       const onewayKey = block.find("oneway");
-      const tags = {};
-      let highway = false;
-      let oneway = "";
-      for (let k = 0; k < way.keys.length; k++) {
-        const key = way.keys[k];
-        const at = laneIndexes.indexOf(key);
-        if (at >= 0) tags[LANE_KEYS[at]] = block.str(way.vals[k]);
-        else if (key === highwayKey) highway = true;
-        else if (key === onewayKey) oneway = block.str(way.vals[k]);
+
+      // Process lane tags
+      if (hasLaneKey) {
+        const tags = {};
+        let highway = false;
+        let oneway = "";
+        for (let k = 0; k < way.keys.length; k++) {
+          const key = way.keys[k];
+          const at = laneIndexes.indexOf(key);
+          if (at >= 0) tags[LANE_KEYS[at]] = block.str(way.vals[k]);
+          else if (key === highwayKey) highway = true;
+          else if (key === onewayKey) oneway = block.str(way.vals[k]);
+        }
+        if (highway && Object.keys(tags).length > 0) {
+          stats.laneWaysFound++;
+          laneRaw.push({ tags, oneway, refs: way.refs });
+        }
       }
-      if (highway && Object.keys(tags).length > 0) {
-        stats.laneWaysFound++;
-        laneRaw.push({ tags, oneway, refs: way.refs });
+
+      // Process name/ref tags
+      if (hasNameOrRef && way.refs.length >= 2) {
+        let name = null;
+        let ref = null;
+        for (let k = 0; k < way.keys.length; k++) {
+          if (way.keys[k] === nameKey) name = block.str(way.vals[k]);
+          else if (way.keys[k] === refKey) ref = block.str(way.vals[k]);
+        }
+        if (name || ref) {
+          stats.roadNamesFound++;
+          const displayName = name || ref; // prefer name, fall back to ref
+          roadNamesRaw.push({ name: displayName, refs: way.refs });
+        }
+      }
+
+      // Process destination/exit tags
+      if (hasDestinationOrExit && way.refs.length >= 2) {
+        let destination = null;
+        let exit = null;
+        for (let k = 0; k < way.keys.length; k++) {
+          if (way.keys[k] === destinationKey) destination = block.str(way.vals[k]);
+          else if (way.keys[k] === exitKey) exit = block.str(way.vals[k]);
+        }
+        if (destination || exit) {
+          stats.signpostsFound++;
+          const signpostText = destination || exit; // prefer destination, fall back to exit
+          signpostsRaw.push({ signpost: signpostText, refs: way.refs });
+        }
       }
     },
   });
 
-  // Work out which nodes are needed: next to the via node on restriction ways, and every node of lane ways.
+  // Work out which nodes are needed: next to the via node on restriction ways, and every node of lane/speed/roadName/signpost ways.
   const trimmed = [];
   for (const r of relations) {
     const fromRefs = wayRefs.has(r.fromWay) ? around(wayRefs.get(r.fromWay), r.viaNode) : null;
@@ -191,6 +245,8 @@ export async function extractFromPbf(path, bbox) {
   for (const w of laneRaw) for (const id of w.refs) neededNodes.add(id);
   for (const id of constructionNodes) neededNodes.add(id);
   for (const w of speedRaw) for (const id of w.refs) neededNodes.add(id);
+  for (const w of roadNamesRaw) for (const id of w.refs) neededNodes.add(id);
+  for (const w of signpostsRaw) for (const id of w.refs) neededNodes.add(id);
 
   // Pass 3: node coordinates.
   const coords = new Map();
@@ -270,7 +326,35 @@ export async function extractFromPbf(path, bbox) {
     }
   }
 
-  return { restrictions, laneWays, warnings, speedWays, stats };
+  const roadNames = [];
+  for (const w of roadNamesRaw) {
+    const geom = w.refs.map((id) => coords.get(id));
+    if (geom.length < 2 || geom.some((p) => !p)) {
+      stats.roadNamesMissingGeometry++;
+      continue;
+    }
+    if (!geom.some(inBox)) {
+      stats.roadNamesOutsideBox++;
+      continue;
+    }
+    roadNames.push({ name: w.name, geom });
+  }
+
+  const signposts = [];
+  for (const w of signpostsRaw) {
+    const geom = w.refs.map((id) => coords.get(id));
+    if (geom.length < 2 || geom.some((p) => !p)) {
+      stats.signpostsMissingGeometry++;
+      continue;
+    }
+    if (!geom.some(inBox)) {
+      stats.signpostsOutsideBox++;
+      continue;
+    }
+    signposts.push({ signpost: w.signpost, geom });
+  }
+
+  return { restrictions, laneWays, warnings, speedWays, roadNames, signposts, stats };
 }
 
 async function main() {
@@ -283,14 +367,14 @@ async function main() {
   const name = arg("name", "london");
   const bbox = arg("bbox", "-0.55,51.28,0.30,51.70").split(",").map(Number);
   const started = Date.now();
-  const { restrictions, laneWays, warnings, speedWays, stats } = await extractFromPbf(pbf, bbox);
+  const { restrictions, laneWays, warnings, speedWays, roadNames, signposts, stats } = await extractFromPbf(pbf, bbox);
 
-  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings], ["speed", speedWays]]) {
+  for (const [dir, data] of [["restrictions", restrictions], ["lanes", laneWays], ["warnings", warnings], ["speed", speedWays], ["roadNames", roadNames], ["signposts", signposts]]) {
     const outDir = join(ROOT, "data", "osm-cache", dir);
     await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, `${name}.json`), JSON.stringify(data));
   }
-  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, warnings: warnings.length, speedWays: speedWays.length, stats }, null, 2));
+  console.log(JSON.stringify({ name, bbox, restrictions: restrictions.length, laneWays: laneWays.length, warnings: warnings.length, speedWays: speedWays.length, roadNames: roadNames.length, signposts: signposts.length, stats }, null, 2));
   console.log(`extracted in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 
