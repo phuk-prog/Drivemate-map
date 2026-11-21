@@ -54,6 +54,16 @@ validation and storage costs.
 - **Extract:** fetched 2026-11-18 (`osm_base` 2026-11-18T18:14:20Z). It contains 965 ways and 4 restriction relations.
 - **Derived database:** `osm-pilot-wells-2026-11-18`, with 5,274 nodes and 5,386 road records. It is CAR-only. Real-road guidance is **not approved**; it is used for automated research and emulator tests only.
 
+## Detailed pilot map pack (M2)
+
+`pilot/wells-z12-16.pmtiles` (about 250 KB, zoom 12-16) is the detailed offline
+map pack for the Wells pilot area. `tools/build_pilot_pack.py` builds it, with
+the standard library only and byte-for-byte reproducibly, from the pinned
+`osm/wells-places-2026-11-19.osm` extract. It holds roads with names and refs,
+named places and tagged buildings. The source has no water or land cover, so
+the pack has none. `python3 tools/build_pilot_pack.py --check` confirms the
+committed file matches a fresh build. NOT FOR DRIVING.
+
 ## Updating
 
 1. Add or edit a file in `requests/` on a branch other than `main`, and push it.
