@@ -25,6 +25,14 @@
       "bytes": 1116,
       "sha256": "3b8ab1ff43deb2cc3663ccdbbf314df09e18fb0ec27c3eac369f3e42864988c5"
     },
+    "pilot/wells-z12-16.pmtiles": {
+      "bytes": 249609,
+      "sha256": "97eb2de43d4b92ca4dba957b9f42e733029580e8249449ef20eac2e0aaade644"
+    },
+    "pilot/wells-z12-16.pmtiles.sha256": {
+      "bytes": 87,
+      "sha256": "4163fdc66d454369eb3ec5331f0624e2f9491aa7b1eb0a25496ba28c02cb8a43"
+    },
     "requests/wells-places.json": {
       "bytes": 384,
       "sha256": "f3950cb90db9eef44a511a8dba67f3a3f578161770c3a65f916932e85e990f1d"

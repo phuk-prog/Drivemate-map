@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def snapshot(root=ROOT):
     files = {}
-    for dirname, pattern in (("requests", "*.json"), ("osm", "*"), ("derived", "*")):
+    for dirname, pattern in (("requests", "*.json"), ("osm", "*"), ("derived", "*"), ("pilot", "*")):
         for p in sorted((root / dirname).glob(pattern)):
             if not p.is_file():
                 continue
