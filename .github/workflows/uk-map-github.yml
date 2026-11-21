@@ -1,0 +1,97 @@
+name: Publish UK map data to GitHub Releases
+
+# All UK map source checks, tests and map-tile publishing stay in GitHub.
+# Two UTC checks per day. The country is rebuilt only if source changed,
+# last tile publication is stale/incomplete, or map builder code was changed.
+on:
+  schedule:
+    - cron: '43 03 * * *'
+    - cron: '43 15 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/uk-map-github.yml'
+      - '.github/workflows/build-tiles.yml'
+      - 'tools/uk_github_releases.py'
+      - 'tools/uk_tiles_status.py'
+      - 'tools/uk_restore_for_tiles.py'
+      - 'tools/build_tiles.sh'
+      - 'tools/tile_catalog.py'
+      - 'tools/preflight_tile_inputs.py'
+      - 'tiles/**'
+  pull_request:
+    paths:
+      - '.github/workflows/uk-map-github.yml'
+      - 'tools/uk_github_releases.py'
+      - 'tools/uk_tiles_status.py'
+      - 'tools/test_uk_github_releases.py'
+      - 'tools/test_uk_tiles_status.py'
+
+permissions:
+  contents: read
+
+# GitHub never runs both scheduled pipelines against the same Releases.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('uk-source-pr-{0}', github.head_ref) || 'uk-map-data-publication' }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test all map source and publication helpers
+        run: python3 -m unittest discover -s tools -p 'test_*.py' -v
+
+  check-source:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    permissions:
+      contents: write
+    outputs:
+      source_tag: ${{ steps.source.outputs.source_tag }}
+      source_changed: ${{ steps.source.outputs.source_changed }}
+      needs_tiles: ${{ steps.freshness.outputs.needs_tiles }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OSM PBF integrity validator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+      - name: Check Geofabrik UK map checksum and publish changes only
+        id: source
+        run: python3 tools/uk_github_releases.py
+      - name: Verify latest map tiles correspond to the published UK source
+        id: freshness
+        env:
+          SOURCE_TAG: ${{ steps.source.outputs.source_tag }}
+        run: python3 tools/uk_tiles_status.py --source-tag "$SOURCE_TAG"
+      - name: Record automatic map update decision
+        env:
+          SOURCE_TAG: ${{ steps.source.outputs.source_tag }}
+          SOURCE_CHANGED: ${{ steps.source.outputs.source_changed }}
+          NEEDS_TILES: ${{ steps.freshness.outputs.needs_tiles }}
+        run: |
+          {
+            echo "### UK-wide OpenStreetMap update check"
+            echo
+            echo "- Source release: \`$SOURCE_TAG\`"
+            echo "- New UK source data: \`$SOURCE_CHANGED\`"
+            echo "- Tiles need rebuilding: \`$NEEDS_TILES\`"
+            echo "- Next step: automatic tile build if new/stale, or source-code change."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  rebuild-map:
+    needs: check-source
+    if: needs.check-source.result == 'success' && (needs.check-source.outputs.needs_tiles == 'true' || github.event_name == 'push')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-tiles.yml
+    secrets: inherit

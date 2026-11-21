@@ -1,0 +1,47 @@
+{
+  "attribution": "(c) OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright",
+  "avoidance_flagged_edges": {},
+  "barrier_nodes": 7,
+  "conservative_incomplete_restrictions": [
+    "14734190"
+  ],
+  "dataset_id": "osm-pilot-wells-2026-11-18",
+  "directed_road_records": 5386,
+  "driving_guidance": "BLOCKED_PENDING_DATA_LEGAL_SAFETY_REVIEW",
+  "estimated_speed_edges": 4343,
+  "excluded_ways": {
+    "no_car_access": [
+      "22900805",
+      "22900820",
+      "22900882",
+      "23020452",
+      "103742040",
+      "133006509",
+      "675191592",
+      "699146827",
+      "740133815",
+      "763078736",
+      "766717208",
+      "810734782",
+      "822506704",
+      "847420620",
+      "852645799",
+      "937108886",
+      "938368855",
+      "938368856"
+    ]
+  },
+  "hgv": "UNSUPPORTED_NOT_VERIFIED",
+  "licence": "ODbL-1.0",
+  "nodes": 5274,
+  "output_sha256": "bce098a99a4b729a7c2e88039515d59e93c196808209e858313b38da912fbde6",
+  "skipped_restrictions": {},
+  "source_sha256": "55beed77040fa024971d141451705a179c33c96b63e866418089276fb388bd30",
+  "time_window_ways": [],
+  "time_windows_zone": "Europe/London (UK local civil time), minute 0 = Monday 00:00",
+  "turn_rules": 5,
+  "unsatisfiable_only_restrictions": [],
+  "vehicle_profiles": [
+    "CAR"
+  ]
+}

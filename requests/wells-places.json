@@ -1,0 +1,13 @@
+{
+  "name": "wells-places",
+  "description": "M7 Wells source inventory; reviewed SHA-256 manifest and downstream import tests required before any app distribution",
+  "bbox": [
+    51.198,
+    -2.668,
+    51.222,
+    -2.622
+  ],
+  "licence": "ODbL-1.0",
+  "attribution": "(c) OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright",
+  "include_places": true
+}

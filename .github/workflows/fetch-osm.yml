@@ -1,0 +1,43 @@
+name: Fetch OSM extracts
+
+# Downloads every requests/*.json extract from public Overpass servers and
+# commits it with provenance to the same branch. Run on a non-default branch
+# (or manually); review the diff before merging into main.
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['requests/*.json']
+  workflow_dispatch:
+
+concurrency:
+  group: fetch-osm-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bounded source query and no fabricated inventory
+        run: python3 -m unittest discover -s tools -p 'test_*.py'
+      - name: Fetch every request
+        run: |
+          for request in requests/*.json; do
+            python3 tools/fetch_osm_extract.py "$request" osm
+          done
+      - name: Rebuild SHA-256 provenance manifest
+        run: python3 tools/build_manifest.py > MANIFEST.json
+      - name: Commit extracts and provenance
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add osm MANIFEST.json
+          if git diff --cached --quiet; then echo "No change"; exit 0; fi
+          git commit -m "osm: extract with provenance (ODbL 1.0, (c) OpenStreetMap contributors)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

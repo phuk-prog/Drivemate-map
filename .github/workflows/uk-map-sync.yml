@@ -1,0 +1,72 @@
+name: UK map source-data sync
+
+# The schedule is deliberately gated until storage and credentials are ready.
+# This workflow does not touch application code or routing data.
+on:
+  push:
+    paths:
+      - 'tools/uk_osm_daily.py'
+      - 'tools/test_uk_osm_daily.py'
+      - '.github/workflows/uk-map-sync.yml'
+  pull_request:
+    paths:
+      - 'tools/uk_osm_daily.py'
+      - 'tools/test_uk_osm_daily.py'
+      - '.github/workflows/uk-map-sync.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Bootstrap the first full UK map once; use update afterwards'
+        type: choice
+        required: true
+        default: update
+        options:
+          - update
+          - bootstrap
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uk-map-sync
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source-data unit tests
+        run: python3 -m unittest discover -s tools -p 'test_*.py' -v
+
+  sync:
+    if: github.event_name == 'workflow_dispatch'
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      UK_MAP_S3_URI: ${{ secrets.UK_MAP_S3_URI }}
+      UK_MAP_S3_ENDPOINT_URL: ${{ secrets.UK_MAP_S3_ENDPOINT_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.UK_MAP_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.UK_MAP_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.UK_MAP_AWS_REGION || 'eu-west-2' }}
+      AWS_EC2_METADATA_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'tools/uk-map-requirements.txt'
+      - name: Install verified map-update tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y osmium-tool
+          python -m pip install -r tools/uk-map-requirements.txt
+      - name: Sync UK map into versioned object storage
+        env:
+          SYNC_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'update' }}
+          UK_MAP_CACHE_DIR: ${{ runner.temp }}/uk-map-cache
+        run: |
+          python tools/uk_osm_daily.py "$SYNC_MODE"

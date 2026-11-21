@@ -1,0 +1,35 @@
+{
+  "attribution": "(c) OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright",
+  "bbox": [
+    51.198,
+    -2.668,
+    51.222,
+    -2.622
+  ],
+  "bytes": 825741,
+  "description": "M7 sourced Wells place/address/POI inventory, additive to the immutable M3 roads pilot; source records require independent review before app inclusion",
+  "endpoint": "https://overpass-api.de/api/interpreter",
+  "fetched_utc": "2026-11-19T22:16:48+00:00",
+  "include_places": true,
+  "licence": "ODbL-1.0",
+  "name": "wells-places",
+  "nodes": 6702,
+  "osm_base": "2026-11-19T22:15:10Z",
+  "overpass_query": "[out:xml][timeout:180];(way[\"highway\"~\"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$\"](51.198000,-2.668000,51.222000,-2.622000);way[\"route\"=\"ferry\"](51.198000,-2.668000,51.222000,-2.622000);relation[\"type\"=\"restriction\"](51.198000,-2.668000,51.222000,-2.622000);node[\"addr:housenumber\"](51.198000,-2.668000,51.222000,-2.622000);node[\"name\"][\"amenity\"](51.198000,-2.668000,51.222000,-2.622000);node[\"name\"][\"shop\"](51.198000,-2.668000,51.222000,-2.622000);node[\"name\"][\"tourism\"](51.198000,-2.668000,51.222000,-2.622000);node[\"name\"][\"leisure\"](51.198000,-2.668000,51.222000,-2.622000);node[\"name\"][\"historic\"](51.198000,-2.668000,51.222000,-2.622000);node[\"name\"][\"office\"](51.198000,-2.668000,51.222000,-2.622000);way[\"addr:housenumber\"](51.198000,-2.668000,51.222000,-2.622000);way[\"name\"][\"amenity\"](51.198000,-2.668000,51.222000,-2.622000);way[\"name\"][\"shop\"](51.198000,-2.668000,51.222000,-2.622000);way[\"name\"][\"tourism\"](51.198000,-2.668000,51.222000,-2.622000);way[\"name\"][\"leisure\"](51.198000,-2.668000,51.222000,-2.622000);way[\"name\"][\"historic\"](51.198000,-2.668000,51.222000,-2.622000);way[\"name\"][\"office\"](51.198000,-2.668000,51.222000,-2.622000););(._;>;);out body;",
+  "relations": 4,
+  "sha256": "8cde16000a69096b62f7a75598fb892c2d8eea34b8f2237278a785ddf125ce26",
+  "tag_inventory": {
+    "node": {
+      "explicit_addresses": 23,
+      "named_pois": 64,
+      "postcode_tags": 23
+    },
+    "way": {
+      "explicit_addresses": 64,
+      "named_pois": 93,
+      "postcode_tags": 49
+    }
+  },
+  "usage": "M3 pilot research; derived road database; NOT approved for driving guidance",
+  "ways": 1119
+}

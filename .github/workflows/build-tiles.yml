@@ -1,0 +1,177 @@
+name: Build offline tiles
+
+# Builds UK-wide PMTiles from the latest verified UK PBF GitHub Release.
+# Uses the GitHub-only map-data source archive; no S3/Cloudflare.
+# Called directly by the twice-daily source workflow ONLY when map data is
+# new, tiles are stale, or build tooling has changed. Can also run manually.
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/build_tiles.sh'
+      - 'tools/preflight_tile_inputs.py'
+      - 'tools/test_preflight_tile_inputs.py'
+      - 'tools/tile_catalog.py'
+      - 'tools/uk_restore_for_tiles.py'
+      - 'tools/uk_tiles_status.py'
+      - 'tiles/**'
+      - 'tests/**'
+      - '.github/workflows/build-tiles.yml'
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('uk-tiles-pr-{0}', github.head_ref) || 'build-tiles' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests for map source and PMTiles catalog
+        run: |
+          python3 -m pip install --quiet cryptography
+          python3 -m unittest discover -s tests -v
+          python3 -m unittest discover -s tools -p 'test_*.py' -v
+      - name: Preflight real UK region boundaries and world source
+        run: python3 tools/preflight_tile_inputs.py --dest "$RUNNER_TEMP/uk-map-preflight"
+
+  tiles:
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: write          # create releases and push the catalog to `live`
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Install tile catalog signing dependency
+        run: python3 -m pip install --quiet cryptography
+      - name: Free runner disk
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+          free -m
+          nproc
+          [ -x /usr/bin/time ] || { sudo apt-get update -qq && sudo apt-get install -y -qq time; }
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Validate region boundaries and world source before UK build
+        run: python3 tools/preflight_tile_inputs.py --config tiles/regions.json --dest work
+      - name: Restore and verify complete UK source PBF from GitHub Releases
+        run: python3 tools/uk_restore_for_tiles.py --dest cache
+      - name: Build tiles
+        run: |
+          bash tools/build_tiles.sh
+      - name: Build and sign catalog
+        env:
+          CATALOG_TEST_SIGNING_KEY: ${{ secrets.CATALOG_TEST_SIGNING_KEY }}
+        run: |
+          tag="tiles-$(date -u +%Y%m%dT%H%MZ)"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          base="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$tag"
+          python3 - "$base" <<'PY'
+          import json, os, sys
+          spec = json.load(open("out/spec.json"))
+          for s in spec:
+              s["url"] = sys.argv[1] + "/" + os.path.basename(s["path"])
+          json.dump(spec, open("out/spec.json", "w"), indent=2)
+          PY
+          python3 - <<'PY'
+          import json, os
+          source = json.load(open("cache/source-release.json"))
+          extra = {
+              "build_report": "build-report.json",
+              "run_url": "%s/%s/actions/runs/%s" % (
+                  os.environ["GITHUB_SERVER_URL"], os.environ["GITHUB_REPOSITORY"],
+                  os.environ["GITHUB_RUN_ID"]),
+              "map_source": "Geofabrik OpenStreetMap UK source in GitHub Releases",
+              "source_release": source["source_release"],
+              "source_sha256": source["source_sha256"],
+          }
+          with open("out/extra.json", "w") as fp:
+              json.dump(extra, fp)
+          PY
+          python3 tools/tile_catalog.py build --spec out/spec.json --release "$tag" --extra out/extra.json --out out
+          if [ -f out/catalog.json.sig ]; then
+            python3 tools/tile_catalog.py verify out/catalog.json out/catalog.json.sig
+          else
+            echo "::warning::Catalog is UNSIGNED. The owner must add an Actions secret named CATALOG_TEST_SIGNING_KEY (TEST-ONLY Ed25519 key, NOT FOR PRODUCTION)."
+          fi
+      - name: Publish GitHub releases
+        run: |
+          cd out
+          assets=$(ls *.pmtiles catalog.json build-report.json)
+          [ -f catalog.json.sig ] && assets="$assets catalog.json.sig catalog-test-signing-key.pub"
+          signed=$(python3 -c "import json;print(json.load(open('catalog.json'))['signing']['status'])")
+          {
+            echo "Drivemate offline vector tiles (PMTiles v3, Mapbox Vector Tiles)."
+            echo
+            echo "- UK regions: Shortbread schema (CC0-1.0), built with Planetiler from OpenStreetMap."
+            echo "- World outline z0-6: extract of the Protomaps daily planet build."
+            echo "- Catalog signing: $signed (TEST-ONLY key, NOT FOR PRODUCTION)."
+            echo "- Build: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo "Map data (c) OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright."
+            echo "Not approved for real driving guidance."
+            echo
+            echo '```'; ls -l *.pmtiles; echo '```'
+          } > notes.md
+          gh release create "$TAG" $assets --title "Offline tiles $TAG" --notes-file notes.md \
+            --prerelease --target "$GITHUB_SHA"
+          if gh release view tiles-latest >/dev/null 2>&1; then
+            gh release edit tiles-latest --title "Offline tiles (latest: $TAG)" --notes-file notes.md --prerelease
+            # Drop assets that are no longer produced, then replace the rest.
+            for old in $(gh release view tiles-latest --json assets -q '.assets[].name'); do
+              case " $(echo $assets) " in *" $old "*) ;; *) gh release delete-asset tiles-latest "$old" -y ;; esac
+            done
+            gh release upload tiles-latest $assets --clobber
+          else
+            gh release create tiles-latest $assets --title "Offline tiles (latest: $TAG)" --notes-file notes.md \
+              --prerelease --target "$GITHUB_SHA"
+          fi
+          # Keep the 7 newest dated releases.
+          gh release list --limit 100 --json tagName,createdAt -q \
+            '[.[] | select(.tagName | test("^tiles-[0-9]{8}T"))] | sort_by(.createdAt) | reverse | .[7:] | .[].tagName' |
+          while read -r old; do gh release delete "$old" --cleanup-tag -y; done
+          gh release view "$TAG" --json assets -q '.assets[] | "\(.name) \(.size)"'
+      - name: Commit catalog to the live branch
+        run: |
+          stage="$RUNNER_TEMP/tiles-out"
+          mkdir -p "$stage"
+          cp out/catalog.json out/build-report.json "$stage/"
+          [ -f out/catalog.json.sig ] && cp out/catalog.json.sig out/catalog-test-signing-key.pub "$stage/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf out work
+          for attempt in 1 2 3 4 5; do
+            if git fetch --depth=1 origin live; then
+              git checkout -f -B live FETCH_HEAD
+            else
+              git checkout -f --orphan live
+              git rm -rq --cached . && git clean -fdq -e cache
+              printf '%s\n' "# drivemate-map-data: live branch" "" \
+                "Machine-updated by .github/workflows/update-map.yml and build-tiles.yml." \
+                "(c) OpenStreetMap contributors, ODbL 1.0." > README.md
+              git add README.md
+            fi
+            rm -rf tiles && mkdir tiles && cp "$stage"/* tiles/
+            git add -A tiles
+            if git diff --cached --quiet; then echo "No catalog change"; exit 0; fi
+            git commit -qm "tiles: catalog for $TAG (ODbL 1.0, (c) OpenStreetMap contributors)"
+            if git push origin live; then exit 0; fi
+            echo "push raced with another update; retrying"; sleep $((attempt * 10))
+          done
+          exit 1

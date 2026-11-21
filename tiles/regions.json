@@ -1,0 +1,58 @@
+{
+  "base_region": "united-kingdom",
+  "schema": {
+    "name": "shortbread",
+    "version": "1.0 (Planetiler bundled shortbread.yml, Planetiler v0.10.2)",
+    "licence": "CC0-1.0",
+    "url": "https://shortbread-tiles.org/schema/"
+  },
+  "max_zoom": 14,
+  "attribution": "(c) OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright",
+  "regions": [
+    {
+      "name": "england",
+      "reference_point": [
+        -0.1278,
+        51.5074
+      ],
+      "polygon_file": "tiles/boundaries/england.poly"
+    },
+    {
+      "name": "scotland",
+      "reference_point": [
+        -3.1883,
+        55.9533
+      ],
+      "polygon_file": "tiles/boundaries/scotland.poly"
+    },
+    {
+      "name": "wales",
+      "reference_point": [
+        -3.1791,
+        51.4816
+      ],
+      "polygon_file": "tiles/boundaries/wales.poly"
+    },
+    {
+      "name": "northern-ireland",
+      "bbox": [
+        -8.25,
+        53.98,
+        -5.35,
+        55.4
+      ],
+      "note": "Geofabrik publishes no separate Northern Ireland polygon; a bounding box is used. The UK base contains no Republic of Ireland data, so the overlap holds only sea and empty tiles."
+    }
+  ],
+  "world": {
+    "name": "world",
+    "max_zoom": 6,
+    "source": "Protomaps daily planet build (https://build.protomaps.com/), cut with pmtiles extract --maxzoom=6",
+    "schema": {
+      "name": "protomaps-basemaps",
+      "url": "https://docs.protomaps.com/basemaps/layers"
+    },
+    "licence": "ODbL-1.0",
+    "attribution": "(c) OpenStreetMap contributors, ODbL 1.0; Natural Earth (public domain); Protomaps"
+  }
+}
