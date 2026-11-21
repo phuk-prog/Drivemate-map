@@ -1,0 +1,64 @@
+{
+  "bytes": {
+    "england": 1356921783,
+    "northern-ireland": 76098078,
+    "scotland": 316043314,
+    "united-kingdom": 1871168140,
+    "wales": 148650386,
+    "world": 45126582
+  },
+  "run_url": "https://github.com/phuk-prog/Drivemate-map/actions/runs/44950252238",
+  "runner": {
+    "cpus": 4,
+    "mem_total_mib": 15983,
+    "os": "Linux-7.0.0-1020-azure-x86_64-with-glibc2.43"
+  },
+  "schema": {
+    "licence": "CC0-1.0",
+    "name": "shortbread",
+    "url": "https://shortbread-tiles.org/schema/",
+    "version": "1.0 (Planetiler bundled shortbread.yml, Planetiler v0.10.2)"
+  },
+  "source_release": "uk-map-20261121T211721Z-34a02136f1ac",
+  "source_replication_timestamp": "2026-11-20T21:21:21+00:00",
+  "source_sha256": "34a02136f1ac647beba7fcb9d15566d50d4f64edb854c450fa617e9073ca0726",
+  "timings": {
+    "extract-england": {
+      "peak_rss_mib": 1357.7,
+      "seconds": 1
+    },
+    "extract-northern-ireland": {
+      "peak_rss_mib": 119.0,
+      "seconds": 0
+    },
+    "extract-scotland": {
+      "peak_rss_mib": 364.2,
+      "seconds": 1
+    },
+    "extract-wales": {
+      "peak_rss_mib": 154.5,
+      "seconds": 0
+    },
+    "planetiler": {
+      "peak_rss_mib": 7572.6,
+      "seconds": 278
+    },
+    "world": {
+      "peak_rss_mib": 48.4,
+      "seconds": 1
+    }
+  },
+  "tools": {
+    "planetiler": {
+      "sha256": "f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d",
+      "version": "0.10.2"
+    },
+    "pmtiles": {
+      "sha256": "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f",
+      "version": "1.31.2"
+    }
+  },
+  "uk_full_bytes": 1871168140,
+  "uk_full_published": true,
+  "world_source": "https://build.protomaps.com/20261121.pmtiles"
+}
