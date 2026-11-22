@@ -14,6 +14,35 @@ import uk_github_releases as uk
 
 
 class GithubUKMapTests(unittest.TestCase):
+    def test_checksum_network_transient_recovers_without_republishing(self):
+        correct = "0123456789abcdef0123456789abcdef"
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = (correct + "  uk.osm.pbf").encode("ascii")
+        with mock.patch.object(uk, "urlopen", side_effect=[
+                OSError(101, "Network is unreachable"), response]) as opening, \
+             mock.patch.object(uk.time, "sleep") as sleeping:
+            self.assertEqual(uk.get_geofabrik_md5(), correct)
+        self.assertEqual(opening.call_count, 2)
+        sleeping.assert_called_once_with(5)
+
+    def test_checksum_network_persistent_failure_is_visible(self):
+        with mock.patch.object(uk, "urlopen", side_effect=OSError(101, "Network is unreachable")) as opening, \
+             mock.patch.object(uk.time, "sleep") as sleeping:
+            with self.assertRaisesRegex(uk.SyncError, "after 3 attempts"):
+                uk.get_geofabrik_md5()
+        self.assertEqual(opening.call_count, 3)
+        self.assertEqual(sleeping.call_count, 2)
+
+    def test_malformed_checksum_is_not_retried_or_trusted(self):
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"invalid checksum"
+        with mock.patch.object(uk, "urlopen", return_value=response) as opening, \
+             mock.patch.object(uk.time, "sleep") as sleeping:
+            with self.assertRaisesRegex(uk.SyncError, "valid source MD5"):
+                uk.get_geofabrik_md5()
+        opening.assert_called_once()
+        sleeping.assert_not_called()
+
     def test_uk_release_selection_ignores_unrelated_and_drafts(self):
         entries = [
             {"tagName": "uk-map-20261119T040000Z-" + "a" * 12, "isDraft": False, "publishedAt": "2026-11-19T04:00:00Z"},
