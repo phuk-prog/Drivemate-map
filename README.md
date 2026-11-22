@@ -86,8 +86,13 @@ integration or a hosted Valhalla service:
   SHA-256-checked parts smaller than GitHub's per-asset limit, and writes a
   builder/version/provenance manifest.
 - The Build UK Valhalla workflow runs network-free packaging tests on PRs.
-  The expensive full-UK build is **manual initially** to measure RAM, time,
-  routing coverage and asset sizes before putting it on scheduled updates.
+  One **one-time** full-UK bootstrap is requested by merging
+  `requests/uk-valhalla-bootstrap.json` into main; this automatically starts
+  the expensive, bounded workflow rather than needing a manual dispatch. This
+  does **not** put multi-gigabyte graph builds on the daily source schedule.
+  Further full builds remain available through explicit workflow dispatch.
+  The initial attempt can still fail due to runner memory, disk, image or
+  GitHub Release storage limits; success must be checked in Actions.
   Multi-gigabyte graph Releases are published as **drafts** first. The
   `verify_valhalla_release.py` step checks every GitHub asset name, uploaded
   state and byte size against the source-pinned manifest before publication.
