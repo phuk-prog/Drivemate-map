@@ -1,0 +1,8 @@
+{
+  "purpose": "one-time-uk-valhalla-graph-bootstrap",
+  "source_policy": "latest published, checksum-verified immutable Geofabrik UK PBF",
+  "trigger": "merge request into main",
+  "publication": "draft release until all graph assets and sizes verified",
+  "lifecycle": "no recurring expensive build; workflow_dispatch remains available",
+  "requested_on": "2026-11-22"
+}
