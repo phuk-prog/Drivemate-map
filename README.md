@@ -88,6 +88,11 @@ integration or a hosted Valhalla service:
 - The Build UK Valhalla workflow runs network-free packaging tests on PRs.
   The expensive full-UK build is **manual initially** to measure RAM, time,
   routing coverage and asset sizes before putting it on scheduled updates.
+  Multi-gigabyte graph Releases are published as **drafts** first. The
+  `verify_valhalla_release.py` step checks every GitHub asset name, uploaded
+  state and byte size against the source-pinned manifest before publication.
+  Missing or corrupt uploads must remain unpublished and cannot replace a
+  previously available dated snapshot.
 
 Native Valhalla tiles are a different format from both DriveMate SQLite
 routing data and Planetiler PMTiles display data. **No Valhalla tile Release

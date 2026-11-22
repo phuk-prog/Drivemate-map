@@ -8,6 +8,8 @@ on:
       - 'tools/build_valhalla_graph.sh'
       - 'tools/package_valhalla_tiles.py'
       - 'tools/test_package_valhalla_tiles.py'
+      - 'tools/verify_valhalla_release.py'
+      - 'tools/test_verify_valhalla_release.py'
 
 permissions:
   contents: read
@@ -27,7 +29,7 @@ jobs:
       - name: Test reproducible package and source policies
         run: |
           bash -n tools/build_valhalla_graph.sh
-          python3 -m unittest discover -s tools -p 'test_package_valhalla_tiles.py' -v
+          python3 -m unittest discover -s tools -p 'test_*valhalla*.py' -v
 
   build:
     if: github.event_name == 'workflow_dispatch'
@@ -65,8 +67,13 @@ jobs:
           printf "UK Valhalla graph from pinned %s.\n" "$source_tag" > valhalla-package/notes.md
           printf "© OpenStreetMap contributors, ODbL 1.0. NOT ROAD VALIDATED.\n" >> valhalla-package/notes.md
           printf "Requires compatible Android Valhalla Mobile integration and UK route acceptance.\n" >> valhalla-package/notes.md
+          # Keep the Release private to GitHub maintainers until every asset
+          # exists with its expected length. Incomplete uploads remain draft.
           gh release create "$tag" valhalla-package/uk-valhalla-manifest.json \
             valhalla-package/uk-valhalla-tiles.tar.part-* \
             --repo "$GH_REPO" --title "Candidate UK Valhalla routing $tag" \
-            --notes-file valhalla-package/notes.md --prerelease --target "$GITHUB_SHA"
+            --notes-file valhalla-package/notes.md --draft --prerelease --target "$GITHUB_SHA"
+          gh api "repos/$GH_REPO/releases/tags/$tag" | python3 tools/verify_valhalla_release.py \
+            --manifest valhalla-package/uk-valhalla-manifest.json
+          gh release edit "$tag" --repo "$GH_REPO" --draft=false --prerelease
           gh release view "$tag" --repo "$GH_REPO" --json assets -q '.assets[].name'
