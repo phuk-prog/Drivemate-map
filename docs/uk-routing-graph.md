@@ -32,3 +32,10 @@ traffic, legally verified speed limits, HGV restrictions, current closures or
 physical-device acceptance is claimed.
 
 Data © OpenStreetMap contributors, ODbL 1.0.
+
+The build manifest records a `builder_sha256` fingerprint. The three daily
+source checks rebuild routing data if the importer changes even if Geofabrik's
+PBF does not. Dated routing Releases include the builder fingerprint in the
+tag to avoid overwriting the previous build. A previous full UK Release from
+22 November 2026 had a name-normalisation defect; do **not** use a pack without
+the corrected builder fingerprint, as place and street searches cannot work.
