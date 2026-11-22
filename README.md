@@ -4,9 +4,9 @@ OpenStreetMap-derived road data for Drivemate (ODbL 1.0).
 
 This repository holds Drivemate's map **data** separately from the
 rights-reserved application code, so the ODbL licence and its share-alike
-obligation apply cleanly to the data alone. It is private during development
-and is publicly readable. Public derived data must still satisfy ODbL share-alike for any
-publicly used derived database.
+obligation apply cleanly to the data alone. This repository is publicly
+readable; publication does not itself clear all source-data, attribution or
+redistribution obligations for a derived database.
 
 ## Contents
 
