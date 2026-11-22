@@ -12,6 +12,12 @@ import build_uk_roads as uk
 
 
 class UkGraphTests(unittest.TestCase):
+    def test_names_preserved_for_every_uk_place_and_road(self):
+        self.assertEqual(uk.road_name("Birmingham"), "Birmingham")
+        self.assertEqual(uk.road_name("  St John's   Road  "), "St John's Road")
+        self.assertEqual(uk.road_name("A58\nNew Road|Old Road"), "A58 New Road Old Road")
+        self.assertEqual(uk.road_name("M" * 200), "M" * 80)
+
     def test_access_and_implied_oneway(self):
         self.assertIsNone(uk.access({"motorcar":"unknown"}))
         self.assertFalse(uk.access({"access":"private"}))
@@ -43,11 +49,15 @@ class UkGraphTests(unittest.TestCase):
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM restrictions").fetchone()[0],1)
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM blocked_ways").fetchone()[0],1)
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM places").fetchone()[0],1)
+                self.assertEqual(conn.execute("SELECT name FROM places").fetchone()[0],"Testville")
+                names={row[0] for row in conn.execute("SELECT DISTINCT name FROM edges")}
+                self.assertEqual(names,{"First Road","Second Road"})
                 self.assertEqual(conn.execute("SELECT value FROM meta WHERE key='format'").fetchone()[0],uk.FORMAT)
             output=root/"out"
             manifest=uk.publish(db,output,"uk-map-20261122T084645Z-9013a4487fa6",
                                 "0"*64,stats,part_bytes=100)
             self.assertGreater(len(manifest["parts"]),1)
+            self.assertEqual(manifest["builder_sha256"],uk.digest(Path(uk.__file__)))
             parts=b"".join((output/p["name"]).read_bytes() for p in manifest["parts"])
             self.assertEqual(hashlib.sha256(parts).hexdigest(),manifest["gzip_sha256"])
             self.assertEqual(hashlib.sha256(gzip.decompress(parts)).hexdigest(),

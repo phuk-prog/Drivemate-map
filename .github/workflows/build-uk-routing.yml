@@ -8,6 +8,7 @@ on:
       - '.github/workflows/build-uk-routing.yml'
       - 'tools/build_uk_roads.py'
       - 'tools/test_build_uk_roads.py'
+      - 'tools/test_uk_routes_status.py'
       - 'tools/uk_routes_status.py'
 
 concurrency:
@@ -23,7 +24,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m unittest discover -s tools -p 'test_build_uk_roads.py' -v
+      - run: |
+          python3 -m unittest discover -s tools -p 'test_build_uk_roads.py' -v
+          python3 -m unittest discover -s tools -p 'test_uk_routes_status.py' -v
 
   build:
     if: github.event_name != 'pull_request'
@@ -56,16 +59,22 @@ jobs:
         run: |
           set -euo pipefail
           source_tag=$(python3 -c 'import json;print(json.load(open("routing/uk-routing-manifest.json"))["source_tag"])')
-          tag="routes-${source_tag#uk-map-}"
+          builder=$(python3 -c 'import json;print(json.load(open("routing/uk-routing-manifest.json"))["builder_sha256"][:12])')
+          tag="routes-${source_tag#uk-map-}-b${builder}"
           printf 'Offline UK routing data. Source: %s.\n' "$source_tag" > routing/notes.md
           printf '© OpenStreetMap contributors, ODbL 1.0. NOT ROAD VALIDATED.\n' >> routing/notes.md
           files=(routing/uk-routing-manifest.json routing/uk-routing.sqlite.gz.part-*)
           gh release create "$tag" "${files[@]}" --repo "$GH_REPO" --title "UK roads $tag" \
             --notes-file routing/notes.md --prerelease --target "$GITHUB_SHA"
           if gh release view routes-latest --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release delete routes-latest --repo "$GH_REPO" --yes
+            # Never delete the previous working alias before the new verified
+            # release exists; verify hashes from the manifest on every import.
+            gh release upload routes-latest "${files[@]}" --clobber --repo "$GH_REPO"
+            gh release edit routes-latest --repo "$GH_REPO" \
+              --title "UK routing (latest $tag)" --notes-file routing/notes.md
+          else
+            gh release create routes-latest "${files[@]}" --repo "$GH_REPO" \
+              --title "UK routing (latest $tag)" --notes-file routing/notes.md \
+              --prerelease --target "$GITHUB_SHA"
           fi
-          gh release create routes-latest "${files[@]}" --repo "$GH_REPO" \
-            --title "UK routing (latest $tag)" --notes-file routing/notes.md \
-            --prerelease --target "$GITHUB_SHA"
           gh release view routes-latest --repo "$GH_REPO" --json assets -q '.assets[].name'

@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Decide if a complete routing release matches the current published UK PBF."""
+import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+
+
+def current_builder_sha():
+    return hashlib.sha256(Path(__file__).with_name("build_uk_roads.py").read_bytes()).hexdigest()
 
 
 def needs_routes(source_tag, repo, runner=subprocess.run):
@@ -17,7 +22,8 @@ def needs_routes(source_tag, repo, runner=subprocess.run):
                 return True
             manifest=json.loads((Path(tmp)/"uk-routing-manifest.json").read_text())
             if manifest.get("source_tag")!=source_tag or \
-                    manifest.get("format")!="drivemate-uk-routing-v1":
+                    manifest.get("format")!="drivemate-uk-routing-v1" or \
+                    manifest.get("builder_sha256") != current_builder_sha():
                 return True
             listing=runner(["gh","release","view","routes-latest","--repo",repo,
                             "--json","assets"],capture_output=True,text=True,

@@ -90,7 +90,8 @@ def distance(a, b):
 
 
 def road_name(text):
-    return " ".join(c if c.isprintable() and c != "|" else " " for c in (text or ""))[:80].strip()
+    clean = "".join(c if c.isprintable() and c != "|" else " " for c in (text or ""))
+    return " ".join(clean.split())[:80].strip()
 
 
 class Builder:
@@ -277,6 +278,7 @@ def publish(db, folder, tag, source_sha, stats, part_bytes=PART_BYTES):
               "attribution": ATTRIBUTION, "licence": "ODbL-1.0",
               "database_bytes": Path(db).stat().st_size, "database_sha256": digest(db),
               "gzip_bytes": gz.stat().st_size, "gzip_sha256": compressed.hexdigest(),
+              "builder_sha256": digest(Path(__file__)),
               "parts": parts, "counts": stats, "road_validated": False}
     (folder / "uk-routing-manifest.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n")
     gz.unlink()
