@@ -124,6 +124,7 @@ python3 - "$CONFIG" "$WORK" "$OUT" "$uk_bytes" "$PLANETILER_VERSION" "$PLANETILE
 import json, os, sys, platform, subprocess
 sys.path.insert(0, "tools")
 import tile_catalog as tc
+from map_build_fingerprint import fingerprint as builder_fingerprint
 cfg_path, work, out, uk_bytes, plv, pls, pmv, pms = sys.argv[1:]
 cfg = json.load(open(cfg_path))
 timings = {}
@@ -168,10 +169,11 @@ report = {
                                          os.environ.get("GITHUB_REPOSITORY", ""), os.environ.get("GITHUB_RUN_ID", "")),
 }
 # The published release identity links the rendered PMTiles to the UK source.
-# This allows the twice-daily updater to skip true no-change runs and retry
+# This allows the three-times-daily updater to skip true no-change runs and retry
 # an interrupted publication automatically at the following scheduled check.
 source_meta = json.load(open(os.path.join(os.environ.get("CACHE", "cache"), "source-release.json")))
 report["source_release"] = source_meta["source_release"]
+report["builder_fingerprint"] = builder_fingerprint()
 report["source_sha256"] = source_meta["source_sha256"]
 report["source_replication_timestamp"] = source_meta.get("source_replication_timestamp")
 json.dump(report, open(f"{out}/build-report.json", "w"), indent=2, sort_keys=True)
