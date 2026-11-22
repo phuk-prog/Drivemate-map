@@ -98,6 +98,14 @@ integration or a hosted Valhalla service:
   state and byte size against the source-pinned manifest before publication.
   Missing or corrupt uploads must remain unpublished and cannot replace a
   previously available dated snapshot.
+- Before packaging or publication, `tools/probe_valhalla_graph.py` performs
+  **actual native Valhalla car-routing queries** in the same pinned Docker
+  image: Birmingham–Coventry, Bristol–Chepstow, Carlisle–Dumfries,
+  Edinburgh–Livingston and Belfast–Lisburn. Each must return a route, valid
+  summary, encoded geometry and engine-authored manoeuvre instructions.
+  Failed routes fail the publishing job and the engineering QA report is
+  retained as a GitHub Actions artifact. These probes do **not** certify
+  real-world route legality, current closures or physical-device navigation.
 
 Native Valhalla tiles are a different format from both DriveMate SQLite
 routing data and Planetiler PMTiles display data. **No Valhalla tile Release
