@@ -51,9 +51,20 @@ def checksum(path, algorithm="sha256"):
 
 
 def get_geofabrik_md5():
+    """Retry transient checksum endpoint failures, not malformed upstream data."""
     req = Request(MD5_URL, headers={"User-Agent": "DriveMate-map-data/1.0"})
-    with urlopen(req, timeout=60) as response:
-        raw = response.read(256).decode("ascii")
+    for attempt in range(3):
+        try:
+            with urlopen(req, timeout=60) as response:
+                raw = response.read(256).decode("ascii")
+            break
+        except (OSError, TimeoutError) as exc:
+            if attempt == 2:
+                raise SyncError(
+                    f"Geofabrik checksum endpoint unavailable after 3 attempts: {exc}"
+                ) from exc
+            # A short bounded retry also handles temporary runner DNS/routing outages.
+            time.sleep(5 * (attempt + 1))
     found = re.search(r"\b([a-fA-F0-9]{32})\b", raw)
     if not found:
         raise SyncError("Geofabrik did not provide a valid source MD5")

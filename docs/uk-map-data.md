@@ -136,3 +136,5 @@ The separate `.github/workflows/uk-map-sync.yml` is a gated alternative
 using external S3-compatible storage and Geofabrik diffs. It requires
 storage credentials and the repository variable `UK_MAP_SYNC_ENABLED=true`.
 It is **not part of the present GitHub-only solution** and is left disabled.
+
+**Transient network reliability (22 Nov 2026):** If the Geofabrik checksum endpoint temporarily fails (for example a GitHub runner reporting `Network is unreachable`), the source check now retries that endpoint at most three times, with bounded backoff. A persistently unavailable endpoint fails the check visibly; no unchecked map is published and the last successful Release remains untouched. Invalid checksums are rejected without retries. Network-free unit regressions cover all three cases.
