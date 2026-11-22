@@ -77,9 +77,24 @@ jobs:
           source_tag=$(python3 -c 'import json;print(json.load(open("valhalla-package/uk-valhalla-manifest.json"))["source_tag"])')
           builder=$(python3 -c 'import json;print(json.load(open("valhalla-package/uk-valhalla-manifest.json"))["builder_sha256"][:12])')
           suffix=$(echo "$source_tag" | sed 's/^uk-map-//')
-          tag="valhalla-$suffix-b$builder"
-          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            echo "Refusing to overwrite immutable dated release $tag"
+          # A failed draft can retain the original source/builder tag. Give
+          # every attempt an immutable run identity rather than overwriting it.
+          tag="valhalla-$suffix-b$builder-run$GITHUB_RUN_ID"
+          # GitHub's /releases/tags/{tag} endpoint returns 404 for some draft
+          # releases even though /releases/{id} lists them. Resolve by id.
+          release_id_for_tag() {
+            GH_RELEASE_TAG="$tag" gh api "repos/$GH_REPO/releases?per_page=100" |
+              GH_RELEASE_TAG="$tag" python3 -c '
+import json, os, sys
+matches = [x for x in json.load(sys.stdin)
+           if x.get("tag_name") == os.environ["GH_RELEASE_TAG"]]
+if len(matches) > 1:
+    raise SystemExit("Ambiguous duplicate Valhalla releases")
+print(matches[0]["id"] if matches else "")
+'
+          }
+          if [ -n "$(release_id_for_tag)" ]; then
+            echo "Refusing to overwrite immutable Valhalla release $tag"
             exit 1
           fi
           printf "UK Valhalla graph from pinned %s.\n" "$source_tag" > valhalla-package/notes.md
@@ -91,7 +106,18 @@ jobs:
             valhalla-package/uk-valhalla-tiles.tar.part-* \
             --repo "$GH_REPO" --title "Candidate UK Valhalla routing $tag" \
             --notes-file valhalla-package/notes.md --draft --prerelease --target "$GITHUB_SHA"
-          gh api "repos/$GH_REPO/releases/tags/$tag" | python3 tools/verify_valhalla_release.py \
-            --manifest valhalla-package/uk-valhalla-manifest.json
-          gh release edit "$tag" --repo "$GH_REPO" --draft=false --prerelease
-          gh release view "$tag" --repo "$GH_REPO" --json assets -q '.assets[].name'
+          # A draft must be verified through its release ID. The validator
+          # refuses publication unless every multipart asset is uploaded.
+          release_id=""
+          for attempt in 1 2 3 4 5; do
+            release_id="$(release_id_for_tag)"
+            [ -n "$release_id" ] && break
+            sleep 2
+          done
+          test -n "$release_id" || { echo "Draft release ID unavailable"; exit 1; }
+          gh api "repos/$GH_REPO/releases/$release_id" |
+            python3 tools/verify_valhalla_release.py \
+              --manifest valhalla-package/uk-valhalla-manifest.json
+          gh api -X PATCH "repos/$GH_REPO/releases/$release_id" \
+            -F draft=false -F prerelease=true >/dev/null
+          gh api "repos/$GH_REPO/releases/$release_id" --jq '.assets[].name'
