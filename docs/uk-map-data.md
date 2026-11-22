@@ -138,3 +138,5 @@ storage credentials and the repository variable `UK_MAP_SYNC_ENABLED=true`.
 It is **not part of the present GitHub-only solution** and is left disabled.
 
 **Transient network reliability (22 Nov 2026):** If the Geofabrik checksum endpoint temporarily fails (for example a GitHub runner reporting `Network is unreachable`), the source check now retries that endpoint at most three times, with bounded backoff. A persistently unavailable endpoint fails the check visibly; no unchecked map is published and the last successful Release remains untouched. Invalid checksums are rejected without retries. Network-free unit regressions cover all three cases.
+
+**Automatic recovery across GitHub runners:** A separate `workflow_run` automation retries *only* a failed UK `check-source` job on a fresh runner (up to three total run attempts). It never replays PR jobs, failed tests, or tile publication. Persistent failures stay visibly failed; previously published map Releases and the `live` catalog are preserved.
