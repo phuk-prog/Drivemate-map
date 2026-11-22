@@ -1,0 +1,115 @@
+name: Verify released UK-wide offline routing journeys
+
+# Deep verification runs once per newly published UK routing snapshot rather
+# than downloading multi-gigabyte packs on each of the 3 daily source checks.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/verify-uk-routing.yml'
+      - 'tools/verify_uk_graph.py'
+      - 'tools/test_verify_uk_graph.py'
+  workflow_run:
+    workflows: ['Publish UK map data to GitHub Releases']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uk-route-coverage-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test checksum verification, OSM turn refusal and SQLite route semantics
+        run: python3 -m unittest discover -s tools -p 'test_verify_uk_graph.py' -v
+
+  verify:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    needs: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Determine whether the current source + builder needs deep route evidence
+        id: release
+        run: |
+          set -euo pipefail
+          mkdir -p routing
+          gh release download routes-latest --repo "$GH_REPO" \
+            --pattern uk-routing-manifest.json --dir routing
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          manifest=json.loads(Path("routing/uk-routing-manifest.json").read_text())
+          actual=manifest.get("builder_sha256","")
+          expected=hashlib.sha256(Path("tools/build_uk_roads.py").read_bytes()).hexdigest()
+          if actual!=expected:
+              print("No corrected routing Release matching the current importer yet.")
+              with open(os.environ["GITHUB_OUTPUT"],"a") as output:
+                  output.write("needed=false\n")
+              raise SystemExit(0)
+          source=manifest["source_tag"]
+          release="route-probe-"+source.removeprefix("uk-map-")+"-b"+actual[:12]
+          with open(os.environ["GITHUB_OUTPUT"],"a") as output:
+              output.write("tag="+release+"\n")
+              output.write("needed=pending\n")
+          print("Engineering QA Release:",release)
+          PY
+          if grep -q '^needed=false$' "$GITHUB_OUTPUT"; then exit 0; fi
+          tag=$(sed -n 's/^tag=//p' "$GITHUB_OUTPUT")
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Already verified this exact UK data and builder: $tag"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Free disk for compressed parts and complete SQLite graph
+        if: steps.release.outputs.needed == 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+      - name: Download and verify every published UK routing part
+        if: steps.release.outputs.needed == 'true'
+        run: |
+          gh release download routes-latest --repo "$GH_REPO" \
+            --pattern 'uk-routing.sqlite.gz.part-*' --dir routing
+          ls -lh routing/
+      - name: Check actual nationwide road routes and save engineering evidence
+        if: steps.release.outputs.needed == 'true'
+        run: |
+          python3 tools/verify_uk_graph.py \
+            --manifest routing/uk-routing-manifest.json --parts routing \
+            --db cache/uk-routing.sqlite --report routing/uk-routing-evidence.json
+          df -h /
+          cat routing/uk-routing-evidence.json
+      - name: Upload route-check evidence (including failed journey samples)
+        if: always() && steps.release.outputs.needed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-uk-road-route-coverage
+          path: routing/uk-routing-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Record verified engineering route sample, not road approval
+        if: success() && steps.release.outputs.needed == 'true'
+        env:
+          EVIDENCE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          printf 'Offline UK car routing engineering smoke routes across England, Wales, Scotland and Northern Ireland.\n' > routing/notes.md
+          printf 'These checks prove sample connected graph routes, NOT legality, road validation or safety.\n' >> routing/notes.md
+          printf '© OpenStreetMap contributors, ODbL 1.0.\n' >> routing/notes.md
+          gh release create "$EVIDENCE_TAG" routing/uk-routing-evidence.json \
+            --repo "$GH_REPO" --title "UK route QA (not road validated) $EVIDENCE_TAG" \
+            --notes-file routing/notes.md --prerelease --target "$GITHUB_SHA"

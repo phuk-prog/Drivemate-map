@@ -39,3 +39,18 @@ PBF does not. Dated routing Releases include the builder fingerprint in the
 tag to avoid overwriting the previous build. A previous full UK Release from
 22 November 2026 had a name-normalisation defect; do **not** use a pack without
 the corrected builder fingerprint, as place and street searches cannot work.
+
+## Nationwide released-data route acceptance
+
+`.github/workflows/verify-uk-routing.yml` runs network-free unit tests on PRs
+and, after a successful main-branch UK map-source update, checks whether
+`routes-latest` has a new source+importer fingerprint. For a new routing
+snapshot it downloads the entire published route database, validates every
+ordered gzip part and both compressed/decompressed SHA-256 hashes, then loads
+the actual nationwide SQLite graph and runs DriveMate-style bounded A* sample
+journeys in England, Scotland, Wales, Northern Ireland, plus border crossings.
+A passing run publishes a small `route-probe-*` evidence release; repeated
+source checks skip packs with existing evidence. Any disconnected or timed-out
+journey fails visibly and is **not** marked verified. These engineering checks
+are not a UK road-driving safety certification, and the emulator/physical GPS
+acceptance still needs separate work.
