@@ -236,6 +236,7 @@ class Builder:
             CREATE INDEX idx_turn_via_from ON restrictions(via,from_way);
             CREATE INDEX idx_nodes_lat ON nodes(lat,lon);
             CREATE INDEX idx_places_name ON places(name);
+            CREATE INDEX idx_road_name ON edges(name COLLATE NOCASE) WHERE name <> '';
             PRAGMA user_version=1;
         """)
         self.db.executemany("INSERT INTO meta VALUES (?,?)", {
