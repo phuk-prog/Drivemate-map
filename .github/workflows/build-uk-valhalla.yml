@@ -2,6 +2,12 @@ name: Candidate UK Valhalla graph for interchangeable routing
 
 on:
   workflow_dispatch:
+  # One-time full-UK bootstrap is triggered by merging the dedicated request
+  # file; normal daily source checks do not rebuild a multi-GB graph.
+  push:
+    branches: [main]
+    paths:
+      - 'requests/uk-valhalla-bootstrap.json'
   pull_request:
     paths:
       - '.github/workflows/build-uk-valhalla.yml'
@@ -32,7 +38,7 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_*valhalla*.py' -v
 
   build:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: test
     runs-on: ubuntu-24.04
     timeout-minutes: 360
