@@ -16,6 +16,8 @@ on:
       - 'tools/test_package_valhalla_tiles.py'
       - 'tools/verify_valhalla_release.py'
       - 'tools/test_verify_valhalla_release.py'
+      - 'tools/probe_valhalla_graph.py'
+      - 'tools/test_probe_valhalla_graph.py'
 
 permissions:
   contents: read
@@ -57,6 +59,16 @@ jobs:
         run: python3 tools/uk_restore_for_tiles.py --dest cache
       - name: Build native Valhalla UK graph tiles
         run: bash tools/build_valhalla_graph.sh
+      - name: Verify five real UK driving journeys on native Valhalla tiles
+        run: python3 tools/probe_valhalla_graph.py --report valhalla-output/route-probes.json
+      - name: Preserve native UK route QA evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-valhalla-uk-route-probes
+          path: valhalla-output/route-probes.json
+          retention-days: 30
+          if-no-files-found: warn
       - name: Split graph extract into immutable SHA-256 release parts
         run: python3 tools/package_valhalla_tiles.py --tar valhalla-output/tiles.tar --source-metadata cache/source-release.json --output valhalla-package
       - name: Publish immutable experimental Valhalla graph
