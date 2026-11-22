@@ -17,7 +17,8 @@ TILE = "tiles-20261120T2300Z"
 
 class TileUpdateGateTests(unittest.TestCase):
     def fixtures(self):
-        report = {"source_release": SOURCE, "source_sha256": "b" * 64}
+        report = {"source_release": SOURCE, "source_sha256": "b" * 64,
+                  "builder_fingerprint": status.builder_fingerprint()}
         catalog = {"release": TILE, "tilesets": [
             {"file": "england.pmtiles", "bytes": 500},
             {"file": "scotland.pmtiles", "bytes": 200},
@@ -41,6 +42,22 @@ class TileUpdateGateTests(unittest.TestCase):
             current, why = status.is_current("owner/repo", SOURCE)
         self.assertTrue(current, why)
         self.assertEqual(fetched.call_count, 2)
+
+    def test_changed_tile_recipe_or_legacy_report_requests_rebuild(self):
+        report, catalog, _ = self.fixtures()
+        for missing in (False, True):
+            candidate = dict(report)
+            if missing:
+                candidate.pop("builder_fingerprint")
+            else:
+                candidate["builder_fingerprint"] = "0" * 64
+            with self.subTest(missing=missing), \
+                 mock.patch.object(status, "get_live_json", side_effect=[candidate, catalog]), \
+                 mock.patch.object(status, "assets_for") as releases:
+                current, reason = status.is_current("owner/repo", SOURCE)
+            self.assertFalse(current)
+            self.assertIn("recipe", reason)
+            releases.assert_not_called()
 
     def test_new_source_requires_tile_rebuild(self):
         report, catalog, _ = self.fixtures()

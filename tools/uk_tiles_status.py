@@ -16,6 +16,8 @@ import re
 import subprocess
 import sys
 
+from map_build_fingerprint import fingerprint as builder_fingerprint
+
 SOURCE_TAG = re.compile(r"^uk-map-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$")
 TILE_TAG = re.compile(r"^tiles-[0-9]{8}T[0-9]{4}Z$")
 REQUIRED = {"england.pmtiles", "scotland.pmtiles", "wales.pmtiles",
@@ -72,6 +74,8 @@ def is_current(repo, source_tag):
         return False, "Missing live branch catalog/build report"
     if report.get("source_release") != source_tag:
         return False, "Latest published tiles do not match current UK map source"
+    if report.get("builder_fingerprint") != builder_fingerprint():
+        return False, "Tile build recipe changed or published report lacks a recipe fingerprint"
     tag = catalog.get("release", "")
     if not isinstance(tag, str) or not TILE_TAG.fullmatch(tag):
         return False, "Latest tile catalog has no valid dated Release"

@@ -16,6 +16,8 @@ on:
       - '.github/workflows/build-tiles.yml'
       - 'tools/uk_github_releases.py'
       - 'tools/uk_tiles_status.py'
+      - 'tools/map_build_fingerprint.py'
+      - 'tools/test_map_build_fingerprint.py'
       - 'tools/uk_restore_for_tiles.py'
       - 'tools/build_tiles.sh'
       - 'tools/tile_catalog.py'
@@ -92,7 +94,7 @@ jobs:
 
   rebuild-map:
     needs: check-source
-    if: needs.check-source.result == 'success' && (needs.check-source.outputs.needs_tiles == 'true' || github.event_name == 'push')
+    if: needs.check-source.result == 'success' && needs.check-source.outputs.needs_tiles == 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/build-tiles.yml
