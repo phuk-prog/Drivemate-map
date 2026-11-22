@@ -72,3 +72,26 @@ committed file matches a fresh build. NOT FOR DRIVING.
 4. Review the diff before merging.
 
 Attribution: © OpenStreetMap contributors, ODbL 1.0.
+
+## Interchangeable UK routing engine data (candidate)
+
+The Android app can select a configured Valhalla HTTPS routing service or its
+previous imported SQLite graph. A separate, **not yet road-validated** candidate
+pipeline prepares native Valhalla tiles for a future on-device Valhalla Mobile
+integration or a hosted Valhalla service:
+
+- tools/build_valhalla_graph.sh checks the exact whole-UK OSM PBF digest and
+  source release identity then invokes an immutable Valhalla 3.8.3 Docker image.
+- tools/package_valhalla_tiles.py splits the native tiles.tar extract into
+  SHA-256-checked parts smaller than GitHub's per-asset limit, and writes a
+  builder/version/provenance manifest.
+- The Build UK Valhalla workflow runs network-free packaging tests on PRs.
+  The expensive full-UK build is **manual initially** to measure RAM, time,
+  routing coverage and asset sizes before putting it on scheduled updates.
+
+Native Valhalla tiles are a different format from both DriveMate SQLite
+routing data and Planetiler PMTiles display data. **No Valhalla tile Release
+or Android Valhalla Mobile integration is claimed until actually verified.**
+A GitHub Release of data is not a hosted routing service; deploying and
+operating a UK server requires separate infrastructure. © OpenStreetMap
+contributors (ODbL 1.0); Valhalla source MIT.

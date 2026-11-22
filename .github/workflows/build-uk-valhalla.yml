@@ -1,0 +1,72 @@
+name: Candidate UK Valhalla graph for interchangeable routing
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/build-uk-valhalla.yml'
+      - 'tools/build_valhalla_graph.sh'
+      - 'tools/package_valhalla_tiles.py'
+      - 'tools/test_package_valhalla_tiles.py'
+
+permissions:
+  contents: read
+
+# First native UK graph build is explicit, not three expensive builds per day.
+concurrency:
+  group: candidate-uk-valhalla-${{ github.event_name == 'pull_request' && github.head_ref || 'publication' }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Validate candidate UK Valhalla graph packaging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test reproducible package and source policies
+        run: |
+          bash -n tools/build_valhalla_graph.sh
+          python3 -m unittest discover -s tools -p 'test_package_valhalla_tiles.py' -v
+
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free room for UK source and native Valhalla graph
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+      - name: Restore and verify immutable UK Geofabrik source
+        run: python3 tools/uk_restore_for_tiles.py --dest cache
+      - name: Build native Valhalla UK graph tiles
+        run: bash tools/build_valhalla_graph.sh
+      - name: Split graph extract into immutable SHA-256 release parts
+        run: python3 tools/package_valhalla_tiles.py --tar valhalla-output/tiles.tar --source-metadata cache/source-release.json --output valhalla-package
+      - name: Publish immutable experimental Valhalla graph
+        run: |
+          set -euo pipefail
+          source_tag=$(python3 -c 'import json;print(json.load(open("valhalla-package/uk-valhalla-manifest.json"))["source_tag"])')
+          builder=$(python3 -c 'import json;print(json.load(open("valhalla-package/uk-valhalla-manifest.json"))["builder_sha256"][:12])')
+          suffix=$(echo "$source_tag" | sed 's/^uk-map-//')
+          tag="valhalla-$suffix-b$builder"
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "Refusing to overwrite immutable dated release $tag"
+            exit 1
+          fi
+          printf "UK Valhalla graph from pinned %s.\n" "$source_tag" > valhalla-package/notes.md
+          printf "© OpenStreetMap contributors, ODbL 1.0. NOT ROAD VALIDATED.\n" >> valhalla-package/notes.md
+          printf "Requires compatible Android Valhalla Mobile integration and UK route acceptance.\n" >> valhalla-package/notes.md
+          gh release create "$tag" valhalla-package/uk-valhalla-manifest.json \
+            valhalla-package/uk-valhalla-tiles.tar.part-* \
+            --repo "$GH_REPO" --title "Candidate UK Valhalla routing $tag" \
+            --notes-file valhalla-package/notes.md --prerelease --target "$GITHUB_SHA"
+          gh release view "$tag" --repo "$GH_REPO" --json assets -q '.assets[].name'
