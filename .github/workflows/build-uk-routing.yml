@@ -1,0 +1,71 @@
+name: Build UK offline road routing pack
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/build-uk-routing.yml'
+      - 'tools/build_uk_roads.py'
+      - 'tools/test_build_uk_roads.py'
+      - 'tools/uk_routes_status.py'
+
+concurrency:
+  group: uk-roads-${{ github.event_name == 'pull_request' && github.head_ref || 'publication' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tools -p 'test_build_uk_roads.py' -v
+
+  build:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk for source, database and gzip data
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+      - name: Install OSM streaming reader
+        run: python3 -m pip install --quiet osmium
+      - name: Restore verified complete UK PBF from GitHub Releases
+        run: python3 tools/uk_restore_for_tiles.py --dest cache
+      - name: Derive the exact-node, directed UK road network
+        run: |
+          tag=$(python3 -c 'import json;print(json.load(open("cache/source-release.json"))["source_release"])')
+          sha=$(python3 -c 'import json;print(json.load(open("cache/source-release.json"))["source_sha256"])')
+          python3 tools/build_uk_roads.py --source cache/united-kingdom.osm.pbf \
+            --source-tag "$tag" --source-sha256 "$sha" --out routing
+          df -h /
+      - name: Publish immutable dated and latest routing packs
+        run: |
+          set -euo pipefail
+          source_tag=$(python3 -c 'import json;print(json.load(open("routing/uk-routing-manifest.json"))["source_tag"])')
+          tag="routes-${source_tag#uk-map-}"
+          printf 'Offline UK routing data. Source: %s.\n' "$source_tag" > routing/notes.md
+          printf '© OpenStreetMap contributors, ODbL 1.0. NOT ROAD VALIDATED.\n' >> routing/notes.md
+          files=(routing/uk-routing-manifest.json routing/uk-routing.sqlite.gz.part-*)
+          gh release create "$tag" "${files[@]}" --repo "$GH_REPO" --title "UK roads $tag" \
+            --notes-file routing/notes.md --prerelease --target "$GITHUB_SHA"
+          if gh release view routes-latest --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release delete routes-latest --repo "$GH_REPO" --yes
+          fi
+          gh release create routes-latest "${files[@]}" --repo "$GH_REPO" \
+            --title "UK routing (latest $tag)" --notes-file routing/notes.md \
+            --prerelease --target "$GITHUB_SHA"
+          gh release view routes-latest --repo "$GH_REPO" --json assets -q '.assets[].name'

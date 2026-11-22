@@ -1,0 +1,70 @@
+"""Network-free nationwide road-graph builder regression checks."""
+import gzip
+import hashlib
+from pathlib import Path
+import sqlite3
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_uk_roads as uk
+
+
+class UkGraphTests(unittest.TestCase):
+    def test_access_and_implied_oneway(self):
+        self.assertIsNone(uk.access({"motorcar":"unknown"}))
+        self.assertFalse(uk.access({"access":"private"}))
+        self.assertTrue(uk.access({"access":"private","motorcar":"yes"}))
+        self.assertEqual(uk.direction({"highway":"motorway_link"}), "F")
+        self.assertIsNone(uk.direction({"oneway":"alternating"}))
+
+    def test_exact_osm_ids_directions_restrictions_and_release_parts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            db=root/"graph.sqlite"
+            b=uk.Builder(db)
+            p1=(10, 52.00,-1.00)
+            p2=(11, 52.001,-1.00)
+            p3=(12, 52.002,-1.00)
+            p4=(13, 52.001,-0.999)
+            b.node(11,p2[1],p2[2],{"place":"town","name":"Testville"})
+            b.way(100,{"highway":"residential","name":"First Road"},[p1,p2,p3])
+            b.way(101,{"highway":"primary","oneway":"yes","name":"Second Road"},[p2,p4])
+            b.way(102,{"highway":"service","access":"private"},[p2,p4])
+            b.way(103,{"highway":"residential","motorcar:conditional":"no @ (Mo-Fr 10:00-12:00)"},[p1,p4])
+            b.turn({"type":"restriction","restriction":"no_right_turn"},
+                   [("from","w",100),("via","n",11),("to","w",101)])
+            b.turn({"type":"restriction","restriction":"unexpected_kind"},
+                   [("from","w",101),("via","n",13),("to","w",100)])
+            stats=b.finish("uk-map-20261122T084645Z-9013a4487fa6","0"*64,min_edges=1)
+            self.assertEqual(stats["edges"],5)
+            with sqlite3.connect(db) as conn:
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM restrictions").fetchone()[0],1)
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM blocked_ways").fetchone()[0],1)
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM places").fetchone()[0],1)
+                self.assertEqual(conn.execute("SELECT value FROM meta WHERE key='format'").fetchone()[0],uk.FORMAT)
+            output=root/"out"
+            manifest=uk.publish(db,output,"uk-map-20261122T084645Z-9013a4487fa6",
+                                "0"*64,stats,part_bytes=100)
+            self.assertGreater(len(manifest["parts"]),1)
+            parts=b"".join((output/p["name"]).read_bytes() for p in manifest["parts"])
+            self.assertEqual(hashlib.sha256(parts).hexdigest(),manifest["gzip_sha256"])
+            self.assertEqual(hashlib.sha256(gzip.decompress(parts)).hexdigest(),
+                             manifest["database_sha256"])
+            self.assertFalse((output/"uk-routing.sqlite.gz").exists())
+
+    def test_unknown_road_access_refuses_routing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=uk.Builder(Path(tmp)/"graph.db")
+            refs=[(1,53,-2),(2,53.001,-2)]
+            b.way(1,{"highway":"residential","oneway":"reversible"},refs)
+            b.way(2,{"highway":"residential","motorcar":"restricted"},refs)
+            self.assertEqual(b.next_edge,0)
+            with self.assertRaises(ValueError):
+                b.finish("test","0"*64)
+            b.db.close()
+
+
+if __name__=="__main__":
+    unittest.main()

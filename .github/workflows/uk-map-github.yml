@@ -16,6 +16,9 @@ on:
       - '.github/workflows/build-tiles.yml'
       - 'tools/uk_github_releases.py'
       - 'tools/uk_tiles_status.py'
+      - 'tools/build_uk_roads.py'
+      - 'tools/uk_routes_status.py'
+      - '.github/workflows/build-uk-routing.yml'
       - 'tools/map_build_fingerprint.py'
       - 'tools/test_map_build_fingerprint.py'
       - 'tools/uk_restore_for_tiles.py'
@@ -63,6 +66,7 @@ jobs:
       source_tag: ${{ steps.source.outputs.source_tag }}
       source_changed: ${{ steps.source.outputs.source_changed }}
       needs_tiles: ${{ steps.freshness.outputs.needs_tiles }}
+      needs_routes: ${{ steps.routes.outputs.needs_routes }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -80,11 +84,17 @@ jobs:
         env:
           SOURCE_TAG: ${{ steps.source.outputs.source_tag }}
         run: python3 tools/uk_tiles_status.py --source-tag "$SOURCE_TAG"
+      - name: Check whether UK routable graph matches current source
+        id: routes
+        env:
+          SOURCE_TAG: ${{ steps.source.outputs.source_tag }}
+        run: python3 tools/uk_routes_status.py
       - name: Record automatic map update decision
         env:
           SOURCE_TAG: ${{ steps.source.outputs.source_tag }}
           SOURCE_CHANGED: ${{ steps.source.outputs.source_changed }}
           NEEDS_TILES: ${{ steps.freshness.outputs.needs_tiles }}
+          NEEDS_ROUTES: ${{ steps.routes.outputs.needs_routes }}
         run: |
           {
             echo "### UK-wide OpenStreetMap update check"
@@ -92,6 +102,7 @@ jobs:
             echo "- Source release: \`$SOURCE_TAG\`"
             echo "- New UK source data: \`$SOURCE_CHANGED\`"
             echo "- Tiles need rebuilding: \`$NEEDS_TILES\`"
+            echo "- Routing graph needs rebuilding: \`$NEEDS_ROUTES\`"
             echo "- Next step: automatic tile build if new/stale, or source-code change."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -101,4 +112,12 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/build-tiles.yml
+    secrets: inherit
+
+  rebuild-routes:
+    needs: check-source
+    if: needs.check-source.result == 'success' && needs.check-source.outputs.needs_routes == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-uk-routing.yml
     secrets: inherit
