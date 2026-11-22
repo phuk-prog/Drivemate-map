@@ -5,7 +5,7 @@ OpenStreetMap-derived road data for Drivemate (ODbL 1.0).
 This repository holds Drivemate's map **data** separately from the
 rights-reserved application code, so the ODbL licence and its share-alike
 obligation apply cleanly to the data alone. It is private during development
-and can be made public at release to satisfy ODbL share-alike for any
+and is publicly readable. Public derived data must still satisfy ODbL share-alike for any
 publicly used derived database.
 
 ## Contents
@@ -23,8 +23,8 @@ publicly used derived database.
 
 The [UK-wide map-data pipeline](docs/uk-map-data.md) downloads the full
 Geofabrik/OpenStreetMap UK PBF covering England, Scotland, Wales and Northern
-Ireland. GitHub Actions automatically checks Geofabrik **twice each day**
-(03:43 and 15:43 UTC), storing validated changed snapshots as **GitHub Release
+Ireland. GitHub Actions automatically checks Geofabrik **three times each day**
+(03:43, 11:43 and 19:43 UTC), storing validated changed snapshots as **GitHub Release
 assets** (split into files smaller than 2 GiB).
 Git history remains small. A manifest records the part checksums, whole-map
 SHA-256, source timestamp, licence and provenance. Only complete, verified

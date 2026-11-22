@@ -11,7 +11,7 @@ It excludes the Isle of Man and Channel Islands. Copyright:
 © OpenStreetMap contributors, ODbL 1.0 — https://www.openstreetmap.org/copyright.
 
 **Workflow:** `.github/workflows/uk-map-github.yml` checks the published
-Geofabrik UK map checksum automatically **twice daily at 03:43 and 15:43 UTC**
+Geofabrik UK map checksum automatically **three times daily at 03:43, 11:43 and 19:43 UTC**
 (GitHub schedules use UTC; executions can be delayed). It also runs when map
 pipeline code changes on main, or via manual dispatch. Every check runs the
 source unit tests in GitHub Actions. On an actual source change it downloads,
@@ -30,7 +30,7 @@ and `live` branch update. A code change on main also forces a regeneration.
 No personal access token, separate cloud storage, manual promotion or external
 scheduler is required for the routine GitHub-only process.
 
-**Storage:** GitHub Releases in this private map-data repository, not Git
+**Storage:** GitHub Releases in this public map-data repository, not Git
 history, Git LFS or expiring GitHub Actions artifacts. A full UK file is
 around 2.1 GB. GitHub limits *each* release asset to under 2 GiB; therefore
 the workflow splits the complete byte-identical PBF into parts of at most
@@ -91,7 +91,7 @@ From a working copy of this private repository with `gh` authenticated:
 The workflow preserves all UK source release snapshots until they are
 explicitly deleted. **Storage growth** is approximately 2.3 GB for each
 changed daily full UK PBF (roughly 69 GB in 30 days, before map-tile assets).
-Two *checks* per day do not double that storage if Geofabrik has not changed
+Three *checks* per day do not multiply that storage if Geofabrik has not changed
 its published snapshot. Configure
 retention or migration once the trial establishes reliable daily publication;
 avoid allowing an unbounded archive. Large downloads and GitHub Releases
@@ -107,10 +107,10 @@ for long-term efficiency if/when storage outside GitHub is acceptable.
 
 ## Remaining validation before production use
 
-- Verify at least one real 2.1 GB UK PBF downloads and publishes successfully.
-- Download and reconstruct one published release; check the whole-file SHA-256.
+- Full UK PBF release publication succeeded on 21 November 2026; independently reconstruct and re-hash it before production use.
+- Download and reconstruct a published release; independently check the whole-file SHA-256.
 - Confirm a subsequent run detects the unchanged-source case correctly.
-- Inspect both scheduled GitHub Action checks, PBF freshness, new/unchanged
+- Inspect all three scheduled GitHub Action checks, PBF freshness, new/unchanged
   decisions, successful rebuilds and actual storage growth.
 - Verify a no-change run skips the expensive tile rebuild, and a failure
   is retried from the last good UK source on the following check.
