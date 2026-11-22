@@ -1,13 +1,14 @@
 {
+  "builder_fingerprint": "a584ab40feb12d93ca0bda0814f86eea3892b0dfb1be6a32830ee82111feeec0",
   "bytes": {
     "england": 1357109817,
     "northern-ireland": 76117231,
     "scotland": 316050025,
     "united-kingdom": 1871405796,
     "wales": 148674512,
-    "world": 45126582
+    "world": 45133663
   },
-  "run_url": "https://github.com/phuk-prog/Drivemate-map/actions/runs/45003932621",
+  "run_url": "https://github.com/phuk-prog/Drivemate-map/actions/runs/45004187586",
   "runner": {
     "cpus": 4,
     "mem_total_mib": 15983,
@@ -24,27 +25,27 @@
   "source_sha256": "9013a4487fa6eb1ebd291ca75e36c2928b7d9457c1f10087ae84d750c85907ac",
   "timings": {
     "extract-england": {
-      "peak_rss_mib": 1136.6,
+      "peak_rss_mib": 1357.8,
       "seconds": 1
     },
     "extract-northern-ireland": {
-      "peak_rss_mib": 118.0,
+      "peak_rss_mib": 118.3,
       "seconds": 0
     },
     "extract-scotland": {
-      "peak_rss_mib": 364.3,
+      "peak_rss_mib": 366.7,
       "seconds": 0
     },
     "extract-wales": {
-      "peak_rss_mib": 154.5,
-      "seconds": 1
+      "peak_rss_mib": 153.3,
+      "seconds": 0
     },
     "planetiler": {
-      "peak_rss_mib": 7370.5,
-      "seconds": 355
+      "peak_rss_mib": 7540.6,
+      "seconds": 475
     },
     "world": {
-      "peak_rss_mib": 48.7,
+      "peak_rss_mib": 49.7,
       "seconds": 1
     }
   },
@@ -60,5 +61,5 @@
   },
   "uk_full_bytes": 1871405796,
   "uk_full_published": true,
-  "world_source": "https://build.protomaps.com/20261121.pmtiles"
+  "world_source": "https://build.protomaps.com/20261122.pmtiles"
 }
