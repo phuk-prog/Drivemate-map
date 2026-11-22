@@ -37,6 +37,18 @@ class ValhallaDraftPublicationTest(unittest.TestCase):
                        for name, size in sizes.items()]
         }
 
+    def test_pipeline_resolves_drafts_by_id_before_publication(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/build-uk-valhalla.yml").read_text()
+        request = json.loads((root / "requests/uk-valhalla-bootstrap.json").read_text())
+        self.assertIn('release_id_for_tag()', workflow)
+        self.assertIn('releases/$release_id', workflow)
+        self.assertIn('gh api -X PATCH', workflow)
+        self.assertIn('--manifest valhalla-package/uk-valhalla-manifest.json', workflow)
+        self.assertIn('run$GITHUB_RUN_ID', workflow)
+        self.assertNotIn('releases/tags/$tag', workflow)
+        self.assertEqual(request["retry"], 2)
+
     def test_completed_draft_can_be_promoted(self):
         self.assertEqual(3, verify_release(self.path, self.release))
 

@@ -4,5 +4,7 @@
   "trigger": "merge request into main",
   "publication": "draft release until all graph assets and sizes verified",
   "lifecycle": "no recurring expensive build; workflow_dispatch remains available",
-  "requested_on": "2026-11-22"
+  "requested_on": "2026-11-22",
+  "retry": 2,
+  "retry_reason": "Graph built successfully, but GitHub draft /releases/tags lookup returned 404; retry release verification via numeric release ID with five real UK Valhalla route QA probes"
 }
