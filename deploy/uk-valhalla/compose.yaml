@@ -1,0 +1,19 @@
+services:
+  uk-valhalla:
+    image: ghcr.io/valhalla/valhalla:3.8.3@sha256:f648b73740c36006ba5719dfc5ff30ceda1bf5152f4d7d90c214d7e4155374e4
+    command: ["valhalla_service", "/data/valhalla.json", "2"]
+    restart: unless-stopped
+    read_only: true
+    volumes:
+      - ./data/current:/data:ro
+    # Never expose unprotected raw routing API directly on the internet.
+    # Put an HTTPS gateway with TLS, authentication/rate-limiting and metrics
+    # in front of this loopback-only HTTP listener before configuring Android.
+    ports:
+      - "127.0.0.1:8002:8002"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 6g

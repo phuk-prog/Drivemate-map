@@ -18,6 +18,11 @@ on:
       - 'tools/test_verify_valhalla_release.py'
       - 'tools/probe_valhalla_graph.py'
       - 'tools/test_probe_valhalla_graph.py'
+      - 'tools/restore_uk_valhalla.py'
+      - 'tools/test_restore_uk_valhalla.py'
+      - 'tools/smoke_valhalla_http.py'
+      - 'tools/test_smoke_valhalla_http.py'
+      - 'deploy/uk-valhalla/**'
 
 permissions:
   contents: read
