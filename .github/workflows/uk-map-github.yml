@@ -1,12 +1,13 @@
 name: Publish UK map data to GitHub Releases
 
 # All UK map source checks, tests and map-tile publishing stay in GitHub.
-# Two UTC checks per day. The country is rebuilt only if source changed,
+# Three UTC checks per day. The country is rebuilt only if source changed,
 # last tile publication is stale/incomplete, or map builder code was changed.
 on:
   schedule:
     - cron: '43 03 * * *'
-    - cron: '43 15 * * *'
+    - cron: '43 11 * * *'
+    - cron: '43 19 * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -27,6 +28,7 @@ on:
       - 'tools/uk_tiles_status.py'
       - 'tools/test_uk_github_releases.py'
       - 'tools/test_uk_tiles_status.py'
+      - 'tools/test_uk_schedule.py'
 
 permissions:
   contents: read
