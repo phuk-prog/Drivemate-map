@@ -55,6 +55,20 @@ class ValhallaPackageTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"Missing"):
             package(self.tar,self.source,self.root/"out")
 
+    def test_one_time_bootstrap_requires_a_merged_request_on_main(self):
+        workflow=(ROOT/".github/workflows/build-uk-valhalla.yml").read_text()
+        request=json.loads((ROOT/"requests/uk-valhalla-bootstrap.json").read_text())
+        self.assertIn("push:", workflow)
+        self.assertIn("branches: [main]", workflow)
+        self.assertIn("'requests/uk-valhalla-bootstrap.json'", workflow)
+        self.assertIn("github.event_name == 'push'", workflow)
+        self.assertIn("github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("needs: test", workflow)
+        self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("--draft --prerelease", workflow)
+        self.assertIn("verify_valhalla_release.py", workflow)
+        self.assertEqual(request["purpose"], "one-time-uk-valhalla-graph-bootstrap")
+
     def test_part_limit_refused_and_script_syntax(self):
         with self.assertRaisesRegex(ValueError,"Invalid"):
             package(self.tar,self.source,self.root/"out",part_bytes=850_000_001)
