@@ -22,6 +22,8 @@ jobs:
       CANDIDATE: ${{ inputs.candidate_run || '45458730102' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Directed endpoint regression tests
+        run: python3 -m unittest discover -s tools -p test_dmtiles_benchmark.py
       - name: Require successful immutable national candidate
         run: |
           set -euo pipefail

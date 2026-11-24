@@ -21,7 +21,7 @@ class Archive:
         self.doc=json.loads(Path(manifest).read_text());self.tiles=self.doc["tiles"]
         self.file=Path(archive).open("rb");self.path=Path(archive)
         if self.doc["archive"]["bytes"]!=self.path.stat().st_size or self.doc["archive"]["sha256"]!=sha_file(self.path):raise ValueError("Archive integrity failure")
-        self.cache=OrderedDict();self.allowed=None;self.touched=set();self.read_bytes=0
+        self.cache=OrderedDict();self.allowed=None;self.touched=set();self.read_bytes=0;self.cache_nodes=0
     def load(self,k):
         if self.allowed is not None and k not in self.allowed:raise MissingCoverage(k)
         if k in self.cache:self.cache.move_to_end(k);return self.cache[k]
@@ -29,24 +29,38 @@ class Archive:
         if len(raw)!=m["bytes"] or digest(raw)!=m["sha256"]:raise ValueError("Corrupt tile "+k)
         self.touched.add(k);self.read_bytes+=len(raw)
         n={n[0]:n for n in json.loads(gzip.decompress(raw))["nodes"]}
-        self.cache[k]=n
-        if len(self.cache)>24:self.cache.popitem(last=False)
+        self.cache[k]=n;self.cache_nodes+=len(n)
+        while len(self.cache)>1 and (len(self.cache)>128 or self.cache_nodes>1200000):
+            _,old=self.cache.popitem(last=False);self.cache_nodes-=len(old)
         return n
-    def near(self,p):
+    def clear(self):
+        self.cache.clear();self.cache_nodes=0
+    def near(self,p,origin):
         lat,lon=map(int,key(*p).split("_"));best=None;dist=350
         if key(*p) not in self.tiles or self.allowed is not None and key(*p) not in self.allowed:return None
+        nearby={}
         for y in range(lat-1,lat+2):
             for x in range(lon-1,lon+2):
                 k=f"{y}_{x}"
                 if k not in self.tiles or self.allowed is not None and k not in self.allowed:continue
-                for n in self.load(k).values():
-                    d=metres(p,(n[1]/1e6,n[2]/1e6))
-                    if d<dist:best=(k,n);dist=d
+                nearby[k]=self.load(k)
+        incoming=set()
+        if not origin:
+            for nodes in nearby.values():
+                for n in nodes.values():
+                    for e in n[3]:
+                        if e[2] in nearby:incoming.add(e[1])
+        for k,nodes in nearby.items():
+            for n in nodes.values():
+                if origin and not any(self.allowed is None or e[2] in self.allowed for e in n[3]):continue
+                if not origin and n[0] not in incoming:continue
+                d=metres(p,(n[1]/1e6,n[2]/1e6))
+                if d<dist:best=(k,n);dist=d
         return best
     def route(self,start,finish,max_expansions,max_seconds):
         began=time.monotonic();self.touched=set();self.read_bytes=0
-        a=self.near(start);b=self.near(finish)
-        if not a or not b:return {"ok":False,"reason":"No nearby covered road"}
+        a=self.near(start,True);b=self.near(finish,False)
+        if not a or not b:return {"ok":False,"reason":"No nearby eligible directed road node"}
         ak,an=a;bk,bn=b
         # No path is ever created across a missing tile; offline search is limited
         # to verified selected cells. Turn rules are the existing importer policy.
@@ -68,7 +82,7 @@ class Archive:
             _,g,eid,k,nid,prev,way,dist=heapq.heappop(q)
             if g>best.get(eid,math.inf)+1e-7:continue
             n=self.load(k)[nid]
-            if nid==bn[0]:
+            if nid==bn[0] and eid!=0:
                 path=[];current=eid
                 while current:
                     path.append(points[current]);current=parent[current]
@@ -112,13 +126,13 @@ def main():
     p=argparse.ArgumentParser();p.add_argument("--manifest",required=True);p.add_argument("--archive",required=True);p.add_argument("--report",required=True);p.add_argument("--expansions",type=int,default=350000);p.add_argument("--seconds",type=int,default=90);a=p.parse_args()
     ar=Archive(a.manifest,a.archive);results=[];diversion=None
     for name,start,end in SAMPLES:
-        ar.allowed=None;ar.cache.clear();r=ar.route(start,end,a.expansions,a.seconds)
+        ar.allowed=None;ar.clear();r=ar.route(start,end,a.expansions,a.seconds)
         path=r.pop("path",None)
         if name=="Sheffield to London" and path:
             selected,used,complete=coverage(ar.tiles,path,48300,500_000_000)
             # actual minimum distance from deviation to original sampled vertices.
             offset=min(metres(DIVERSION,(lat,lon)) for _,lat,lon in path)
-            ar.allowed=selected;ar.cache.clear()
+            ar.allowed=selected;ar.clear()
             diversion=ar.route(DIVERSION,end,a.expansions,a.seconds);diversion.pop("path",None)
             diversion.update({"distance_from_original_vertex_km":round(offset/1000,2),"cached_cells":len(selected),"cache_bytes":used,"requested_radius_fits_catalog_budget":complete,"no_network":True})
         r["name"]=name;results.append(r);print(json.dumps(r),flush=True)
