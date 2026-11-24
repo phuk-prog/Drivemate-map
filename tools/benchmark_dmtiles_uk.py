@@ -53,6 +53,17 @@ class Archive:
         q=[(0.0,0.0,0,ak,an[0],0,0,0.0)]
         best={0:0.0};parent={};points={0:(ak,an[1]/1e6,an[2]/1e6)};expanded=0
         goal=(bn[1]/1e6,bn[2]/1e6);global_rules=self.doc["global_rules"]
+        reverse={}
+        if all("crossing_ms" in t for t in self.tiles.values()):
+            for k,t in self.tiles.items():
+                for dest,ms in t["crossing_ms"].items():reverse.setdefault(dest,[]).append((k,ms))
+        lower={bk:0};coarse=[(0,bk)]
+        while coarse:
+            cost,k=heapq.heappop(coarse)
+            if cost!=lower[k]:continue
+            for src,ms in reverse.get(k,[]):
+                v=cost+ms
+                if v<lower.get(src,math.inf):lower[src]=v;heapq.heappush(coarse,(v,src))
         while q and expanded<max_expansions and time.monotonic()-began<max_seconds:
             _,g,eid,k,nid,prev,way,dist=heapq.heappop(q)
             if g>best.get(eid,math.inf)+1e-7:continue
@@ -72,7 +83,7 @@ class Archive:
                 if cost+1e-7>=best.get(edge,math.inf):continue
                 t=self.load(dest).get(to)
                 if t is None:raise ValueError("Broken edge")
-                h=metres((t[1]/1e6,t[2]/1e6),goal)*3.6/160
+                h=max(metres((t[1]/1e6,t[2]/1e6),goal)*3.6/160,lower.get(dest,0)/1000)
                 best[edge]=cost;parent[edge]=eid;points[edge]=(dest,t[1]/1e6,t[2]/1e6)
                 heapq.heappush(q,(cost+h,cost,edge,dest,to,nid,newway,dist+mm/1000))
             if len(best)>max_expansions*3:break

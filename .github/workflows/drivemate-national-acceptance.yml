@@ -1,5 +1,8 @@
 name: UK original tiled routing acceptance
 on:
+  push:
+    branches: ['feat/drivemate-native-stack-20261124']
+    paths: ['.github/workflows/drivemate-national-acceptance.yml','tools/benchmark_dmtiles_uk.py']
   workflow_dispatch:
     inputs:
       candidate_run:
@@ -16,7 +19,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      CANDIDATE: ${{ inputs.candidate_run }}
+      CANDIDATE: ${{ inputs.candidate_run || '45458730102' }}
     steps:
       - uses: actions/checkout@v4
       - name: Require successful immutable national candidate
