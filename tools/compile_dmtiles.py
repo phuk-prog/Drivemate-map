@@ -22,10 +22,20 @@ def compile_tiles(source,out,expected_sha):
     ways={int(w.attrib["id"]):tags(w) for w in root.findall("way")}
     tiles={}
     def tile(k):return tiles.setdefault(k,{"nodes":[],"places":[],"features":[]})
+    def address(tags,lat,lon):
+        street=tags.get("addr:street") or tags.get("addr:place") or ""
+        number=tags.get("addr:housenumber","")
+        postcode=tags.get("addr:postcode","").strip()
+        label=" ".join(x for x in (number,street) if x)
+        if label and postcode:label+=", "+postcode
+        elif not label:label=postcode
+        if label:
+            entry=[label,round(lat*SCALE),round(lon*SCALE),"address" if number and street else "postcode",postcode]
+            tile(key(lat,lon))["places"].append(entry)
     with tempfile.TemporaryDirectory() as td:
         b=Builder(Path(td)/"roads.sqlite")
         for n in root.findall("node"):
-            i=int(n.attrib["id"]);b.node(*nodes[i],tags(n))
+            i=int(n.attrib["id"]);b.node(*nodes[i],tags(n));address(tags(n),nodes[i][1],nodes[i][2])
         for w in root.findall("way"):
             refs=[int(n.attrib["ref"]) for n in w.findall("nd")]
             if all(i in nodes for i in refs):
@@ -35,6 +45,9 @@ def compile_tiles(source,out,expected_sha):
                 if coords:
                     feature=[i,ways[i],coords]
                     for k in {key(nodes[r][1],nodes[r][2]) for r in refs}:tile(k)["features"].append(feature)
+                    if any(k.startswith("addr:") for k in ways[i]):
+                        # Anchor on an actual mapped vertex rather than an invented entrance.
+                        mid=refs[len(refs)//2];address(ways[i],nodes[mid][1],nodes[mid][2])
                     if ways[i].get("name") and ways[i].get("highway"):
                         mid=refs[len(refs)//2];lat,lon=nodes[mid][1:]
                         tile(key(lat,lon))["places"].append([ways[i]["name"],round(lat*SCALE),round(lon*SCALE),"street"])
