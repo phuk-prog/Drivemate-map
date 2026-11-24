@@ -64,7 +64,11 @@ def compile_tiles(source,out,expected_sha):
     for k,t in sorted(tiles.items()):
         blob=gzip.compress(packed(t),compresslevel=9,mtime=0)
         name=k+".dmt.gz";(out/name).write_bytes(blob)
-        catalog[k]={"name":name,"bytes":len(blob),"sha256":digest(blob),"nodes":len(t["nodes"]),"edges":sum(len(n[3]) for n in t["nodes"])}
+        crossing={}
+        for n in t["nodes"]:
+            for e in n[3]:
+                if e[2]!=k:crossing[e[2]]=min(crossing.get(e[2],e[5]),e[5])
+        catalog[k]={"name":name,"bytes":len(blob),"sha256":digest(blob),"nodes":len(t["nodes"]),"edges":sum(len(n[3]) for n in t["nodes"]),"crossing_ms":crossing}
     manifest={"format":FORMAT,"scope":"pilot","source_sha256":expected_sha,"license":"ODbL-1.0","attribution":"© OpenStreetMap contributors","cell_microdegrees":CELL,"global_rules":global_rules,"tiles":catalog,"road_validated":False,"stats":stats}
     data=packed(manifest);(out/"manifest.json").write_bytes(data)
     print(json.dumps({"manifest_sha256":digest(data),"tiles":len(catalog),"compressed_tile_bytes":sum(x["bytes"] for x in catalog.values()),"source_bytes":len(raw),"stats":stats}))
