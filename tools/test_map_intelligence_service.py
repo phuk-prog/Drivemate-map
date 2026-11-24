@@ -17,6 +17,12 @@ class ServiceTest(unittest.TestCase):
         status,item=dispatch(self.store,"/v1/feature?type=w&id=10")
         self.assertEqual(status,200);self.assertEqual(item["tags"]["maxspeed"],"20 mph");self.assertEqual(item["osm_version"],2)
         self.assertEqual(dispatch(self.store,"/v1/feature?type=n&id=10")[0],404)
+    def test_way_batch_exact_ids(self):
+        status,result=dispatch(self.store,"/v1/ways?ids=10,999")
+        self.assertEqual(status,200);self.assertEqual(result["ways"][0]["id"],10)
+        self.assertEqual(result["ways"][0]["tags"]["maxspeed"],"20 mph")
+        self.assertEqual(len(result["ways"]),1)
+        with self.assertRaises(ValueError):self.store.ways([10,10])
     def test_bounded_nearby_and_search(self):
         self.assertTrue(self.store.nearby(53,-2,100,1)["truncated"])
         self.assertEqual(len(self.store.search("Test")["features"]),2)

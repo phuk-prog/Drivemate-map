@@ -54,6 +54,12 @@ class Store:
         if kind not in ("n","w","r") or not 0<oid<2**63:raise ValueError("Invalid OSM identity")
         with self.connect() as c:
             return self.feature(c.execute("SELECT * FROM feature WHERE osm_type=? AND osm_id=?",(kind,oid)).fetchone(),True)
+    def ways(self,ids):
+        if not 1<=len(ids)<=60 or len(set(ids))!=len(ids) or any(not 0<i<2**63 for i in ids):
+            raise ValueError("Invalid bounded way IDs")
+        with self.connect() as c:
+            rows=c.execute("SELECT osm_id,osm_version,tags_json FROM feature WHERE osm_type='w' AND osm_id IN ("+",".join("?" for _ in ids)+")",ids).fetchall()
+        return {"source_sha256":self.metadata()["source_sha256"],"ways":[{"id":r["osm_id"],"version":r["osm_version"],"tags":json.loads(r["tags_json"])} for r in rows]}
     def nearby(self,lat,lon,radius=100,limit=25):
         if not all(map(math.isfinite,(lat,lon,radius))) or not 49<=lat<=61 or not -9<=lon<=3 or not 1<=radius<=1000 or not 1<=limit<=MAX_RESULTS:
             raise ValueError("Invalid UK query bounds")
@@ -87,6 +93,7 @@ def dispatch(store,path):
     if url.path=="/v1/feature":
         item=store.get(one("type"),int(one("id")))
         return (200,item) if item is not None else (404,{"error":"Object not found"})
+    if url.path=="/v1/ways":return 200,store.ways([int(x) for x in one("ids").split(",")])
     if url.path=="/v1/nearby":return 200,store.nearby(float(one("lat")),float(one("lon")),float(one("radius","100")),int(one("limit","25")))
     if url.path=="/v1/search":return 200,store.search(one("q"),int(one("limit","20")))
     return 404,{"error":"Unknown endpoint"}

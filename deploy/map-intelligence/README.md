@@ -1,0 +1,9 @@
+# DriveMate independent services: deployment preparation
+Use a Linux host with approved storage and bandwidth. Restore the verified full UK graph and intelligence database from the SAME immutable Geofabrik source digest. Do not expose raw Valhalla or SQLite services directly.
+1. Run existing deploy/uk-valhalla/install.sh with the matching graph release. Run its Compose service and all five HTTP smoke probes.
+2. Verify the intelligence coverage manifest and database digest; run tools/map_intelligence_service.py on localhost:8010. Run /v1/meta and /v1/ways smoke queries.
+3. Deploy a private HTTPS gateway with access control, rate limits, request size limits and no location logging. Route /route and /trace_attributes to localhost:8002, /v1/* to localhost:8010. Serve /v1/graph-source as JSON {"source_sha256":"<verified actual graph source digest>"} from installed graph manifest; fail gateway startup if it differs from index source. Never advertise an unverified digest.
+4. Configure a trusted Photon service (separate index/import and endpoint); do not use public demo infrastructure as a production backend.
+5. Run Android end-to-end tests including independent route, GPS loss, mismatched data digest, no TomTom key, and route comparison.
+Regional attribute packs may be generated with tools/pack_regional_intelligence.py. They do not include complete relation geometry or native offline route graphs; cannot be used to infer access, restrictions or safe navigation.
+TomTom live tiles remain separate. Integrating commercial traffic speeds into Valhalla requires licensed feed, edge mapping, expiry, closure and false-positive checks. No paid hosting provisioned or traffic feed copied. No change submission endpoint: independent user survey notes must remain private until approved for OSM or compatible source submission.
