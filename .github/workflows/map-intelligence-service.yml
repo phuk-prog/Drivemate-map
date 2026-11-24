@@ -18,7 +18,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python3 -m unittest discover -s tools -p 'test_map_intelligence*.py' -v
+      - run: |
+          python3 -m unittest discover -s tools -p 'test_map_intelligence*.py' -v
+          python3 -m unittest discover -s tools -p 'test_independent_gateway.py' -v
       - run: python3 -m pip install --quiet osmium
       - name: Build actual Wells map and smoke-test HTTP
         run: |
