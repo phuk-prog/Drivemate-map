@@ -35,6 +35,9 @@ def compile_tiles(source,out,expected_sha):
                 if coords:
                     feature=[i,ways[i],coords]
                     for k in {key(nodes[r][1],nodes[r][2]) for r in refs}:tile(k)["features"].append(feature)
+                    if ways[i].get("name") and ways[i].get("highway"):
+                        mid=refs[len(refs)//2];lat,lon=nodes[mid][1:]
+                        tile(key(lat,lon))["places"].append([ways[i]["name"],round(lat*SCALE),round(lon*SCALE),"street"])
         for r in root.findall("relation"):
             b.turn(tags(r),[(m.attrib["role"],m.attrib["type"][0],int(m.attrib["ref"])) for m in r.findall("member")])
         stats=b.finish("wells-dmtiles-pilot",expected_sha,min_edges=500)
