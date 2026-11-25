@@ -1,0 +1,51 @@
+name: DriveMate Map V2 shared geometry build
+on:
+  push:
+    branches: ['feat/map-v2-unified-20261125']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install osmium
+      - run: python3 -m unittest discover -s tools -p test_map_v2.py -v
+      - name: Compile real source pilot
+        run: python3 tools/build_map_v2.py --source osm/wells-places-2026-11-19.osm --sha 8cde16000a69096b62f7a75598fb892c2d8eea34b8f2237278a785ddf125ce26 --tag wells-2026-11-19 --out pilot-v2 --min-edges 500
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Map-V2-pilot
+          path: pilot-v2/
+  uk:
+    needs: pilot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          python3 -m pip install osmium
+          df -h /
+      - name: Restore pinned UK source
+        run: python3 tools/uk_restore_for_tiles.py --dest cache --source-tag uk-map-20261125T034434Z-2c31f7d0c5c7 --source-sha256 2c31f7d0c5c7280aee2130f38f7ebabb990626a8f5a208dba3c0279ada6c3164
+      - name: Build unified graph, source geometry and searchable road intelligence
+        run: python3 tools/build_map_v2.py --source cache/united-kingdom.osm.pbf --sha 2c31f7d0c5c7280aee2130f38f7ebabb990626a8f5a208dba3c0279ada6c3164 --tag uk-map-20261125T034434Z-2c31f7d0c5c7 --out national-v2
+      - name: Package immutable candidate (no live promotion)
+        run: |
+          mkdir pack
+          cp national-v2/manifest.json pack/
+          gzip -n -c national-v2/map-v2.sqlite | split -b 850000000 -d -a 3 - pack/map-v2.sqlite.gz.part-
+          (cd pack && sha256sum map-v2.sqlite.gz.part-* > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Map-V2-UK-UNVALIDATED
+          path: pack/
+          compression-level: 0
+          retention-days: 7
