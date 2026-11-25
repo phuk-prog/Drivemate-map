@@ -1,14 +1,14 @@
 {
   "builder_fingerprint": "a584ab40feb12d93ca0bda0814f86eea3892b0dfb1be6a32830ee82111feeec0",
   "bytes": {
-    "england": 1357494673,
-    "northern-ireland": 76161500,
-    "scotland": 316099382,
-    "united-kingdom": 1872035608,
-    "wales": 148827817,
-    "world": 45131953
+    "england": 1357722591,
+    "northern-ireland": 76184698,
+    "scotland": 316106884,
+    "united-kingdom": 1872336554,
+    "wales": 148872052,
+    "world": 45129897
   },
-  "run_url": "https://github.com/phuk-prog/Drivemate-map/actions/runs/45326512571",
+  "run_url": "https://github.com/phuk-prog/Drivemate-map/actions/runs/45538107696",
   "runner": {
     "cpus": 4,
     "mem_total_mib": 15983,
@@ -20,33 +20,33 @@
     "url": "https://shortbread-tiles.org/schema/",
     "version": "1.0 (Planetiler bundled shortbread.yml, Planetiler v0.10.2)"
   },
-  "source_release": "uk-map-20261124T044450Z-4f30f06120b2",
-  "source_replication_timestamp": "2026-11-23T21:21:17+00:00",
-  "source_sha256": "4f30f06120b2c07ab0c2e9ae3d21fec401e80439f4cc4397a34f4fee5ad1c262",
+  "source_release": "uk-map-20261125T034434Z-2c31f7d0c5c7",
+  "source_replication_timestamp": "2026-11-24T21:21:23+00:00",
+  "source_sha256": "2c31f7d0c5c7280aee2130f38f7ebabb990626a8f5a208dba3c0279ada6c3164",
   "timings": {
     "extract-england": {
-      "peak_rss_mib": 1358.6,
-      "seconds": 2
+      "peak_rss_mib": 1139.8,
+      "seconds": 1
     },
     "extract-northern-ireland": {
-      "peak_rss_mib": 119.1,
+      "peak_rss_mib": 118.9,
       "seconds": 1
     },
     "extract-scotland": {
-      "peak_rss_mib": 366.4,
+      "peak_rss_mib": 363.0,
       "seconds": 0
     },
     "extract-wales": {
-      "peak_rss_mib": 156.3,
+      "peak_rss_mib": 150.5,
       "seconds": 0
     },
     "planetiler": {
-      "peak_rss_mib": 7299.2,
-      "seconds": 472
+      "peak_rss_mib": 7618.3,
+      "seconds": 279
     },
     "world": {
-      "peak_rss_mib": 48.7,
-      "seconds": 22
+      "peak_rss_mib": 48.6,
+      "seconds": 1
     }
   },
   "tools": {
@@ -59,7 +59,7 @@
       "version": "1.31.2"
     }
   },
-  "uk_full_bytes": 1872035608,
+  "uk_full_bytes": 1872336554,
   "uk_full_published": true,
-  "world_source": "https://build.protomaps.com/20261123.pmtiles"
+  "world_source": "https://build.protomaps.com/20261124.pmtiles"
 }
