@@ -55,7 +55,7 @@ jobs:
           python3 tools/build_uk_roads.py --source cache/united-kingdom.osm.pbf \
             --source-tag "$tag" --source-sha256 "$sha" --out routing
           df -h /
-      - name: Publish immutable dated and latest routing packs
+      - name: Publish immutable dated and candidate routing packs
         run: |
           set -euo pipefail
           source_tag=$(python3 -c 'import json;print(json.load(open("routing/uk-routing-manifest.json"))["source_tag"])')
@@ -64,17 +64,23 @@ jobs:
           printf 'Offline UK routing data. Source: %s.\n' "$source_tag" > routing/notes.md
           printf '© OpenStreetMap contributors, ODbL 1.0. NOT ROAD VALIDATED.\n' >> routing/notes.md
           files=(routing/uk-routing-manifest.json routing/uk-routing.sqlite.gz.part-*)
-          gh release create "$tag" "${files[@]}" --repo "$GH_REPO" --title "UK roads $tag" \
-            --notes-file routing/notes.md --prerelease --target "$GITHUB_SHA"
-          if gh release view routes-latest --repo "$GH_REPO" >/dev/null 2>&1; then
+          if ! gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release create "$tag" "${files[@]}" --repo "$GH_REPO" --title "UK roads candidate $tag" \
+              --notes-file routing/notes.md --prerelease --target "$GITHUB_SHA"
+          else
+            mkdir -p existing
+            gh release download "$tag" --repo "$GH_REPO" --pattern uk-routing-manifest.json --dir existing
+            cmp existing/uk-routing-manifest.json routing/uk-routing-manifest.json
+          fi
+          if gh release view routes-candidate-latest --repo "$GH_REPO" >/dev/null 2>&1; then
             # Never delete the previous working alias before the new verified
             # release exists; verify hashes from the manifest on every import.
-            gh release upload routes-latest "${files[@]}" --clobber --repo "$GH_REPO"
-            gh release edit routes-latest --repo "$GH_REPO" \
+            gh release upload routes-candidate-latest "${files[@]}" --clobber --repo "$GH_REPO"
+            gh release edit routes-candidate-latest --repo "$GH_REPO" \
               --title "UK routing (latest $tag)" --notes-file routing/notes.md
           else
-            gh release create routes-latest "${files[@]}" --repo "$GH_REPO" \
+            gh release create routes-candidate-latest "${files[@]}" --repo "$GH_REPO" \
               --title "UK routing (latest $tag)" --notes-file routing/notes.md \
               --prerelease --target "$GITHUB_SHA"
           fi
-          gh release view routes-latest --repo "$GH_REPO" --json assets -q '.assets[].name'
+          gh release view routes-candidate-latest --repo "$GH_REPO" --json assets -q '.assets[].name'

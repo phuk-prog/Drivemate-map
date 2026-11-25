@@ -21,6 +21,7 @@ import time
 FORMAT = "drivemate-uk-routing-v1"
 MAX_EXPANSIONS = 350_000
 SNAP_METRES = 350.0
+SEARCH_WEIGHT = 2.2  # bounded approximate travel-time search, not a fastest-route proof
 ATTRIBUTION = "© OpenStreetMap contributors, ODbL 1.0"
 
 # Named real-world points are only representative anchors for coverage checks.
@@ -185,7 +186,7 @@ class OfflineRoads:
     def close(self):
         self.db.close()
 
-    def nearest(self,point):
+    def nearest(self,point, require_departure=False):
         delta=SNAP_METRES/111000.0
         lon_delta=delta/max(0.1,math.cos(math.radians(point[0])))
         answer=None
@@ -196,7 +197,7 @@ class OfflineRoads:
                 "AND NOT EXISTS (SELECT 1 FROM blocked b WHERE b.id=n.id)",
                 (point[0]-delta,point[0]+delta,point[1]-lon_delta,point[1]+lon_delta)):
             d=metres(point,(lat,lon))
-            if d<best:
+            if d<best and (not require_departure or self.outgoing(nid)):
                 answer=(nid,(lat,lon))
                 best=d
         return answer
@@ -234,7 +235,7 @@ class OfflineRoads:
         return (not only or matched) and (next_node!=prev_node or explicit_u)
 
     def route(self,start,end,max_expansions=MAX_EXPANSIONS,max_seconds=160):
-        origin=self.nearest(start)
+        origin=self.nearest(start, require_departure=True)
         target=self.nearest(end)
         if origin is None or target is None:
             return {"ok":False,"reason":"No road node near UK start/end", "expanded":0}
@@ -275,7 +276,7 @@ class OfflineRoads:
                     continue
                 best[eid]=cost
                 parents[eid]=edge_id
-                heuristic=metres((lat,lon),dest_point)*3.6/160
+                heuristic=SEARCH_WEIGHT*metres((lat,lon),dest_point)*3.6/160
                 heapq.heappush(queue,(cost+heuristic,cost,eid,to,node,way,
                                       (lat,lon),travelled_metres+length))
         return {"ok":False,"reason":"Android A* work bound" if expanded>=max_expansions
@@ -294,7 +295,7 @@ def verify(dbpath,manifest,samples=SAMPLES):
     data={"schema":FORMAT,"source_tag":manifest["source_tag"],
           "source_sha256":manifest["source_sha256"],
           "builder_sha256":manifest["builder_sha256"],
-          "attribution":ATTRIBUTION,"road_validated":False,
+          "attribution":ATTRIBUTION,"road_validated":False,"search_weight":SEARCH_WEIGHT,"max_expansions":MAX_EXPANSIONS,
           "counts":{},"named_places":{},"samples":[]}
     roads=OfflineRoads(dbpath)
     failures=[]
