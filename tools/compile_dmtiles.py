@@ -13,9 +13,10 @@ def key(lat,lon):
 def packed(obj):
     return json.dumps(obj,ensure_ascii=False,separators=(",",":"),sort_keys=True).encode()
 def digest(data):return hashlib.sha256(data).hexdigest()
-def compile_tiles(source,out,expected_sha):
+def compile_tiles(source,out,expected_sha,max_source_bytes=30_000_000):
+    if not 0<max_source_bytes<=160_000_000 or Path(source).stat().st_size>max_source_bytes:raise ValueError('Bounded source exceeds limit')
     raw=Path(source).read_bytes()
-    if len(raw)>30_000_000 or digest(raw)!=expected_sha:raise ValueError("Unverified or oversized pilot source")
+    if len(raw)>max_source_bytes or digest(raw)!=expected_sha:raise ValueError("Unverified or oversized pilot source")
     root=ET.fromstring(raw)
     tags=lambda e:{t.attrib["k"]:t.attrib["v"] for t in e.findall("tag")}
     nodes={int(n.attrib["id"]):(int(n.attrib["id"]),float(n.attrib["lat"]),float(n.attrib["lon"])) for n in root.findall("node")}
