@@ -25,18 +25,19 @@ class Unified(Builder):
         CREATE TABLE mapped_point(id INTEGER PRIMARY KEY,lat INTEGER NOT NULL,lon INTEGER NOT NULL,tags TEXT NOT NULL,name TEXT NOT NULL,postcode TEXT NOT NULL);
         CREATE INDEX mapped_point_name ON mapped_point(name COLLATE NOCASE);
         CREATE INDEX mapped_point_postcode ON mapped_point(postcode COLLATE NOCASE);
+        CREATE INDEX mapped_point_position ON mapped_point(lat,lon);
         """)
         self.render_count=0
     def node(self,oid,lat,lon,tags):
         super().node(oid,lat,lon,tags)
-        if any(k in tags for k in ("amenity","shop","tourism","entrance","place","addr:housenumber","addr:postcode","highway","emergency","healthcare")):
+        if any(k in tags for k in ("amenity","shop","tourism","entrance","place","addr:housenumber","addr:postcode","highway","emergency","healthcare","traffic_calming","aeroway","railway","barrier","man_made","public_transport")):
             y,x=coord(lat,lon)
             name=tags.get("name") or " ".join(filter(None,(tags.get("addr:housenumber"),tags.get("addr:street") or tags.get("addr:place"))))
             self.db.execute("INSERT INTO mapped_point VALUES (?,?,?,?,?,?)",(oid,y,x,packed(tags),name,tags.get("addr:postcode","")))
     def way(self,oid,tags,refs):
         # All road classes plus mapped natural/cartographic features; exact source vertices.
         road=bool(tags.get("highway")) or tags.get("route")=="ferry"
-        display=road or any(k in tags for k in ("building","waterway","landuse","leisure","natural","railway","amenity","parking"))
+        display=road or any(k in tags for k in ("building","waterway","landuse","leisure","natural","railway","amenity","parking","aeroway","aerialway","man_made","boundary"))
         if not display or len(refs)<2:return
         cs=[coord(lat,lon) for _,lat,lon in refs];ids=[i for i,_,_ in refs]
         self.db.execute("INSERT INTO render_way VALUES (?,?,?,?)",(oid,packed(tags),packed(ids),packed(cs)))
@@ -86,7 +87,7 @@ def build(source,sha,tag,out,min_edges):
             if tags and n.location.valid():b.node(n.id,n.location.lat,n.location.lon,tags)
         def way(self,w):
             tags=dict(w.tags)
-            if not (tags.get("highway") or tags.get("route")=="ferry" or any(k in tags for k in ("building","waterway","landuse","leisure","natural","railway","amenity","parking"))):return
+            if not (tags.get("highway") or tags.get("route")=="ferry" or any(k in tags for k in ("building","waterway","landuse","leisure","natural","railway","amenity","parking","aeroway","aerialway","man_made","boundary"))):return
             if any(not n.location.valid() for n in w.nodes):
                 b.stats["excluded_missing_render_locations"]+=1;return
             b.way(w.id,tags,[(n.ref,n.location.lat,n.location.lon) for n in w.nodes])

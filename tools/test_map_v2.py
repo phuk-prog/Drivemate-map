@@ -14,6 +14,8 @@ class MapV2(unittest.TestCase):
             r=roads(p,[-2.61,53.04,-2.59,53.06],"a"*64)
             self.assertEqual(r["features"][0][2],[[530490000,-26000000],[530510000,-26010000],[530520000,-26000000]])
             self.assertEqual(r["features"][0][1]["maxspeed"],"30 mph")
+            self.assertEqual(r["points"][0][0],8)
+            self.assertEqual(r["points"][0][3]["addr:housenumber"],"4")
             with self.assertRaises(ValueError):roads(p,[-2.61,53.04,-2.59,53.06],"b"*64)
     def test_graph_without_matching_geometry_fails(self):
         with tempfile.TemporaryDirectory() as folder:

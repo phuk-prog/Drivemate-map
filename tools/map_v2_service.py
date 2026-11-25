@@ -31,7 +31,12 @@ def roads(path,bounds,expected_sha):
             if count>100000:raise ValueError("Region too large")
             # Keep E7 in API; client explicitly decodes scale.
             features.append([oid,json.loads(tags),cs,json.loads(refs)])
-        return {"format":FORMAT,"source_sha256":expected_sha,"coordinate_scale":SCALE,"features":features,"bounds":bounds}
+        # Return actual source nodes, not fabricated centroids. Bounded independently.
+        points=c.execute("""SELECT id,lat,lon,tags FROM mapped_point
+            WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? ORDER BY id LIMIT 6001""",
+            (math.floor(south*SCALE),math.ceil(north*SCALE),math.floor(west*SCALE),math.ceil(east*SCALE))).fetchall()
+        if len(points)>6000:raise ValueError("Point region too dense; request smaller bounds")
+        return {"format":FORMAT,"source_sha256":expected_sha,"coordinate_scale":SCALE,"features":features,"points":[[oid,y,x,json.loads(tags)] for oid,y,x,tags in points],"bounds":bounds}
 def serve(path,manifest,port):
     verify(path,manifest)
     class Handler(BaseHTTPRequestHandler):
