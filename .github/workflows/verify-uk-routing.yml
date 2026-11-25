@@ -13,6 +13,9 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/verify_uk_graph.py', '.github/workflows/verify-uk-routing.yml']
 
 permissions:
   contents: read
@@ -31,7 +34,7 @@ jobs:
         run: python3 -m unittest discover -s tools -p 'test_verify_uk_graph.py' -v
 
   verify:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     needs: unit
     runs-on: ubuntu-24.04
     timeout-minutes: 70
@@ -47,7 +50,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p routing
-          gh release download routes-latest --repo "$GH_REPO" \
+          alias=routes-candidate-latest
+          if ! gh release view "$alias" --repo "$GH_REPO" >/dev/null 2>&1; then alias=routes-latest; fi
+          gh release download "$alias" --repo "$GH_REPO" \
             --pattern uk-routing-manifest.json --dir routing
           python3 - <<'PY'
           import hashlib,json,os
@@ -61,9 +66,12 @@ jobs:
                   output.write("needed=false\n")
               raise SystemExit(0)
           source=manifest["source_tag"]
-          release="route-probe-"+source.removeprefix("uk-map-")+"-b"+actual[:12]
+          verifier=hashlib.sha256(Path("tools/verify_uk_graph.py").read_bytes()).hexdigest()[:12]
+          dated="routes-"+source.removeprefix("uk-map-")+"-b"+actual[:12]
+          release="route-probe-"+source.removeprefix("uk-map-")+"-b"+actual[:12]+"-v"+verifier
           with open(os.environ["GITHUB_OUTPUT"],"a") as output:
               output.write("tag="+release+"\n")
+              output.write("dated="+dated+"\n")
               output.write("needed=pending\n")
           print("Engineering QA Release:",release)
           PY
@@ -83,7 +91,7 @@ jobs:
       - name: Download and verify every published UK routing part
         if: steps.release.outputs.needed == 'true'
         run: |
-          gh release download routes-latest --repo "$GH_REPO" \
+          gh release download "${{ steps.release.outputs.dated }}" --repo "$GH_REPO" \
             --pattern 'uk-routing.sqlite.gz.part-*' --dir routing
           ls -lh routing/
       - name: Check actual nationwide road routes and save engineering evidence
@@ -113,3 +121,22 @@ jobs:
           gh release create "$EVIDENCE_TAG" routing/uk-routing-evidence.json \
             --repo "$GH_REPO" --title "UK route QA (not road validated) $EVIDENCE_TAG" \
             --notes-file routing/notes.md --prerelease --target "$GITHUB_SHA"
+          python3 - <<'PY'
+          import json, hashlib, os
+          from pathlib import Path
+          manifest=Path("routing/uk-routing-manifest.json")
+          evidence=Path("routing/uk-routing-evidence.json")
+          m=json.loads(manifest.read_text()); e=json.loads(evidence.read_text())
+          assert e["passed"] and not e["road_validated"]
+          pointer={"schema":"drivemate-verified-route-pointer-v1","source_tag":m["source_tag"],
+                   "routing_tag":"routes-"+m["source_tag"].removeprefix("uk-map-")+"-b"+m["builder_sha256"][:12],
+                   "manifest_sha256":hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                   "evidence_tag":os.environ["EVIDENCE_TAG"],"evidence_sha256":hashlib.sha256(evidence.read_bytes()).hexdigest(),
+                   "road_validated":False}
+          Path("routing/verified-routing.json").write_text(json.dumps(pointer,indent=2)+"\n")
+          PY
+          if gh release view routes-verified-latest --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload routes-verified-latest routing/verified-routing.json --repo "$GH_REPO" --clobber
+          else
+            gh release create routes-verified-latest routing/verified-routing.json --repo "$GH_REPO" --prerelease --title "Latest engineering-verified route pointer" --notes-file routing/notes.md --target "$GITHUB_SHA"
+          fi

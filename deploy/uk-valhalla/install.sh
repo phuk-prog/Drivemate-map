@@ -41,7 +41,9 @@ if mj.get("tile_extract")!="/data/tiles.tar":
 print("Runtime config validated; NOT ROAD VALIDATED")
 PY
 mv "$TARGET/valhalla.json.incomplete" "$TARGET/valhalla.json"
-chmod 0444 "$TARGET/tiles.tar" "$TARGET/valhalla.json"
+cp "$TEMP/uk-valhalla-manifest.json" "$TARGET/graph-manifest.json.pending"
+mv "$TARGET/graph-manifest.json.pending" "$TARGET/graph-manifest.json"
+chmod 0444 "$TARGET/tiles.tar" "$TARGET/valhalla.json" "$TARGET/graph-manifest.json"
 # Switch only after full verification; an old working copy remains untouched
 # on download/verification failure. Restart the service after switching.
 ln -sfn "$TAG" "$DEPLOY/data/current.pending"

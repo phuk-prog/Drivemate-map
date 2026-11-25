@@ -1,0 +1,91 @@
+name: Prepare coordinated UK navigation snapshot
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: Exact immutable UK map release tag (blank uses latest published)
+        required: false
+        type: string
+  schedule:
+    - cron: '20 02 * * 0'
+  pull_request:
+    paths:
+      - 'tools/paired_snapshot.py'
+      - 'tools/test_paired_snapshot.py'
+      - '.github/workflows/paired-navigation-refresh.yml'
+permissions:
+  contents: read
+concurrency:
+  group: paired-navigation-refresh-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tools -p 'test_paired_snapshot.py' -v
+  prepare:
+    if: github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && vars.DRIVEMATE_PAIRED_REFRESH_ENABLED == 'true'))
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REQUESTED_TAG: ${{ inputs.source_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare working space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          python3 -m pip install --quiet osmium
+          df -h /
+      - name: Restore single immutable source
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ -n "$REQUESTED_TAG" ]]; then args+=(--source-tag "$REQUESTED_TAG"); fi
+          python3 tools/uk_restore_for_tiles.py --dest cache "${args[@]}"
+      - name: Build and probe native UK routing graph
+        run: |
+          bash tools/build_valhalla_graph.sh
+          python3 tools/probe_valhalla_graph.py --report valhalla-output/route-probes.json
+          python3 tools/package_valhalla_tiles.py --tar valhalla-output/tiles.tar --source-metadata cache/source-release.json --output candidate/graph
+      - name: Reclaim intermediate graph storage
+        run: |
+          rm -rf valhalla-output/tiles
+          rm -f valhalla-output/tiles.tar
+          df -h /
+      - name: Index same exact UK map source
+        run: |
+          tag=$(python3 -c 'import json;print(json.load(open("cache/source-release.json"))["source_release"])')
+          sha=$(python3 -c 'import json;print(json.load(open("cache/source-release.json"))["source_sha256"])')
+          python3 tools/build_map_intelligence.py --source cache/united-kingdom.osm.pbf --source-tag "$tag" --source-sha256 "$sha" --scope uk --out intelligence
+          python3 tools/paired_snapshot.py --graph candidate/graph/uk-valhalla-manifest.json --coverage intelligence/coverage.json --probes valhalla-output/route-probes.json --out candidate/pair.json
+          cp intelligence/coverage.json valhalla-output/route-probes.json candidate/
+      - name: Preserve verified pairing evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: paired-UK-navigation-evidence
+          path: |
+            candidate/pair.json
+            candidate/coverage.json
+            candidate/route-probes.json
+            candidate/graph/uk-valhalla-manifest.json
+          if-no-files-found: error
+      - name: Package map intelligence
+        run: |
+          set -euo pipefail
+          mkdir -p candidate/intelligence
+          gzip -n -c intelligence/map-intelligence.sqlite | split -b 850000000 -d -a 3 - candidate/intelligence/map-intelligence.sqlite.gz.part-
+          (cd candidate/intelligence && sha256sum map-intelligence.sqlite.gz.part-* > SHA256SUMS)
+          cp intelligence/coverage.json candidate/intelligence/
+      - name: Upload matched experimental data for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: paired-UK-navigation-NOT-ROAD-VALIDATED
+          path: candidate/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

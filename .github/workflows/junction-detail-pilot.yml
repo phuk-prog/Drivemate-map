@@ -1,0 +1,38 @@
+name: Higher-detail map pilot verification
+on:
+  push:
+    branches: ['feat/intelligent-navigation-detail-20261124']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify stable pack remains reproducible
+        run: python3 tools/build_pilot_pack.py --check
+      - name: Build and reproduce native z18 experimental pack
+        run: |
+          python3 tools/build_pilot_pack.py --detail-z18
+          python3 tools/build_pilot_pack.py --detail-z18 --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          p = Path("pilot/wells-z12-18-experimental.pmtiles")
+          data = p.read_bytes()
+          assert data[:8] == b"PMTiles\x03"
+          assert data[100:102] == bytes([12,18])
+          assert struct.unpack_from("<Q",data,16)[0] <= 16384-127
+          assert p.stat().st_size < 25*1024*1024
+          print("Pilot header and size gates passed")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wells-z18-map-pilot-NOT-FOR-DRIVING
+          path: pilot/wells-z12-18-experimental.pmtiles*
+          if-no-files-found: error

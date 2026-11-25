@@ -317,6 +317,14 @@ def sha256_file(path):
 
 
 def main(argv):
+    global MAX_ZOOM, OUTPUT
+    # Opt-in bounded experiment; the committed z12-16 pack remains byte-identical.
+    if "--detail-z18" in argv:
+        MAX_ZOOM = 18
+        OUTPUT = "pilot/wells-z12-18-experimental.pmtiles"
+    if any(a not in ("--detail-z18", "--check") for a in argv):
+        print("unsupported option", file=sys.stderr)
+        return 2
     src = os.path.join(ROOT, SOURCE)
     if sha256_file(src) != SOURCE_SHA256:
         print("source extract SHA-256 mismatch; refusing to build", file=sys.stderr)

@@ -1,0 +1,35 @@
+name: Verify map intelligence query service
+on:
+  push:
+    branches: ['feat/map-intelligence-service-20261124']
+  pull_request:
+    paths:
+      - 'tools/map_intelligence_service.py'
+      - 'tools/test_map_intelligence_service.py'
+      - '.github/workflows/map-intelligence-service.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          python3 -m unittest discover -s tools -p 'test_map_intelligence*.py' -v
+          python3 -m unittest discover -s tools -p 'test_independent_gateway.py' -v
+      - run: python3 -m pip install --quiet osmium
+      - name: Build actual Wells map and smoke-test HTTP
+        run: |
+          set -euo pipefail
+          python3 tools/build_map_intelligence.py --source osm/wells-places-2026-11-19.osm --source-sha256 8cde16000a69096b62f7a75598fb892c2d8eea34b8f2237278a785ddf125ce26 --source-tag wells-2026-11-19 --scope pilot --out intelligence-pilot
+          python3 tools/map_intelligence_service.py --db intelligence-pilot/map-intelligence.sqlite --report intelligence-pilot/coverage.json &
+          pid=$!
+          trap 'kill "$pid" || true' EXIT
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8010/v1/meta
+          curl --fail 'http://127.0.0.1:8010/v1/nearby?lat=51.21&lon=-2.65&radius=500&limit=10' > nearby.json
+          python3 -c 'import json; d=json.load(open("nearby.json")); assert d["features"], "no real mapped features near Wells"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8010/v1/feature)" = 405

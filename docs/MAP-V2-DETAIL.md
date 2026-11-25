@@ -1,0 +1,1 @@
+Map V2 detail extension: bounded actual point features, position index, additional source way categories and raw tags. Service remains read-only and local; full regional coverage and licence-reviewed external datasets remain outstanding. Existing national compilation continues on its immutable earlier commit; this branch builds a distinct candidate.

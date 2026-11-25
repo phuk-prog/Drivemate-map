@@ -15,7 +15,7 @@ def current_builder_sha():
 def needs_routes(source_tag, repo, runner=subprocess.run):
     with tempfile.TemporaryDirectory() as tmp:
         try:
-            result=runner(["gh","release","download","routes-latest","--repo",repo,
+            result=runner(["gh","release","download","routes-candidate-latest","--repo",repo,
                            "--pattern","uk-routing-manifest.json","--dir",tmp],
                           capture_output=True,text=True,timeout=60,check=False)
             if result.returncode != 0:
@@ -25,7 +25,7 @@ def needs_routes(source_tag, repo, runner=subprocess.run):
                     manifest.get("format")!="drivemate-uk-routing-v1" or \
                     manifest.get("builder_sha256") != current_builder_sha():
                 return True
-            listing=runner(["gh","release","view","routes-latest","--repo",repo,
+            listing=runner(["gh","release","view","routes-candidate-latest","--repo",repo,
                             "--json","assets"],capture_output=True,text=True,
                            timeout=60,check=False)
             if listing.returncode:

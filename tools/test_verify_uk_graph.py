@@ -77,6 +77,24 @@ class VerifyUkGraphTests(unittest.TestCase):
             finally:
                 road.close()
 
+    def test_origin_skips_isolated_or_blocked_departure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"source.db"
+            self.fixture(db)
+            with sqlite3.connect(db) as conn:
+                conn.execute("INSERT INTO nodes VALUES (99,54.9899,-2.0)")
+                conn.execute("INSERT INTO nodes VALUES (98,54.9898,-2.0)")
+                conn.execute("INSERT INTO edges VALUES (99,99,2,77,1700,100,'Blocked',0)")
+            roads=v.OfflineRoads(db)
+            try:
+                self.assertEqual(roads.nearest((54.9899,-2))[0],99)
+                self.assertEqual(roads.nearest((54.9899,-2),require_departure=True)[0],1)
+                result=roads.route((54.9899,-2),(55.010,-1.999),max_expansions=100)
+                self.assertTrue(result["ok"],result)
+                self.assertEqual(result["edges"],3)
+            finally:
+                roads.close()
+
     def test_full_gzip_part_and_sqlite_hashes_and_no_partial_replacement(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp)

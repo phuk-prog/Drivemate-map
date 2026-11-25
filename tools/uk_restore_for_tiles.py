@@ -87,6 +87,8 @@ def use_bundled_polygon(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dest", type=Path, default=Path("cache"))
+    parser.add_argument("--source-tag", help="Restore an exact immutable source rather than the latest")
+    parser.add_argument("--source-sha256", help="Require this digest (e.g. the installed routing graph source)")
     args = parser.parse_args()
     repo = os.environ.get("GH_REPO") or os.environ.get("GITHUB_REPOSITORY")
     if not repo or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
@@ -96,10 +98,22 @@ def main():
     args.dest.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="uk-map-parts-", dir=args.dest) as name:
         temp = Path(name)
-        manifest = existing_manifest(repo, temp)
+        if args.source_tag:
+            if not re.fullmatch(r"uk-map-\d{8}T\d{6}Z-[a-f0-9]{12}",args.source_tag):
+                raise SyncError("Invalid immutable source tag")
+            release=json.loads(run(["gh","release","view",args.source_tag,"--repo",repo,"--json","isDraft,tagName"]))
+            if release.get("isDraft") or release.get("tagName")!=args.source_tag:
+                raise SyncError("Source release is not published")
+            run(["gh","release","download",args.source_tag,"--repo",repo,"--pattern","manifest.json","--dir",str(temp)])
+            manifest=json.loads((temp/"manifest.json").read_text())
+            if manifest.get("tag")!=args.source_tag:raise SyncError("Source tag mismatch")
+        else:
+            manifest = existing_manifest(repo, temp)
         if manifest is None:
             raise SyncError("No published UK map source release exists")
         validate_manifest(manifest)
+        if args.source_sha256 and manifest.get("sha256")!=args.source_sha256:
+            raise SyncError("Requested graph/source digest mismatch")
         run(["gh", "release", "download", manifest["tag"], "--repo", repo,
              "--pattern", "uk.osm.pbf.part-*", "--dir", str(temp)])
         reconstruct(manifest, temp, args.dest / "united-kingdom.osm.pbf")

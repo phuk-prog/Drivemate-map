@@ -1,0 +1,22 @@
+name: Consolidated map tests
+on:
+  pull_request:
+  push:
+    branches: [main, 'feat/repository-consolidation-map']
+permissions:
+  contents: read
+concurrency:
+  group: map-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install -r tools/uk-map-requirements.txt cryptography
+      - run: python3 -m unittest discover -s tools -p 'test_*.py' -v
+      - run: python3 -m unittest discover -s tests -p 'test_*.py' -v

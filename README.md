@@ -113,3 +113,7 @@ or Android Valhalla Mobile integration is claimed until actually verified.**
 A GitHub Release of data is not a hosted routing service; deploying and
 operating a UK server requires separate infrastructure. © OpenStreetMap
 contributors (ODbL 1.0); Valhalla source MIT.
+
+## Consolidated development and release contract
+
+Main is the integration branch. Experimental native map, intelligence, unified geometry and traffic-signal code are retained as candidates, not automatically approved for driving. Immutable dated routing releases are candidates. `routes-candidate-latest` is a staging alias; the legacy `routes-latest` is not a safety approval. `routes-verified-latest` is a pointer to an immutable release and passing route QA evidence, only updated after all sample journeys pass. The app continues using pinned, checksum-verified inputs and preview-only routing until on-device acceptance. See [repository workflow](docs/REPOSITORY-WORKFLOW.md).
