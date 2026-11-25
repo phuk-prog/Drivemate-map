@@ -174,7 +174,7 @@ def metres(a,b):
 
 
 class OfflineRoads:
-    """Same incoming-edge A* state, snap limit and turn policies as Android."""
+    """Engineering incoming-edge A*, snap limit and turn policies; alternative anchors are diagnostic only."""
     def __init__(self,path):
         self.db=sqlite3.connect("file:"+str(Path(path).resolve())+"?mode=ro",uri=True)
         self.db.row_factory=None
@@ -234,7 +234,7 @@ class OfflineRoads:
                         explicit_u=True
         return (not only or matched) and (next_node!=prev_node or explicit_u)
 
-    def route(self,start,end,max_expansions=MAX_EXPANSIONS,max_seconds=160):
+    def route_exact(self,start,end,max_expansions=MAX_EXPANSIONS,max_seconds=160):
         origin=self.nearest(start, require_departure=True)
         target=self.nearest(end)
         if origin is None or target is None:
@@ -282,6 +282,85 @@ class OfflineRoads:
         return {"ok":False,"reason":"Android A* work bound" if expanded>=max_expansions
                 else "Disconnected/restricted road network","expanded":expanded}
 
+    def anchor_candidates(self,point,departure=False):
+        """Find distinct nearby real road nodes; never synthesize connecting edges."""
+        delta=SNAP_METRES/111000.0
+        lon_delta=delta/max(0.1,math.cos(math.radians(point[0])))
+        rows=self.db.execute(
+            "SELECT n.id,n.lat,n.lon FROM nodes n WHERE n.lat BETWEEN ? AND ? "
+            "AND n.lon BETWEEN ? AND ? AND NOT EXISTS "
+            "(SELECT 1 FROM blocked b WHERE b.id=n.id)",
+            (point[0]-delta,point[0]+delta,point[1]-lon_delta,point[1]+lon_delta))
+        nearby=[]
+        for nid,lat,lon in rows:
+            d=metres(point,(lat,lon))
+            if d<=SNAP_METRES:nearby.append((d,nid,(lat,lon)))
+        selected=[]
+        for d,nid,pos in sorted(nearby):
+            if departure and not self.outgoing(nid):continue
+            if any(metres(pos,old[2])<20 for old in selected):continue
+            selected.append((d,nid,pos))
+            if len(selected)>=16:break
+        return selected
+
+    def route(self,start,end,max_expansions=MAX_EXPANSIONS,max_seconds=160):
+        """Engineering-only anchor fallback; shared search budget, no access claims.
+        Exact snap is preferred. Alternative snaps are recorded as access gaps.
+        """
+        began=time.monotonic()
+        if max_expansions<20:return self.route_exact(start,end,max_expansions,max_seconds)
+        first=self.route_exact(start,end,max_expansions=max_expansions//4,max_seconds=max_seconds/3)
+        if first["ok"]:
+            first["anchor_mode"]="nearest"
+            return first
+        used=first["expanded"]
+        if first["reason"]=="Same snapped junction":return first
+        origins=self.anchor_candidates(start,True)
+        targets={nid:(d,pos) for d,nid,pos in self.anchor_candidates(end)}
+        if not origins or not targets:return first
+        # The route excludes unverified off-road access. Penalise larger snap
+        # gaps in search ordering only, not in the reported road travel time.
+        penalty=0.8
+        q=[];best={}
+        for d,nid,pos in origins:
+            key=-nid
+            cost=d*penalty
+            best[key]=cost
+            h=SEARCH_WEIGHT*max(0,metres(pos,end)-SNAP_METRES)*3.6/160
+            heapq.heappush(q,(cost+h,cost,key,nid,0,0,pos,0.0,0.0,0,d,nid))
+        expanded=used
+        while q and expanded<max_expansions:
+            if time.monotonic()-began>max_seconds:
+                return {"ok":False,"reason":"Route computation time bound","expanded":expanded}
+            _,cost,key,node,prev,way,pos,length,seconds,count,origin_gap,origin_id=heapq.heappop(q)
+            if cost>best.get(key,math.inf)+1e-7:continue
+            if count and node in targets:
+                end_gap=targets[node][0]
+                return {"ok":True,"edges":count,"distance_km":round(length/1000,2),
+                        "minutes":round(seconds/60,1),"expanded":expanded,
+                        "elapsed_seconds":round(time.monotonic()-began,2),
+                        "anchor_mode":"alternative-road-nodes",
+                        "origin_node":origin_id,"target_node":node,
+                        "origin_access_gap_m":round(origin_gap,1),
+                        "target_access_gap_m":round(end_gap,1),
+                        "access_verified":False,"nearest_failure":first["reason"]}
+            expanded+=1
+            rules=self.rules(node,way) if count else ()
+            for eid,to,newway,duration,lat,lon,segment in self.outgoing(node):
+                if count and not self.turn_allowed(prev,to,newway,rules):continue
+                if not math.isfinite(duration) or duration<=0 or not math.isfinite(segment) or segment<=0:continue
+                newcost=cost+duration
+                if newcost+1e-7>=best.get(eid,math.inf):continue
+                best[eid]=newcost
+                nxt=(lat,lon)
+                h=SEARCH_WEIGHT*max(0,metres(nxt,end)-SNAP_METRES)*3.6/160
+                if to in targets:h+=targets[to][0]*penalty
+                heapq.heappush(q,(newcost+h,newcost,eid,to,node,newway,nxt,
+                                  length+segment,seconds+duration,count+1,origin_gap,origin_id))
+        return {"ok":False,"reason":"Engineering A* work bound" if expanded>=max_expansions
+                else "Disconnected/restricted road network after anchor fallback",
+                "expanded":expanded,"nearest_failure":first["reason"]}
+
     def named_places(self,names):
         out={}
         for name in names:
@@ -315,6 +394,8 @@ def verify(dbpath,manifest,samples=SAMPLES):
             data["samples"].append(result)
             if not result["ok"]:
                 failures.append(name+": "+result["reason"])
+            elif result.get("anchor_mode")=="alternative-road-nodes":
+                failures.append(name+": connected alternative road nodes; endpoint access and Android parity unverified")
     finally:
         roads.close()
     data["failures"]=failures

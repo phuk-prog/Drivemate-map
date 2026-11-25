@@ -89,9 +89,30 @@ class VerifyUkGraphTests(unittest.TestCase):
             try:
                 self.assertEqual(roads.nearest((54.9899,-2))[0],99)
                 self.assertEqual(roads.nearest((54.9899,-2),require_departure=True)[0],1)
-                result=roads.route((54.9899,-2),(55.010,-1.999),max_expansions=100)
+                result=roads.route((54.9897,-2),(55.010,-1.999),max_expansions=100)
                 self.assertTrue(result["ok"],result)
                 self.assertEqual(result["edges"],3)
+            finally:
+                roads.close()
+
+    def test_connected_alternative_anchor_reports_unverified_access(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"source.db"
+            self.fixture(db)
+            with sqlite3.connect(db) as conn:
+                conn.execute("INSERT INTO nodes VALUES (99,54.9897,-2.000)")
+                conn.execute("INSERT INTO nodes VALUES (98,54.9896,-2.001)")
+                conn.execute("INSERT INTO edges VALUES (99,99,98,90,75,10,'Isolated road',0)")
+            roads=v.OfflineRoads(db)
+            try:
+                # Nearest road has a usable edge but belongs to a disconnected component.
+                self.assertFalse(roads.route_exact((54.9897,-2),(55.010,-1.999),100)["ok"])
+                result=roads.route((54.9897,-2),(55.010,-1.999),100)
+                self.assertTrue(result["ok"],result)
+                self.assertEqual(result["anchor_mode"],"alternative-road-nodes")
+                self.assertFalse(result["access_verified"])
+                self.assertGreater(result["origin_access_gap_m"],0)
+                self.assertLessEqual(result["expanded"],100)
             finally:
                 roads.close()
 
