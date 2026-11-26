@@ -116,6 +116,23 @@ class VerifyUkGraphTests(unittest.TestCase):
             finally:
                 roads.close()
 
+    def test_weighted_queue_never_bypasses_restrictions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"source.db"
+            self.fixture(db)
+            road=v.OfflineRoads(db)
+            try:
+                for weight in (2.2,3.3,4.4):
+                    result=road.route_exact((54.990,-2),(55.010,-1.999),
+                                            max_expansions=100,search_weight=weight)
+                    self.assertTrue(result["ok"],result)
+                    self.assertEqual(result["edges"],3)
+                    self.assertLessEqual(result["expanded"],100)
+                with self.assertRaises(ValueError):
+                    road.route_exact((54.990,-2),(55.010,-1.999),search_weight=float("nan"))
+            finally:
+                road.close()
+
     def test_anchor_diagnostics_do_not_claim_access(self):
         with tempfile.TemporaryDirectory() as tmp:
             db=Path(tmp)/"source.db"

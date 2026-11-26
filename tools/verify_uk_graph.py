@@ -237,7 +237,9 @@ class OfflineRoads:
                         explicit_u=True
         return (not only or matched) and (next_node!=prev_node or explicit_u)
 
-    def route_exact(self,start,end,max_expansions=MAX_EXPANSIONS,max_seconds=160):
+    def route_exact(self,start,end,max_expansions=MAX_EXPANSIONS,max_seconds=160,search_weight=SEARCH_WEIGHT):
+        if not math.isfinite(search_weight) or search_weight<1:
+            raise ValueError("Invalid search weight")
         origin=self.nearest(start, require_departure=True)
         target=self.nearest(end)
         if origin is None or target is None:
@@ -281,7 +283,7 @@ class OfflineRoads:
                     continue
                 best[eid]=cost
                 parents[eid]=edge_id
-                heuristic=SEARCH_WEIGHT*metres((lat,lon),dest_point)*3.6/160
+                heuristic=search_weight*metres((lat,lon),dest_point)*3.6/160
                 heapq.heappush(queue,(cost+heuristic,cost,eid,to,node,way,
                                       (lat,lon),travelled_metres+length))
         return {"ok":False,"reason":"Android A* work bound" if expanded>=max_expansions
@@ -413,6 +415,11 @@ def verify(dbpath,manifest,samples=SAMPLES):
             result["android_work_bound_passed"] = bool(result["ok"] and result.get("anchor_mode")=="nearest" and result["expanded"]<=ANDROID_MAX_EXPANSIONS)
             if not result["ok"] or result.get("anchor_mode")!="nearest":
                 result["anchor_diagnostics"] = roads.anchor_diagnostics(start,end)
+                # Bounded experiments never substitute for the Android-parity gate.
+                # Run exactly the same anchors and restrictions, changing only queue ordering.
+                result["exact_anchor_experiments"] = [dict(roads.route_exact(start,end,
+                    max_expansions=ANDROID_MAX_EXPANSIONS,max_seconds=25,search_weight=weight),
+                    search_weight=weight,diagnostic_only=True) for weight in (2.2,3.3,4.4)]
             data["samples"].append(result)
             if not result["ok"]:
                 failures.append(name+": "+result["reason"])
@@ -422,6 +429,7 @@ def verify(dbpath,manifest,samples=SAMPLES):
                 failures.append(name+": desktop route exceeds Android expansion bound")
     finally:
         roads.close()
+    data["android_max_expansions"]=ANDROID_MAX_EXPANSIONS
     data["failures"]=failures
     data["passed"]=not failures
     return data

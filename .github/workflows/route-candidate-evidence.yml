@@ -46,6 +46,10 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           gh release download "$ROUTING_TAG" --repo "$GH_REPO" --pattern 'uk-routing.sqlite.gz.part-*' --dir routing
           python3 tools/verify_uk_graph.py --manifest routing/uk-routing-manifest.json --parts routing --db cache/uk-routing.sqlite --report routing/uk-routing-evidence.json
+      - name: Print bounded diagnostic evidence for review
+        if: always()
+        run: |
+          if [[ -f routing/uk-routing-evidence.json ]]; then cat routing/uk-routing-evidence.json; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

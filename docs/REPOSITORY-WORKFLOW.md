@@ -18,3 +18,6 @@ journeys exceeding Android's 80,000 expansion ceiling cannot be promoted.
 Device time and memory parity still require Android replay. Retain all
 current app pins; do not raise resource bounds or weaken turn restrictions
 to achieve a green check. Coordinate the matching app PR #36.
+
+### Exact-anchor optimisation experiments
+Failed national samples now run three exact-anchor queue weights (2.2, 3.3, 4.4), each independently capped at 80,000 expansions and 25 seconds. Reports expose alternate anchor diagnostics and exact-anchor experiments in the run log and artifact. Experiments cannot change acceptance or turn rules, and a desktop success is not Android time/memory or endpoint-access proof. Only choose a new production preview heuristic after comparing exact route lengths, times, and device replay.
