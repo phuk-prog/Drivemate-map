@@ -26,6 +26,8 @@ class Unified(Builder):
         CREATE INDEX mapped_point_name ON mapped_point(name COLLATE NOCASE);
         CREATE INDEX mapped_point_postcode ON mapped_point(postcode COLLATE NOCASE);
         CREATE INDEX mapped_point_position ON mapped_point(lat,lon);
+        CREATE TABLE enforcement_relation(id INTEGER PRIMARY KEY,tags TEXT NOT NULL,members TEXT NOT NULL);
+        CREATE TABLE enforcement_anchor(node INTEGER NOT NULL,relation INTEGER NOT NULL,PRIMARY KEY(node,relation)) WITHOUT ROWID;
         """)
         self.render_count=0
     def node(self,oid,lat,lon,tags):
@@ -51,6 +53,12 @@ class Unified(Builder):
             super().way(oid,tags,refs)
         self.render_count+=1
         if self.render_count%10000==0:self.flush();self.db.commit()
+    def enforcement(self,oid,tags,members):
+        # Keep source identity and member ordering. No geometric or directional inference.
+        if tags.get("type")!="enforcement" or tags.get("enforcement") not in ("maxspeed","average_speed","traffic_signals"):return
+        if not 2<=len(members)<=1000:return
+        self.db.execute("INSERT INTO enforcement_relation VALUES (?,?,?)",(oid,packed(tags),packed(members)))
+        self.db.executemany("INSERT OR IGNORE INTO enforcement_anchor VALUES (?,?)",[(ref,oid) for role,kind,ref in members if role=="from" and kind=="n"])
     def finish_v2(self,tag,source_sha,min_edges):
         stats=super().finish(tag,source_sha,min_edges)
         db=sqlite3.connect(str(self.path))
@@ -93,6 +101,7 @@ def build(source,sha,tag,out,min_edges):
             b.way(w.id,tags,[(n.ref,n.location.lat,n.location.lon) for n in w.nodes])
         def relation(self,r):
             if r.tags.get("type")=="restriction":b.turn(dict(r.tags),[(m.role,m.type,m.ref) for m in r.members])
+            elif r.tags.get("type")=="enforcement":b.enforcement(r.id,dict(r.tags),[(m.role,m.type,m.ref) for m in r.members])
     try:
         Handler().apply_file(str(source),locations=True,idx="flex_mem")
         stats=b.finish_v2(tag,sha,min_edges)
