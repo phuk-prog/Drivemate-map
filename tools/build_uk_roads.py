@@ -251,6 +251,31 @@ class Builder:
         return dict(self.stats)
 
 
+def load_osm(source, builder):
+    """Stream an OSM PBF/XML file into builder. Shared by the release build and
+    the Valhalla comparison harness so both test the identical import rules."""
+    import osmium
+
+    class OSM(osmium.SimpleHandler):
+        def node(self, n):
+            if n.tags.get("barrier") or n.tags.get("place"):
+                builder.node(n.id, n.location.lat, n.location.lon, dict(n.tags))
+        def way(self, w):
+            if w.tags.get("highway") not in DRIVABLE and w.tags.get("route") != "ferry":
+                return
+            try:
+                refs = [(n.ref, n.location.lat, n.location.lon) for n in w.nodes]
+            except (ValueError, RuntimeError):
+                builder.stats["excluded_missing_location"] += 1
+                return
+            builder.way(w.id, dict(w.tags), refs)
+        def relation(self, r):
+            if r.tags.get("type") == "restriction":
+                builder.turn(dict(r.tags), [(m.role,m.type,m.ref) for m in r.members])
+
+    OSM().apply_file(str(source), locations=True, idx="flex_mem")
+
+
 def publish(db, folder, tag, source_sha, stats, part_bytes=PART_BYTES):
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
@@ -305,26 +330,8 @@ def main(argv=None):
     database = a.out / "uk-routing.sqlite"
     database.unlink(missing_ok=True)
     b = Builder(database)
-
-    class OSM(osmium.SimpleHandler):
-        def node(self, n):
-            if n.tags.get("barrier") or n.tags.get("place"):
-                b.node(n.id, n.location.lat, n.location.lon, dict(n.tags))
-        def way(self, w):
-            if w.tags.get("highway") not in DRIVABLE and w.tags.get("route") != "ferry":
-                return
-            try:
-                refs = [(n.ref, n.location.lat, n.location.lon) for n in w.nodes]
-            except (ValueError, RuntimeError):
-                b.stats["excluded_missing_location"] += 1
-                return
-            b.way(w.id, dict(w.tags), refs)
-        def relation(self, r):
-            if r.tags.get("type") == "restriction":
-                b.turn(dict(r.tags), [(m.role,m.type,m.ref) for m in r.members])
-
     try:
-        OSM().apply_file(str(a.source), locations=True, idx="flex_mem")
+        load_osm(a.source, b)
         stats = b.finish(a.source_tag, a.source_sha256, a.min_edges)
         manifest = publish(database, a.out, a.source_tag, a.source_sha256, stats)
         database.unlink()

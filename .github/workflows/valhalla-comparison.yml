@@ -1,0 +1,60 @@
+name: Compare DriveMate routing with Valhalla
+# Builds DriveMate's own graph and a Valhalla reference graph from the same
+# OSM extract, routes the same journeys through both, and reports every
+# disagreement. Valhalla is a test yardstick only; it is never shipped.
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: Geofabrik England sub-region (e.g. north-east, south-west)
+        default: north-east
+      journeys:
+        description: Random journeys (plus named ones)
+        default: '60'
+  schedule:
+    - cron: '17 4 * * 1'
+  pull_request:
+    paths:
+      - tools/build_uk_roads.py
+      - tools/compile_dmtiles_uk.py
+      - tools/benchmark_dmtiles_uk.py
+      - tools/compare_with_valhalla.py
+      - reports/valhalla-compare/**
+permissions:
+  contents: read
+concurrency:
+  group: valhalla-comparison-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      REGION: ${{ inputs.region || 'north-east' }}
+      JOURNEYS: ${{ inputs.journeys || '60' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install -r tools/valhalla-compare-requirements.txt
+      - name: Download region
+        run: |
+          case "$REGION" in *[!a-z-]*|'') echo "bad region"; exit 1;; esac
+          curl -fsSL -o region.osm.pbf "https://download.geofabrik.de/europe/united-kingdom/england/${REGION}-latest.osm.pbf"
+      - name: Compare
+        run: |
+          base="reports/valhalla-compare/${REGION}.json"
+          extra=()
+          if [ -f "$base" ]; then extra=(--baseline "$base" --fail-on-regression); fi
+          python3 tools/compare_with_valhalla.py --pbf region.osm.pbf --work work \
+            --journeys "$JOURNEYS" --report report.json --markdown report.md "${extra[@]}"
+      - if: always()
+        run: '[ -f report.md ] && cat report.md >> "$GITHUB_STEP_SUMMARY" || true'
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valhalla-comparison-${{ env.REGION }}
+          path: |
+            report.json
+            report.md

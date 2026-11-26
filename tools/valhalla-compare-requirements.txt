@@ -1,0 +1,4 @@
+# Test-only: Valhalla is the reference engine DriveMate is compared against.
+# It is never shipped in, or linked into, DriveMate.
+osmium==4.3.2
+pyvalhalla==3.9.3

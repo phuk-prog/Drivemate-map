@@ -65,7 +65,7 @@ class Archive:
         # No path is ever created across a missing tile; offline search is limited
         # to verified selected cells. Turn rules are the existing importer policy.
         q=[(0.0,0.0,0,ak,an[0],0,0,0.0)]
-        best={0:0.0};parent={};points={0:(ak,an[1]/1e6,an[2]/1e6)};expanded=0
+        best={0:0.0};parent={};points={0:(ak,an[1]/1e6,an[2]/1e6)};wayof={};expanded=0
         goal=(bn[1]/1e6,bn[2]/1e6);global_rules=self.doc["global_rules"]
         reverse={}
         if all("crossing_ms" in t for t in self.tiles.values()):
@@ -83,11 +83,11 @@ class Archive:
             if g>best.get(eid,math.inf)+1e-7:continue
             n=self.load(k)[nid]
             if nid==bn[0] and eid!=0:
-                path=[];current=eid
+                path=[];ways=[];current=eid
                 while current:
-                    path.append(points[current]);current=parent[current]
-                path.append(points[0]);path.reverse()
-                return {"ok":True,"distance_km":round(dist/1000,3),"seconds":round(g,2),"expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"path":path,"cells_read":len(self.touched),"read_bytes":self.read_bytes,"rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}
+                    path.append(points[current]);ways.append(wayof[current]);current=parent[current]
+                path.append(points[0]);path.reverse();ways.reverse()
+                return {"ok":True,"distance_km":round(dist/1000,3),"seconds":round(g,2),"expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"path":path,"ways":ways,"cells_read":len(self.touched),"read_bytes":self.read_bytes,"rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}
             expanded+=1
             rules=global_rules.get(str(way),[])+[[r[1],r[2]] for r in n[4] if r[0]==way]
             for edge,to,dest,newway,mm,ms in n[3]:
@@ -98,7 +98,7 @@ class Archive:
                 t=self.load(dest).get(to)
                 if t is None:raise ValueError("Broken edge")
                 h=max(metres((t[1]/1e6,t[2]/1e6),goal)*3.6/160,lower.get(dest,0)/1000)
-                best[edge]=cost;parent[edge]=eid;points[edge]=(dest,t[1]/1e6,t[2]/1e6)
+                best[edge]=cost;parent[edge]=eid;points[edge]=(dest,t[1]/1e6,t[2]/1e6);wayof[edge]=newway
                 heapq.heappush(q,(cost+h,cost,edge,dest,to,nid,newway,dist+mm/1000))
             if len(best)>max_expansions*3:break
         return {"ok":False,"reason":"Disconnected or resource bound","expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"cells_read":len(self.touched),"read_bytes":self.read_bytes}
@@ -127,13 +127,13 @@ def main():
     ar=Archive(a.manifest,a.archive);results=[];diversion=None
     for name,start,end in SAMPLES:
         ar.allowed=None;ar.clear();r=ar.route(start,end,a.expansions,a.seconds)
-        path=r.pop("path",None)
+        path=r.pop("path",None);r.pop("ways",None)
         if name=="Sheffield to London" and path:
             selected,used,complete=coverage(ar.tiles,path,48300,500_000_000)
             # actual minimum distance from deviation to original sampled vertices.
             offset=min(metres(DIVERSION,(lat,lon)) for _,lat,lon in path)
             ar.allowed=selected;ar.clear()
-            diversion=ar.route(DIVERSION,end,a.expansions,a.seconds);diversion.pop("path",None)
+            diversion=ar.route(DIVERSION,end,a.expansions,a.seconds);diversion.pop("path",None);diversion.pop("ways",None)
             diversion.update({"distance_from_original_vertex_km":round(offset/1000,2),"cached_cells":len(selected),"cache_bytes":used,"requested_radius_fits_catalog_budget":complete,"no_network":True})
         r["name"]=name;results.append(r);print(json.dumps(r),flush=True)
     ar.file.close();passed=all(r["ok"] for r in results) and bool(diversion and diversion["ok"] and diversion["distance_from_original_vertex_km"]>=48.3)
