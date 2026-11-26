@@ -11,7 +11,12 @@ from benchmark_dmtiles_uk import Archive
 from build_uk_roads import Builder, publish
 from compile_dmtiles_uk import compile_graph
 from dm_overlay import build_overlay
+from compile_dmtiles import key as key_of_latlon
 from verify_uk_graph import metres
+
+
+def key_of(point):
+    return key_of_latlon(*point)
 
 
 def grid_network(db):
@@ -72,6 +77,47 @@ class OverlayMatchesFullSearch(unittest.TestCase):
                     self.assertLess(metres(a[1:], c[1:]), 3000)
                 self.assertLess(metres(over["path"][-1][1:], e), 400)
             self.assertGreater(checked, 100)
+
+    def test_level2_matches_full_search(self):
+        from dm_overlay import build_level2
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            b, points = grid_network(p / "roads.sqlite")
+            tag, sha = "uk-map-20261122T084645Z-9013a4487fa6", "a" * 64
+            m = publish(p / "roads.sqlite", p / "release", tag, sha,
+                        b.finish(tag, sha, min_edges=1), part_bytes=1 << 20)
+            compile_graph(p / "roads.sqlite", m, p / "tiles", pilot=True)
+            build_overlay(p / "tiles")
+            doc = build_level2(p / "tiles", block=2)  # small blocks so the grid spans several
+            self.assertGreater(doc["overlay2"]["stats"]["blocks"], 2)
+            ar = Archive(p / "tiles" / "manifest.json", p / "tiles" / "routing.dma")
+            self.assertTrue(ar.use_level2)
+            checked = 0
+            for s, e in itertools.permutations(points, 2):
+                ar.use_overlay = False
+                flat = ar.route(s, e, 10**7, 60)
+                ar.use_overlay = True
+                over = ar.route(s, e, 10**7, 60)
+                self.assertEqual(flat["ok"], over["ok"], (s, e))
+                if not flat["ok"]:
+                    continue
+                checked += 1
+                self.assertAlmostEqual(flat["seconds"], over["seconds"], delta=0.015, msg=(s, e))
+                self.assertAlmostEqual(flat["distance_km"], over["distance_km"], delta=0.0015)
+                self.assertEqual(len(over["path"]), len(over["ways"]) + 1)
+                for a, c in zip(over["path"], over["path"][1:]):
+                    self.assertLess(metres(a[1:], c[1:]), 3000)
+            self.assertGreater(checked, 3000)
+            # Offline: a block not fully downloaded falls back to level 1.
+            ar.allowed = set(list(doc["tiles"])[:-1]) | {key_of(points[0]), key_of(points[-1])}
+            ar.use_overlay = False
+            flat = ar.route(points[0], points[-1], 10**7, 60)
+            ar.use_overlay = True
+            over = ar.route(points[0], points[-1], 10**7, 60)
+            self.assertEqual(flat["ok"], over["ok"])
+            if flat["ok"]:
+                self.assertAlmostEqual(flat["seconds"], over["seconds"], delta=0.015)
+                self.assertTrue({c for c, _, _ in over["path"]} <= ar.allowed)
 
     def test_corrupt_overlay_rejected(self):
         with tempfile.TemporaryDirectory() as d:

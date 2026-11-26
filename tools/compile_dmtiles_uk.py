@@ -114,8 +114,9 @@ def compile_graph(dbpath, manifest, out, pilot=False):
     return doc
 if __name__=="__main__":
     p=argparse.ArgumentParser();p.add_argument("--db",required=True);p.add_argument("--manifest",required=True);p.add_argument("--out",required=True)
-    p.add_argument("--overlay",action="store_true",help="also build the road hierarchy (dm_overlay.py)");a=p.parse_args()
+    p.add_argument("--overlay",action="store_true",help="also build the road hierarchy, levels 1 and 2 (dm_overlay.py)");a=p.parse_args()
     compile_graph(a.db,json.loads(Path(a.manifest).read_text()),a.out)
     if a.overlay:
-        from dm_overlay import build_overlay
+        from dm_overlay import build_overlay,build_level2
         print(json.dumps(build_overlay(a.out)["overlay"]["stats"]),flush=True)
+        print(json.dumps(build_level2(a.out)["overlay2"]["stats"]),flush=True)

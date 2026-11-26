@@ -224,8 +224,9 @@ def build_drivemate(pbf, work, source_sha):
     for part in (out / "pack").glob("*.part-*"):
         part.unlink()
     compile_graph(db, manifest, out / "tiles", pilot=True)
-    from dm_overlay import build_overlay
-    build_overlay(out / "tiles")  # road hierarchy: the engine under test uses it
+    from dm_overlay import build_level2, build_overlay
+    build_overlay(out / "tiles")  # road hierarchy, levels 1 and 2: the engine under test uses it
+    build_level2(out / "tiles")
     stamp.write_text(json.dumps(want))
     return out
 

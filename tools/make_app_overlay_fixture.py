@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchmark_dmtiles_uk import Archive
 from build_uk_roads import publish
 from compile_dmtiles_uk import compile_graph
-from dm_overlay import build_overlay
+from dm_overlay import build_level2, build_overlay
 from test_dm_overlay import grid_network
 
 
@@ -35,19 +35,22 @@ def main(argv=None):
         tag, sha = "uk-map-20261122T084645Z-9013a4487fa6", "a" * 64
         m = publish(d / "roads.sqlite", d / "release", tag, sha, b.finish(tag, sha, min_edges=1), part_bytes=1 << 20)
         compile_graph(d / "roads.sqlite", m, d / "tiles", pilot=True)
-        doc = build_overlay(d / "tiles")
+        build_overlay(d / "tiles")
+        # Small blocks so the 9-cell grid spans several level-2 blocks.
+        doc = build_level2(d / "tiles", block=2)
         if a.out.exists():
             shutil.rmtree(a.out)
         a.out.mkdir(parents=True)
         shutil.copy(d / "tiles" / "manifest.json", a.out / "manifest.json")
-        for archive, cells in (("routing.dma", doc["tiles"]), ("overlay.dmo", doc["overlay"]["cells"])):
+        for archive, cells in (("routing.dma", doc["tiles"]), ("overlay.dmo", doc["overlay"]["cells"]),
+                               ("overlay2.dmo", doc["overlay2"]["blocks"])):
             raw = (d / "tiles" / archive).read_bytes()
             for meta in cells.values():
                 (a.out / meta["name"]).write_bytes(raw[meta["offset"]:meta["offset"] + meta["bytes"]])
         ar = Archive(d / "tiles" / "manifest.json", d / "tiles" / "routing.dma")
         ar.use_overlay = False
         expected = []
-        for s, e in itertools.permutations(points[::3], 2):
+        for s, e in itertools.permutations(points[::2], 2):
             r = ar.route(s, e, 10**7, 60)
             expected.append({"start": s, "end": e, "ok": r["ok"],
                              "seconds": r.get("seconds"), "km": r.get("distance_km")})

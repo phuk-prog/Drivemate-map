@@ -154,8 +154,145 @@ def build_overlay(tiles_dir):
     return doc
 
 
+# ------------------------------------------------------------------ level 2
+# Blocks of BLOCK x BLOCK cells. For each block, the exact cost from every road
+# entering the block to every road leaving it, found by searching over the
+# block's level-1 jumps (each already an exact in-cell path). Same argument as
+# level 1: paths inside a block are chains of in-cell paths; paths that leave
+# and re-enter a block are chains of block jumps.
+FORMAT2 = "drivemate-overlay2-v1"
+BLOCK = 4
+
+
+def block_key(cell, block):
+    y, x = map(int, cell.split("_"))
+    return f"{y // block}_{x // block}"
+
+
+def region_search(load_level1, cells, entry_edge, entry_cell):
+    """Dijkstra over level-1 jumps inside a block (set of cells), starting just
+    after driving entry_edge into entry_cell. Returns (exit costs {edge: ms},
+    parent {edge: (previous edge, cell jumped)})."""
+    best = {entry_edge: 0}
+    parent = {}
+    exits = {}
+    queue = [(0, entry_edge, entry_cell)]
+    while queue:
+        g, e, cell = heapq.heappop(queue)
+        if g > best[e]:
+            continue
+        ov = load_level1(cell)
+        for j, ms in enumerate(ov["cost"][ov["row"][e]]):
+            if ms < 0:
+                continue
+            x = ov["exits"][j]
+            edge, dest = x[0], x[3]
+            cost = g + ms
+            if cost >= best.get(edge, math.inf):
+                continue
+            best[edge] = cost
+            parent[edge] = (e, cell)
+            if dest in cells:
+                heapq.heappush(queue, (cost, edge, dest))
+            else:
+                exits[edge] = cost
+    return exits, parent
+
+
+def region_jumps(load_level1, cells, entry_edge, entry_cell, exit_edge):
+    """The level-1 jumps [(cell, entry edge, exit edge)] that make up one block
+    jump, in driving order."""
+    _, parent = region_search(load_level1, cells, entry_edge, entry_cell)
+    out = []
+    e = exit_edge
+    while e != entry_edge:
+        prev, cell = parent[e]
+        out.append((cell, prev, e))
+        e = prev
+    out.reverse()
+    return out
+
+
+def level1_reader(tiles_dir, doc):
+    ov = doc["overlay"]
+    path = Path(tiles_dir) / ov["name"]
+    if ov["bytes"] != path.stat().st_size or ov["sha256"] != sha_file(path):
+        raise ValueError("Overlay digest mismatch")
+    stream = path.open("rb")
+    cache = {}
+
+    def load(cell):
+        if cell not in cache:
+            meta = ov["cells"][cell]
+            stream.seek(meta["offset"])
+            raw = stream.read(meta["bytes"])
+            if len(raw) != meta["bytes"] or digest(raw) != meta["sha256"]:
+                raise ValueError("Overlay digest mismatch " + cell)
+            d = json.loads(gzip.decompress(raw))
+            d["row"] = {e[0]: i for i, e in enumerate(d["entries"])}
+            cache[cell] = d
+        return cache[cell]
+    return load, stream
+
+
+def build_level2(tiles_dir, block=BLOCK):
+    """Add overlay2.dmo (one piece per block) to tiles that already have a
+    level-1 overlay, and record it in the manifest."""
+    tiles_dir = Path(tiles_dir)
+    doc = json.loads((tiles_dir / "manifest.json").read_text())
+    if "overlay" not in doc:
+        raise ValueError("Level 1 overlay required")
+    load, stream = level1_reader(tiles_dir, doc)
+    blocks = {}
+    for cell in doc["tiles"]:
+        blocks.setdefault(block_key(cell, block), set()).add(cell)
+    entries = {b: [] for b in blocks}
+    exits = {b: [] for b in blocks}
+    for cell in doc["tiles"]:
+        ov = load(cell)
+        here = block_key(cell, block)
+        for x in ov["exits"]:
+            edge, src, dst, dest, way, lat, lon = x
+            there = block_key(dest, block)
+            if there != here:
+                exits[here].append(x)
+                entries[there].append([edge, src, dst, way, lat, lon, dest])
+    out = tiles_dir / "overlay2.dmo"
+    written = {}
+    offset = 0
+    stats = {"blocks": 0, "entries": 0, "exits": 0, "arcs": 0}
+    with out.open("wb") as output:
+        for b in sorted(blocks):
+            index = {x[0]: j for j, x in enumerate(exits[b])}
+            cost = []
+            for en in entries[b]:
+                found, _ = region_search(load, blocks[b], en[0], en[6])
+                row = [-1] * len(exits[b])
+                for edge, ms in found.items():
+                    row[index[edge]] = ms
+                stats["arcs"] += sum(1 for v in row if v >= 0)
+                cost.append(row)
+            blob = gzip.compress(packed({"entries": entries[b], "exits": exits[b], "cost": cost}),
+                                 compresslevel=6, mtime=0)
+            output.write(blob)
+            written[b] = {"name": b + ".dm2.gz", "offset": offset, "bytes": len(blob),
+                          "sha256": digest(blob)}
+            offset += len(blob)
+            stats["blocks"] += 1
+            stats["entries"] += len(entries[b])
+            stats["exits"] += len(exits[b])
+    stream.close()
+    doc["overlay2"] = {"format": FORMAT2, "block_cells": block, "name": out.name, "bytes": offset,
+                       "sha256": sha_file(out), "blocks": written, "stats": stats}
+    (tiles_dir / "manifest.json").write_bytes(packed(doc))
+    return doc
+
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--tiles", required=True, help="folder with manifest.json and routing.dma")
+    p.add_argument("--level2", action="store_true", help="also build level 2 (blocks of cells)")
     a = p.parse_args()
     print(json.dumps(build_overlay(a.tiles)["overlay"]["stats"]))
+    if a.level2:
+        print(json.dumps(build_level2(a.tiles)["overlay2"]["stats"]))
