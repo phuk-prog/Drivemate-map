@@ -20,3 +20,20 @@ python3 tools/build_map_intelligence.py --source cache-matched/united-kingdom.os
 python3 tools/independent_gateway.py --graph-manifest "$graph" --graph-archive deploy/uk-valhalla/data/current/tiles.tar --db intelligence-matched/map-intelligence.sqlite --report intelligence-matched/coverage.json
 ```
 The gateway verifies both archives and identical immutable source provenance, exposes graph-source itself, bounds requests, and forwards only allowlisted car routing calls to localhost:8002. Keep the graph and index immutable for the service lifetime; stop gateway and routing service before changing the graph or index. Loopback port 8011 requires an external TLS/authenticated proxy or private VPN for Android access. No external host is created by this commit. Photon remains separately deployed.
+
+## Exact-detail deployment
+
+On the approved host, use a fresh output directory and a verified published graph:
+```sh
+bash deploy/map-intelligence/prepare-matched.sh \
+  deploy/uk-valhalla/data/current/graph-manifest.json \
+  deploy/uk-valhalla/data/current/tiles.tar matched-v2
+python3 tools/independent_gateway.py \
+  --graph-manifest deploy/uk-valhalla/data/current/graph-manifest.json \
+  --graph-archive deploy/uk-valhalla/data/current/tiles.tar \
+  --db matched-v2/intelligence/map-intelligence.sqlite \
+  --report matched-v2/intelligence/coverage.json \
+  --geometry-db matched-v2/geometry/map-v2.sqlite \
+  --geometry-manifest matched-v2/geometry/manifest.json
+```
+All three datasets must share one immutable source. Gateway exposes /v2/roads alongside /v1 and routing, still on loopback only. Configure authenticated private TLS/VPN access with no request/location logs; use the configured HTTPS /route URL in the app. No public anonymous gateway, no unapproved hosting expenditure. Run the existing UK route smoke probes and the detailed geometry smoke command before any device acceptance. A missing or mismatched database fails closed. Retain the previous immutable deployment for rollback.
