@@ -6,6 +6,10 @@ on:
         description: Exact immutable UK map release tag (blank uses latest published)
         required: false
         type: string
+      tile_tag:
+        description: Optional exact dated tile release from the same UK source
+        required: false
+        type: string
   schedule:
     - cron: '20 02 * * 0'
   pull_request:
@@ -34,6 +38,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       REQUESTED_TAG: ${{ inputs.source_tag }}
+      TILE_TAG: ${{ inputs.tile_tag }}
     steps:
       - uses: actions/checkout@v4
       - name: Prepare working space
@@ -64,6 +69,15 @@ jobs:
           python3 tools/build_map_intelligence.py --source cache/united-kingdom.osm.pbf --source-tag "$tag" --source-sha256 "$sha" --scope uk --out intelligence
           python3 tools/paired_snapshot.py --graph candidate/graph/uk-valhalla-manifest.json --coverage intelligence/coverage.json --probes valhalla-output/route-probes.json --out candidate/pair.json
           cp intelligence/coverage.json valhalla-output/route-probes.json candidate/
+      - name: Verify matching dated display catalog when requested
+        if: env.TILE_TAG != ''
+        run: |
+          set -euo pipefail
+          [[ "$TILE_TAG" =~ ^tiles-[0-9]{8}T[0-9]{4}Z$ ]]
+          mkdir -p tile-evidence
+          gh release download "$TILE_TAG" --repo "$GH_REPO" --pattern catalog.json --dir tile-evidence
+          python3 tools/paired_snapshot.py --graph candidate/graph/uk-valhalla-manifest.json --coverage intelligence/coverage.json --probes valhalla-output/route-probes.json --out candidate/pair.json --tile-catalog tile-evidence/catalog.json --compatibility-out candidate/compatibility.json
+          cp tile-evidence/catalog.json candidate/tile-catalog.json
       - name: Preserve verified pairing evidence
         uses: actions/upload-artifact@v4
         with:
@@ -73,6 +87,8 @@ jobs:
             candidate/coverage.json
             candidate/route-probes.json
             candidate/graph/uk-valhalla-manifest.json
+            candidate/compatibility.json
+            candidate/tile-catalog.json
           if-no-files-found: error
       - name: Package map intelligence
         run: |

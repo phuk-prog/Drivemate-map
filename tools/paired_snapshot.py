@@ -38,13 +38,40 @@ def pair(graph,report,probes,builder):
             "database_sha256":report["database_sha256"],"database_bytes":report["database_bytes"],
             "licence":"ODbL-1.0","status":"EXPERIMENTAL_NOT_ROAD_VALIDATED","road_validated":False}
 
+def compatibility(pair_data,catalog,catalog_sha256,probe_sha256):
+    """Candidate-only contract for display, native routing and intelligence."""
+    if pair_data.get("road_validated") is not False:
+        raise ValueError("Expected experimental pair")
+    if catalog.get("source_release")!=pair_data["source_tag"] or catalog.get("source_sha256")!=pair_data["source_sha256"]:
+        raise ValueError("Tile source mismatch")
+    release=catalog.get("release","")
+    if not re.fullmatch(r"tiles-[0-9]{8}T[0-9]{4}Z",release):
+        raise ValueError("Expected immutable dated tile release")
+    uk=[x for x in catalog.get("tilesets",[]) if x.get("file")=="uk.pmtiles" or x.get("file")=="united-kingdom.pmtiles"]
+    if len(uk)!=1:raise ValueError("Expected exactly one UK display archive")
+    for value in (catalog_sha256,probe_sha256,uk[0].get("sha256")):
+        if not isinstance(value,str) or not re.fullmatch("[a-f0-9]{64}",value):
+            raise ValueError("Invalid compatibility digest")
+    return {"format":"drivemate-navigation-compatibility-v1",
+            "source_tag":pair_data["source_tag"],"source_sha256":pair_data["source_sha256"],
+            "tile_release":release,"tile_catalog_sha256":catalog_sha256,
+            "uk_tile_sha256":uk[0]["sha256"],"graph_sha256":pair_data["graph_sha256"],
+            "intelligence_sha256":pair_data["database_sha256"],
+            "route_probe_sha256":probe_sha256,
+            "status":"EXPERIMENTAL_NOT_ROAD_VALIDATED","road_validated":False}
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--graph",type=Path,required=True);p.add_argument("--coverage",type=Path,required=True)
     p.add_argument("--probes",type=Path,required=True);p.add_argument("--out",type=Path,required=True)
+    p.add_argument("--tile-catalog",type=Path);p.add_argument("--compatibility-out",type=Path)
     a=p.parse_args()
+    if bool(a.tile_catalog)!=bool(a.compatibility_out):p.error("Supply both compatibility arguments")
     read=lambda path:json.loads(path.read_text())
     result=pair(read(a.graph),read(a.coverage),read(a.probes),fingerprint(Path(__file__).parent))
     a.out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
+    if a.tile_catalog:
+        contract=compatibility(result,read(a.tile_catalog),digest(a.tile_catalog),digest(a.probes))
+        a.compatibility_out.write_text(json.dumps(contract,indent=2,sort_keys=True)+"\n")
     print("Matched immutable snapshot:",result["source_tag"],result["source_sha256"])
 if __name__=="__main__":main()

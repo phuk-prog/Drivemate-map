@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from paired_snapshot import pair
+from paired_snapshot import pair, compatibility
 class PairTest(unittest.TestCase):
     def test_fail_closed_and_match(self):
         g={"source_tag":"uk-test","source_sha256":"a"*64,"tile_extract_sha256":"b"*64,"tile_extract_bytes":1024}
@@ -12,4 +12,14 @@ class PairTest(unittest.TestCase):
             self.assertFalse(pair(g,r,p,"e"*64)["road_validated"])
             p["samples"][0]["passed"]=False
             with self.assertRaisesRegex(ValueError,"probes"):pair(g,r,p,"e"*64)
+    def test_compatibility_rejects_wrong_snapshot_and_mutable_alias(self):
+        p={"source_tag":"uk-map-test","source_sha256":"a"*64,"graph_sha256":"b"*64,
+           "database_sha256":"c"*64,"road_validated":False}
+        cat={"source_release":"uk-map-test","source_sha256":"a"*64,
+             "release":"tiles-20261125T0943Z","tilesets":[{"file":"uk.pmtiles","sha256":"d"*64}]}
+        self.assertEqual(compatibility(p,cat,"e"*64,"f"*64)["uk_tile_sha256"],"d"*64)
+        cat["source_sha256"]="0"*64
+        with self.assertRaisesRegex(ValueError,"source mismatch"):compatibility(p,cat,"e"*64,"f"*64)
+        cat["source_sha256"]="a"*64;cat["release"]="tiles-latest"
+        with self.assertRaisesRegex(ValueError,"immutable"):compatibility(p,cat,"e"*64,"f"*64)
 if __name__=="__main__":unittest.main()
