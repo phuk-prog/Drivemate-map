@@ -57,6 +57,17 @@ weekly, on demand, and on pull requests that touch the router. If
 `reports/valhalla-compare/<region>.json` is committed, it is used as the
 baseline, so a pull request that makes routing worse fails.
 
+## History (North East England, 66 journeys)
+
+| Change | Agreement | DriveMate failed |
+|---|---|---|
+| First run | 51.5% | 29 |
+| Snap only to real road networks; true top speed in A* | 59.1% | 23 |
+| Road hierarchy, levels 1 and 2 | 87.9% | 4 |
+| Car-only conditional tags; passable unmarked gates; 2 km snap; start/end snap rules; 30 mph restricted roads | 100% | 0 |
+
+A flat traffic-light delay was tested and rejected: 10 s gave 92.4%, 20 s 89.4%.
+
 ## Limits
 
 - This tests the Python mirror of the Android engine, not the APK. Keep the

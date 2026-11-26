@@ -101,6 +101,7 @@ class UkGraphTests(unittest.TestCase):
         self.assertEqual(uk.kph({"highway":"motorway","lit":"yes"}),112)
 
     def test_traffic_signal_adds_delay(self):
+        old=uk.SIGNAL_PENALTY_S;uk.SIGNAL_PENALTY_S=10;self.addCleanup(setattr,uk,"SIGNAL_PENALTY_S",old)
         with tempfile.TemporaryDirectory() as tmp:
             db=Path(tmp)/"graph.db";b=uk.Builder(db)
             b.node(2,53.001,-2,{"highway":"traffic_signals"})
@@ -109,7 +110,7 @@ class UkGraphTests(unittest.TestCase):
             with sqlite3.connect(db) as conn:
                 into=conn.execute("SELECT seconds FROM edges WHERE src=1 AND dst=2").fetchone()[0]
                 out=conn.execute("SELECT seconds FROM edges WHERE src=2 AND dst=3").fetchone()[0]
-                self.assertAlmostEqual(into-out,uk.SIGNAL_PENALTY_S,delta=0.5)
+                self.assertAlmostEqual(into-out,10,delta=0.5)
 
     def test_unknown_road_access_refuses_routing(self):
         with tempfile.TemporaryDirectory() as tmp:

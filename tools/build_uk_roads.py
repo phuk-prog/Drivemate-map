@@ -33,9 +33,12 @@ GATES = set("gate lift_gate swing_gate sliding_gate".split())
 # A gate cars may use (no access tags, or a permissive one) is passable but may
 # need opening or be closed briefly, so crossing it costs extra time.
 GATE_PENALTY_S = 30
-# Average delay for driving through a traffic-signal node (red/amber share of
-# the cycle). Calibrated against Valhalla's timing on North East England.
-SIGNAL_PENALTY_S = 10
+# Average delay for driving through a traffic-signal node. Off: measured
+# against Valhalla on North East England (66 journeys), 0 s gave 100% route
+# agreement, 10 s 92.4%, 20 s 89.4%, with no better time estimates, because a
+# flat delay at every light sends routes on detours. Revisit with junction-
+# aware delays (e.g. only when turning or crossing a major road).
+SIGNAL_PENALTY_S = 0
 # UK "restricted road": a lit road with no signed limit is 30 mph by law
 # (Road Traffic Regulation Act 1984 s.81-82). Not applied to motorways.
 RESTRICTED_ROAD_KPH = 30 * 1.609344
