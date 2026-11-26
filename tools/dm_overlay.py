@@ -11,8 +11,8 @@ still built from jumps, the route cost equals a full road-by-road search.
 The roads inside each jumped cell are recovered afterwards (unpack_cell).
 
 Overlay archive: one gzip JSON blob per cell,
-  {"entries": [[edge, src, dst, way, lat_e6, lon_e6], ...],
-   "exits":   [[edge, src, dst, dest_cell, way, lat_e6, lon_e6], ...],
+  {"entries": [[edge, src, dst, way, lat_e6, lon_e6, bearing], ...],
+   "exits":   [[edge, src, dst, dest_cell, way, lat_e6, lon_e6, bearing], ...],
    "cost":    [[ms or -1 per exit] per entry]}
 lat/lon are of the edge's destination node, so a search can estimate
 remaining time without loading the full tile.
@@ -38,6 +38,33 @@ def canon(node):
     return node[6] if len(node) > 6 else node[0]
 
 
+# Turn costs (DriveMate's own model; UK drives on the left, so right turns cross
+# oncoming traffic). Only at a real junction (more than one way on) and for
+# turns sharper than 30 degrees; whole milliseconds so every engine agrees.
+LEFT_TURN_S, RIGHT_TURN_S, TURN_FREE_DEG = 4, 8, 30
+
+
+def bearing_of(edge):
+    return edge[6] if len(edge) > 6 else None
+
+
+def turn_ms(b_in, b_out, options):
+    """Extra time to leave a node on bearing b_out having arrived on b_in, where
+    `options` ways on are available (excluding a U-turn). Same as DmTileEngine.turnMs."""
+    if b_in is None or b_out is None or options <= 1:
+        return 0
+    d = ((b_out - b_in + 540) % 360) - 180
+    a = abs(d)
+    if a < TURN_FREE_DEG:
+        return 0
+    s = LEFT_TURN_S if d < 0 else RIGHT_TURN_S
+    return s * 1000 + s * 500 * (a - TURN_FREE_DEG) // (180 - TURN_FREE_DEG)
+
+
+def options_at(node, prev):
+    return sum(1 for e in node[3] if e[1] != prev)
+
+
 def state_rules(global_rules, node, way):
     """Turn rules that apply when standing on `node` having arrived on `way`.
     Identical to the live search (benchmark_dmtiles_uk / DmTileEngine)."""
@@ -46,29 +73,32 @@ def state_rules(global_rules, node, way):
 
 def cell_search(nodes, cell, entry, global_rules):
     """Edge-based Dijkstra inside one cell, starting just after driving entry
-    edge (edge, src, dst, way). Integer milliseconds, so results are exact.
-    Returns (exit costs {edge: ms}, parent {edge: (prev_edge, record)})."""
+    edge (edge, src, dst, way, bearing). Integer milliseconds, so results are
+    exact. Returns (exit costs {edge: ms}, parent {edge: (prev_edge, record)})."""
     eid, src, dst, way = entry[:4]
+    b_entry = entry[4] if len(entry) > 4 else None
     best = {eid: 0}
     parent = {}
     exits = {}
-    queue = [(0, eid, dst, src, way)]
+    queue = [(0, eid, dst, src, way, b_entry)]
     while queue:
-        g, e, nid, prev, cur_way = heapq.heappop(queue)
+        g, e, nid, prev, cur_way, b_in = heapq.heappop(queue)
         if g > best[e]:
             continue
         node = nodes[nid]
         rules = state_rules(global_rules, node, cur_way)
-        for edge, to, dest, new_way, mm, ms in node[3]:
+        options = options_at(node, prev)
+        for rec in node[3]:
+            edge, to, dest, new_way, mm, ms = rec[:6]
             if not turn_allowed(prev, to, new_way, rules):
                 continue
-            cost = g + ms
+            cost = g + ms + turn_ms(b_in, bearing_of(rec), options)
             if cost >= best.get(edge, math.inf):
                 continue
             best[edge] = cost
             parent[edge] = (e, (edge, to, dest, new_way, mm, ms, nid))
             if dest == cell:
-                heapq.heappush(queue, (cost, edge, to, canon(node), new_way))
+                heapq.heappush(queue, (cost, edge, to, canon(node), new_way, bearing_of(rec)))
             else:
                 exits[edge] = cost
     return exits, parent
@@ -107,7 +137,7 @@ def _cell_job(job):
     """One cell of the level-1 build: entry coordinates and cost matrix."""
     k, meta, entries, exit_ids = job
     nodes = read_tile(_W["stream"], meta)
-    coords = [(nodes[dst][1], nodes[dst][2]) for _, _, dst, _ in entries]
+    coords = [(nodes[e[2]][1], nodes[e[2]][2]) for e in entries]
     index = {edge: j for j, edge in enumerate(exit_ids)}
     cost = []
     for entry in entries:
@@ -138,11 +168,12 @@ def build_overlay(tiles_dir, workers=None):
         # an entry of its neighbour (the same record object in both lists).
         for k, meta in doc["tiles"].items():
             for n in read_tile(stream, meta).values():
-                for edge, to, dest, way, mm, ms in n[3]:
+                for e in n[3]:
+                    edge, to, dest, way = e[:4]
                     if dest != k:
                         if dest not in doc["tiles"]:
                             raise ValueError("Crossing into unknown cell " + dest)
-                        rec = [edge, canon(n), to, dest, way, None, None]
+                        rec = [edge, canon(n), to, dest, way, None, None, bearing_of(e)]
                         exits[k].append(rec)
                         entries[dest].append(rec)
         # Pass 2, in parallel: per cell, coordinates of entering roads and the
@@ -150,7 +181,7 @@ def build_overlay(tiles_dir, workers=None):
         # identical whatever the number of workers.
         catalog = {}
         stats = {"cells": 0, "entries": 0, "exits": 0, "arcs": 0}
-        jobs = [(k, meta, [(r[0], r[1], r[2], r[4]) for r in entries[k]], [r[0] for r in exits[k]])
+        jobs = [(k, meta, [(r[0], r[1], r[2], r[4], r[7]) for r in entries[k]], [r[0] for r in exits[k]])
                 for k, meta in doc["tiles"].items()]
         init = (str(arc), rules)
         if workers > 1:
@@ -175,7 +206,7 @@ def build_overlay(tiles_dir, workers=None):
         offset = 0
         with out.open("wb") as output:
             for k, c in catalog.items():
-                blob_doc = {"entries": [[r[0], r[1], r[2], r[4], r[5], r[6]] for r in c["entries"]],
+                blob_doc = {"entries": [[r[0], r[1], r[2], r[4], r[5], r[6], r[7]] for r in c["entries"]],
                             "exits": c["exits"], "cost": c["cost"]}
                 blob = gzip.compress(packed(blob_doc), compresslevel=6, mtime=0)
                 output.write(blob)
@@ -287,11 +318,12 @@ def build_level2(tiles_dir, block=BLOCK):
         ov = load(cell)
         here = block_key(cell, block)
         for x in ov["exits"]:
-            edge, src, dst, dest, way, lat, lon = x
+            edge, src, dst, dest, way, lat, lon = x[:7]
+            brg = x[7] if len(x) > 7 else None
             there = block_key(dest, block)
             if there != here:
                 exits[here].append(x)
-                entries[there].append([edge, src, dst, way, lat, lon, dest])
+                entries[there].append([edge, src, dst, way, lat, lon, dest, brg])
     out = tiles_dir / "overlay2.dmo"
     written = {}
     offset = 0

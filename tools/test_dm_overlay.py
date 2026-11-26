@@ -45,6 +45,17 @@ def grid_network(db):
     return b, [pos(i, j) for i in range(8) for j in range(8)]
 
 
+class TurnCosts(unittest.TestCase):
+    def test_turn_ms(self):
+        from dm_overlay import turn_ms
+        self.assertEqual(turn_ms(0, 10, 3), 0)          # nearly straight
+        self.assertEqual(turn_ms(0, 270, 3), 4800)      # 90 degree left: 4000 + 2000*60//150
+        self.assertEqual(turn_ms(0, 90, 3), 9600)       # 90 degree right: 8000 + 4000*60//150
+        self.assertEqual(turn_ms(350, 80, 3), 9600)     # wraps across north
+        self.assertEqual(turn_ms(0, 90, 1), 0)          # a bend, not a junction
+        self.assertEqual(turn_ms(None, 90, 3), 0)       # journey start
+
+
 class OverlayMatchesFullSearch(unittest.TestCase):
     def test_every_pair_same_cost_and_connected_path(self):
         with tempfile.TemporaryDirectory() as d:

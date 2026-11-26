@@ -15,6 +15,12 @@ MIN_SNAP_COMPONENT=50
 # Field 5 of a node record says which journey ends may snap to it. 1 and 0 keep
 # their original meaning (both / neither), so older tiles read the same.
 SNAP_BOTH,SNAP_NONE,SNAP_END_ONLY,SNAP_START_ONLY=1,0,2,3
+def bearing(lat1, lon1, lat2, lon2):
+    """Initial compass bearing in whole degrees 0-359, from point 1 to point 2."""
+    import math
+    p1,p2=math.radians(lat1),math.radians(lat2);dl=math.radians(lon2-lon1)
+    y=math.sin(dl)*math.cos(p2);x=math.cos(p1)*math.sin(p2)-math.sin(p1)*math.cos(p2)*math.cos(dl)
+    return int(round(math.degrees(math.atan2(y,x))))%360
 def _csr(n, a, b):
     start=array("q",[0])*(n+1)
     for x in a:start[x+1]+=1
@@ -115,13 +121,14 @@ def compile_graph(dbpath, manifest, out, pilot=False):
                     records[cid].append(orig)
             if len(records)>80000:raise ValueError("Cell exceeds Android node bound; subdivide "+k)
             neighbors=set();edge_count=0;street={}
-            for eid,src,dst,other,way,m,s,name in db.execute("""
-              SELECT e.id,e.src,e.dst,d.k,e.way,e.metres,e.seconds,e.name
+            for eid,src,dst,other,way,m,s,name,lat1,lon1,lat2,lon2 in db.execute("""
+              SELECT e.id,e.src,e.dst,d.k,e.way,e.metres,e.seconds,e.name,n.lat,n.lon,d.lat,d.lon
               FROM cell_nodes n INDEXED BY cn_cell CROSS JOIN edges e INDEXED BY idx_edges_from ON e.src=n.id
               JOIN cell_nodes d ON d.id=e.dst
               WHERE n.k=? AND NOT EXISTS(SELECT 1 FROM blocked_ways b WHERE b.id=e.way)
               """,(k,)):
-                records[src][3].append([eid,dst,other,way,round(m*1000),round(s*1000)]);edge_count+=1
+                # Field 6: compass bearing of the (straight) segment, for turn costs.
+                records[src][3].append([eid,dst,other,way,round(m*1000),round(s*1000),bearing(lat1,lon1,lat2,lon2)]);edge_count+=1
                 if other!=k:neighbors.add(other);counts["cross_cell_edges"]+=1
                 if name:street.setdefault(name,records[src][1:3])
             for frm,to,policy,via in db.execute("SELECT r.from_way,r.to_way,r.policy,r.via FROM cell_nodes n CROSS JOIN restrictions r INDEXED BY idx_turn_via_from ON r.via=n.id WHERE n.k=?",(k,)):
