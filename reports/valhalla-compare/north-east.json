@@ -1,7 +1,7 @@
 {
  "source_sha256": "26c36f8b531c9747ffc22302d8e2d2e17e8c9df08e453cc79f8cec8809d55ff6",
- "drivemate_builder_sha256": "a88478ce810488a708345a88e82dec5033be816b2eba2d30f5ac93cd49585418",
- "engine": "DriveMate Python mirror of DmTileEngine (not the Android build)",
+ "drivemate_builder_sha256": "4c27486052503e405959c23e74985a8f1503e8ee1618353f2f51090b59853c74",
+ "engine": "DriveMate Python mirror of DmTileEngine with road hierarchy (not the Android build)",
  "settings": {
   "expansions": 350000,
   "seconds": 90,
@@ -12,11 +12,11 @@
   "journeys": 66,
   "counts": {
    "ours_slower": 4,
-   "ours_failed": 23,
-   "match": 23,
-   "equivalent": 16
+   "match": 38,
+   "ours_failed": 4,
+   "equivalent": 20
   },
-  "score": 59.1
+  "score": 87.9
  },
  "journeys": [
   {
@@ -44,8 +44,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 284495,
-    "elapsed_seconds": 4.36,
+    "expanded": 32650,
+    "elapsed_seconds": 1.16,
     "km": 35.061,
     "seconds": 1493.21,
     "coverage": 0.776
@@ -69,18 +69,32 @@
     -2.1013
    ],
    "straight_km": 46.39,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.906162,
+    "lon": -1.559077,
+    "osm_way": 4041827,
+    "route_km_from_start": 13.06
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.998,
+    "similarity": 0.997,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.34
+    "ok": true,
+    "expanded": 15645,
+    "elapsed_seconds": 1.33,
+    "km": 57.788,
+    "seconds": 2313.8,
+    "coverage": 0.998
    },
    "valhalla": {
     "ok": true,
     "km": 57.889,
-    "seconds": 2344.792
+    "seconds": 2344.792,
+    "coverage": 0.997,
+    "seconds_for_our_route": 2344.0
    }
   },
   {
@@ -94,18 +108,32 @@
     -2.0054
    ],
    "straight_km": 141.72,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.574324,
+    "lon": -1.236159,
+    "osm_way": 35694849,
+    "route_km_from_start": 0.07
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.001,
+    "similarity": 0.991,
+    "valhalla_time_ratio_of_our_route": 0.999
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 6.18
+    "ok": true,
+    "expanded": 18067,
+    "elapsed_seconds": 1.83,
+    "km": 161.315,
+    "seconds": 5825.42,
+    "coverage": 0.991
    },
    "valhalla": {
     "ok": true,
     "km": 161.112,
-    "seconds": 5885.636
+    "seconds": 5885.636,
+    "coverage": 0.993,
+    "seconds_for_our_route": 5882.1
    }
   },
   {
@@ -119,18 +147,32 @@
     -1.7066
    ],
    "straight_km": 99.34,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.950792,
+    "lon": -1.649719,
+    "osm_way": 198972866,
+    "route_km_from_start": 56.04
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 0.156
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.72
+    "ok": true,
+    "expanded": 16423,
+    "elapsed_seconds": 1.38,
+    "km": 114.617,
+    "seconds": 4180.55,
+    "coverage": 1.0
    },
    "valhalla": {
     "ok": true,
     "km": 114.773,
-    "seconds": 4236.656
+    "seconds": 4236.656,
+    "coverage": 1.0,
+    "seconds_for_our_route": 659.6
    }
   },
   {
@@ -181,8 +223,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 220168,
-    "elapsed_seconds": 3.52,
+    "expanded": 18860,
+    "elapsed_seconds": 0.51,
     "km": 49.847,
     "seconds": 2197.39,
     "coverage": 0.97
@@ -220,8 +262,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 7067,
-    "elapsed_seconds": 0.28,
+    "expanded": 3620,
+    "elapsed_seconds": 0.37,
     "km": 5.806,
     "seconds": 356.62,
     "coverage": 0.786
@@ -259,8 +301,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 5343,
-    "elapsed_seconds": 0.3,
+    "expanded": 3559,
+    "elapsed_seconds": 0.26,
     "km": 4.095,
     "seconds": 300.17,
     "coverage": 0.631
@@ -293,8 +335,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 29521,
-    "elapsed_seconds": 1.56,
+    "expanded": 19819,
+    "elapsed_seconds": 0.83,
     "km": 6.206,
     "seconds": 464.28,
     "coverage": 1.0
@@ -327,8 +369,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 4111,
-    "elapsed_seconds": 1.26,
+    "expanded": 3988,
+    "elapsed_seconds": 0.09,
     "km": 3.745,
     "seconds": 249.96,
     "coverage": 1.0
@@ -366,8 +408,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 9078,
-    "elapsed_seconds": 0.23,
+    "expanded": 5977,
+    "elapsed_seconds": 0.42,
     "km": 5.905,
     "seconds": 327.27,
     "coverage": 0.815
@@ -405,8 +447,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 7856,
-    "elapsed_seconds": 0.4,
+    "expanded": 7316,
+    "elapsed_seconds": 0.56,
     "km": 3.706,
     "seconds": 284.89,
     "coverage": 0.993
@@ -444,8 +486,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 6742,
-    "elapsed_seconds": 0.33,
+    "expanded": 4307,
+    "elapsed_seconds": 0.53,
     "km": 4.351,
     "seconds": 277.37,
     "coverage": 0.536
@@ -483,8 +525,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 8972,
-    "elapsed_seconds": 1.33,
+    "expanded": 7824,
+    "elapsed_seconds": 0.68,
     "km": 3.963,
     "seconds": 278.07,
     "coverage": 0.201
@@ -517,8 +559,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 3916,
-    "elapsed_seconds": 0.24,
+    "expanded": 1687,
+    "elapsed_seconds": 0.46,
     "km": 5.177,
     "seconds": 240.3,
     "coverage": 1.0
@@ -557,7 +599,7 @@
    "ours": {
     "ok": true,
     "expanded": 9405,
-    "elapsed_seconds": 0.31,
+    "elapsed_seconds": 0.28,
     "km": 3.747,
     "seconds": 314.42,
     "coverage": 0.465
@@ -595,8 +637,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 17743,
-    "elapsed_seconds": 0.39,
+    "expanded": 16234,
+    "elapsed_seconds": 0.29,
     "km": 5.729,
     "seconds": 427.93,
     "coverage": 0.907
@@ -634,8 +676,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 17198,
-    "elapsed_seconds": 0.2,
+    "expanded": 6673,
+    "elapsed_seconds": 1.15,
     "km": 7.055,
     "seconds": 460.47,
     "coverage": 0.988
@@ -668,8 +710,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 11732,
-    "elapsed_seconds": 0.38,
+    "expanded": 8698,
+    "elapsed_seconds": 0.14,
     "km": 7.132,
     "seconds": 460.99,
     "coverage": 1.0
@@ -707,8 +749,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 23409,
-    "elapsed_seconds": 0.18,
+    "expanded": 21349,
+    "elapsed_seconds": 1.04,
     "km": 6.735,
     "seconds": 475.45,
     "coverage": 0.041
@@ -741,8 +783,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 2574,
-    "elapsed_seconds": 0.13,
+    "expanded": 2177,
+    "elapsed_seconds": 0.29,
     "km": 5.028,
     "seconds": 304.29,
     "coverage": 1.0
@@ -780,8 +822,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 42715,
-    "elapsed_seconds": 1.02,
+    "expanded": 10067,
+    "elapsed_seconds": 0.56,
     "km": 19.493,
     "seconds": 864.82,
     "coverage": 0.889
@@ -819,8 +861,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 101253,
-    "elapsed_seconds": 1.03,
+    "expanded": 15134,
+    "elapsed_seconds": 1.62,
     "km": 22.746,
     "seconds": 1009.5,
     "coverage": 0.348
@@ -853,8 +895,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 101699,
-    "elapsed_seconds": 2.09,
+    "expanded": 17704,
+    "elapsed_seconds": 0.6,
     "km": 18.852,
     "seconds": 846.39,
     "coverage": 1.0
@@ -892,8 +934,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 115905,
-    "elapsed_seconds": 1.3,
+    "expanded": 13910,
+    "elapsed_seconds": 0.52,
     "km": 22.561,
     "seconds": 1037.2,
     "coverage": 0.42
@@ -931,8 +973,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 49128,
-    "elapsed_seconds": 0.49,
+    "expanded": 21044,
+    "elapsed_seconds": 0.45,
     "km": 13.38,
     "seconds": 786.77,
     "coverage": 0.828
@@ -970,8 +1012,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 63138,
-    "elapsed_seconds": 2.08,
+    "expanded": 10024,
+    "elapsed_seconds": 0.42,
     "km": 20.11,
     "seconds": 1001.66,
     "coverage": 0.974
@@ -1009,8 +1051,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 41336,
-    "elapsed_seconds": 0.31,
+    "expanded": 2378,
+    "elapsed_seconds": 0.41,
     "km": 29.097,
     "seconds": 1202.26,
     "coverage": 0.241
@@ -1048,8 +1090,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 19118,
-    "elapsed_seconds": 0.22,
+    "expanded": 2259,
+    "elapsed_seconds": 0.16,
     "km": 20.658,
     "seconds": 1111.26,
     "coverage": 0.98
@@ -1082,8 +1124,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 16712,
-    "elapsed_seconds": 1.72,
+    "expanded": 6560,
+    "elapsed_seconds": 0.27,
     "km": 11.692,
     "seconds": 571.85,
     "coverage": 1.0
@@ -1121,8 +1163,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 39108,
-    "elapsed_seconds": 0.59,
+    "expanded": 16319,
+    "elapsed_seconds": 0.26,
     "km": 15.446,
     "seconds": 868.84,
     "coverage": 0.346
@@ -1155,8 +1197,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 35245,
-    "elapsed_seconds": 0.34,
+    "expanded": 5477,
+    "elapsed_seconds": 0.28,
     "km": 14.558,
     "seconds": 626.36,
     "coverage": 1.0
@@ -1194,8 +1236,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 20655,
-    "elapsed_seconds": 0.2,
+    "expanded": 6887,
+    "elapsed_seconds": 1.38,
     "km": 18.26,
     "seconds": 789.46,
     "coverage": 0.553
@@ -1228,8 +1270,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 92752,
-    "elapsed_seconds": 0.62,
+    "expanded": 20263,
+    "elapsed_seconds": 0.3,
     "km": 13.85,
     "seconds": 841.28,
     "coverage": 1.0
@@ -1267,8 +1309,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 48565,
-    "elapsed_seconds": 0.73,
+    "expanded": 10055,
+    "elapsed_seconds": 1.27,
     "km": 14.462,
     "seconds": 708.57,
     "coverage": 0.454
@@ -1298,7 +1340,7 @@
     "ok": false,
     "reason": "Disconnected or resource bound",
     "expanded": 173,
-    "elapsed_seconds": 0.14
+    "elapsed_seconds": 0.2
    },
    "valhalla": {
     "ok": true,
@@ -1326,8 +1368,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 16343,
-    "elapsed_seconds": 0.19,
+    "expanded": 1630,
+    "elapsed_seconds": 0.07,
     "km": 37.781,
     "seconds": 1647.81,
     "coverage": 1.0
@@ -1360,8 +1402,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 283372,
-    "elapsed_seconds": 2.64,
+    "expanded": 9977,
+    "elapsed_seconds": 0.21,
     "km": 44.254,
     "seconds": 1926.24,
     "coverage": 1.0
@@ -1394,8 +1436,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 72289,
-    "elapsed_seconds": 0.66,
+    "expanded": 11605,
+    "elapsed_seconds": 0.33,
     "km": 52.339,
     "seconds": 1882.31,
     "coverage": 1.0
@@ -1433,8 +1475,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 109601,
-    "elapsed_seconds": 0.77,
+    "expanded": 9893,
+    "elapsed_seconds": 0.46,
     "km": 30.889,
     "seconds": 1280.99,
     "coverage": 0.99
@@ -1467,8 +1509,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 66565,
-    "elapsed_seconds": 0.74,
+    "expanded": 20020,
+    "elapsed_seconds": 0.33,
     "km": 24.821,
     "seconds": 978.96,
     "coverage": 1.0
@@ -1506,8 +1548,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 60026,
-    "elapsed_seconds": 1.64,
+    "expanded": 3092,
+    "elapsed_seconds": 1.35,
     "km": 35.397,
     "seconds": 1514.14,
     "coverage": 0.769
@@ -1545,8 +1587,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 87777,
-    "elapsed_seconds": 0.6,
+    "expanded": 16696,
+    "elapsed_seconds": 0.26,
     "km": 27.06,
     "seconds": 1097.86,
     "coverage": 0.808
@@ -1584,8 +1626,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 245848,
-    "elapsed_seconds": 3.84,
+    "expanded": 20383,
+    "elapsed_seconds": 0.79,
     "km": 33.902,
     "seconds": 1578.34,
     "coverage": 0.5
@@ -1618,8 +1660,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 236790,
-    "elapsed_seconds": 2.31,
+    "expanded": 11189,
+    "elapsed_seconds": 0.58,
     "km": 34.956,
     "seconds": 1429.04,
     "coverage": 1.0
@@ -1657,8 +1699,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 278525,
-    "elapsed_seconds": 3.95,
+    "expanded": 8125,
+    "elapsed_seconds": 1.41,
     "km": 46.79,
     "seconds": 2205.89,
     "coverage": 0.258
@@ -1682,18 +1724,32 @@
     -1.860414
    ],
    "straight_km": 50.43,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.518284,
+    "lon": -1.359898,
+    "osm_way": 1418760511,
+    "route_km_from_start": 2.84
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 1.003,
+    "similarity": 0.043,
+    "valhalla_time_ratio_of_our_route": 0.986
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 2.62
+    "ok": true,
+    "expanded": 5805,
+    "elapsed_seconds": 0.35,
+    "km": 66.116,
+    "seconds": 2956.24,
+    "coverage": 0.043
    },
    "valhalla": {
     "ok": true,
     "km": 65.921,
-    "seconds": 3094.433
+    "seconds": 3094.433,
+    "coverage": 0.043,
+    "seconds_for_our_route": 3052.2
    }
   },
   {
@@ -1721,8 +1777,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 237608,
-    "elapsed_seconds": 1.74,
+    "expanded": 29200,
+    "elapsed_seconds": 1.71,
     "km": 30.479,
     "seconds": 1377.93,
     "coverage": 0.969
@@ -1746,18 +1802,32 @@
     -1.38267
    ],
    "straight_km": 38.03,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 55.067279,
+    "lon": -1.591638,
+    "osm_way": 23411641,
+    "route_km_from_start": 26.53
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.005,
+    "similarity": 0.903,
+    "valhalla_time_ratio_of_our_route": 1.049
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 4.58
+    "ok": true,
+    "expanded": 5679,
+    "elapsed_seconds": 0.53,
+    "km": 54.047,
+    "seconds": 2185.39,
+    "coverage": 0.903
    },
    "valhalla": {
     "ok": true,
     "km": 53.784,
-    "seconds": 2202.775
+    "seconds": 2202.775,
+    "coverage": 0.909,
+    "seconds_for_our_route": 2309.9
    }
   },
   {
@@ -1771,18 +1841,32 @@
     -1.413029
    ],
    "straight_km": 56.2,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.946226,
+    "lon": -1.514961,
+    "osm_way": 4681932,
+    "route_km_from_start": 76.97
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.021,
+    "similarity": 0.94,
+    "valhalla_time_ratio_of_our_route": 0.999
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 6.17
+    "ok": true,
+    "expanded": 9387,
+    "elapsed_seconds": 0.7,
+    "km": 87.36,
+    "seconds": 3384.65,
+    "coverage": 0.94
    },
    "valhalla": {
     "ok": true,
     "km": 85.583,
-    "seconds": 3474.745
+    "seconds": 3474.745,
+    "coverage": 0.96,
+    "seconds_for_our_route": 3471.2
    }
   },
   {
@@ -1801,8 +1885,8 @@
    "ours": {
     "ok": false,
     "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 4.63
+    "expanded": 25133,
+    "elapsed_seconds": 0.33
    },
    "valhalla": {
     "ok": true,
@@ -1821,18 +1905,32 @@
     -1.539406
    ],
    "straight_km": 89.17,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 55.005594,
+    "lon": -1.667845,
+    "osm_way": 4662064,
+    "route_km_from_start": 69.02
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 0.998,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.54
+    "ok": true,
+    "expanded": 10341,
+    "elapsed_seconds": 1.5,
+    "km": 110.226,
+    "seconds": 3927.12,
+    "coverage": 0.998
    },
    "valhalla": {
     "ok": true,
     "km": 110.329,
-    "seconds": 3942.802
+    "seconds": 3942.802,
+    "coverage": 0.998,
+    "seconds_for_our_route": 3943.1
    }
   },
   {
@@ -1846,18 +1944,32 @@
     -1.672307
    ],
    "straight_km": 63.13,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.643201,
+    "lon": -1.254853,
+    "osm_way": 122041719,
+    "route_km_from_start": 5.28
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.948,
+    "similarity": 0.893,
+    "valhalla_time_ratio_of_our_route": 1.005
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 4.21
+    "ok": true,
+    "expanded": 8175,
+    "elapsed_seconds": 0.56,
+    "km": 79.02,
+    "seconds": 3243.24,
+    "coverage": 0.944
    },
    "valhalla": {
     "ok": true,
     "km": 83.365,
-    "seconds": 3334.631
+    "seconds": 3334.631,
+    "coverage": 0.893,
+    "seconds_for_our_route": 3351.4
    }
   },
   {
@@ -1880,8 +1992,8 @@
    },
    "ours": {
     "ok": true,
-    "expanded": 62737,
-    "elapsed_seconds": 1.3,
+    "expanded": 617,
+    "elapsed_seconds": 0.21,
     "km": 89.179,
     "seconds": 3477.77,
     "coverage": 1.0
@@ -1905,18 +2017,32 @@
     -2.488981
    ],
    "straight_km": 73.7,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.536753,
+    "lon": -1.568862,
+    "osm_way": 62272069,
+    "route_km_from_start": 0.71
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.903,
+    "similarity": 0.265,
+    "valhalla_time_ratio_of_our_route": 0.99
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.29
+    "ok": true,
+    "expanded": 15722,
+    "elapsed_seconds": 0.28,
+    "km": 92.99,
+    "seconds": 4166.97,
+    "coverage": 0.292
    },
    "valhalla": {
     "ok": true,
     "km": 102.989,
-    "seconds": 4333.351
+    "seconds": 4333.351,
+    "coverage": 0.265,
+    "seconds_for_our_route": 4288.0
    }
   },
   {
@@ -1930,18 +2056,32 @@
     -1.064511
    ],
    "straight_km": 98.84,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 55.067279,
+    "lon": -1.591638,
+    "osm_way": 23411641,
+    "route_km_from_start": 44.47
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.963,
+    "similarity": 0.865,
+    "valhalla_time_ratio_of_our_route": 0.997
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.33
+    "ok": true,
+    "expanded": 6811,
+    "elapsed_seconds": 0.68,
+    "km": 127.283,
+    "seconds": 4747.94,
+    "coverage": 0.897
    },
    "valhalla": {
     "ok": true,
     "km": 132.195,
-    "seconds": 4833.293
+    "seconds": 4833.293,
+    "coverage": 0.865,
+    "seconds_for_our_route": 4820.6
    }
   },
   {
@@ -1955,18 +2095,32 @@
     -1.091922
    ],
    "straight_km": 66.02,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.57818,
+    "lon": -1.276712,
+    "osm_way": 4687380,
+    "route_km_from_start": 69.29
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 0.998,
+    "valhalla_time_ratio_of_our_route": 0.998
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 4.27
+    "ok": true,
+    "expanded": 12520,
+    "elapsed_seconds": 1.6,
+    "km": 89.406,
+    "seconds": 3364.8,
+    "coverage": 0.998
    },
    "valhalla": {
     "ok": true,
     "km": 89.452,
-    "seconds": 3439.712
+    "seconds": 3439.712,
+    "coverage": 0.999,
+    "seconds_for_our_route": 3433.8
    }
   },
   {
@@ -1980,18 +2134,27 @@
     -2.162287
    ],
    "straight_km": 87.23,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.006
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 3.0
+    "ok": true,
+    "expanded": 18203,
+    "elapsed_seconds": 1.37,
+    "km": 101.351,
+    "seconds": 4196.21,
+    "coverage": 1.0
    },
    "valhalla": {
     "ok": true,
     "km": 101.465,
-    "seconds": 4346.02
+    "seconds": 4346.02,
+    "coverage": 1.0,
+    "seconds_for_our_route": 4373.5
    }
   },
   {
@@ -2005,18 +2168,27 @@
     -1.308027
    ],
    "straight_km": 71.04,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 3.01
+    "ok": true,
+    "expanded": 18079,
+    "elapsed_seconds": 0.8,
+    "km": 82.34,
+    "seconds": 2892.84,
+    "coverage": 1.0
    },
    "valhalla": {
     "ok": true,
     "km": 82.423,
-    "seconds": 2930.01
+    "seconds": 2930.01,
+    "coverage": 1.0,
+    "seconds_for_our_route": 2930.8
    }
   },
   {
@@ -2030,18 +2202,32 @@
     -1.46355
    ],
    "straight_km": 132.23,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 55.005594,
+    "lon": -1.667845,
+    "osm_way": 4662064,
+    "route_km_from_start": 90.74
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.011,
+    "similarity": 0.883,
+    "valhalla_time_ratio_of_our_route": 0.882
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.95
+    "ok": true,
+    "expanded": 4158,
+    "elapsed_seconds": 0.61,
+    "km": 156.449,
+    "seconds": 5891.86,
+    "coverage": 0.883
    },
    "valhalla": {
     "ok": true,
     "km": 154.794,
-    "seconds": 5853.625
+    "seconds": 5853.625,
+    "coverage": 0.893,
+    "seconds_for_our_route": 5161.4
    }
   },
   {
@@ -2055,18 +2241,27 @@
     -1.764013
    ],
    "straight_km": 82.95,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 6.01
+    "ok": true,
+    "expanded": 7732,
+    "elapsed_seconds": 1.61,
+    "km": 109.394,
+    "seconds": 4035.25,
+    "coverage": 1.0
    },
    "valhalla": {
     "ok": true,
     "km": 109.511,
-    "seconds": 4108.453
+    "seconds": 4108.453,
+    "coverage": 1.0,
+    "seconds_for_our_route": 4108.4
    }
   },
   {
@@ -2080,18 +2275,32 @@
     -1.274235
    ],
    "straight_km": 74.65,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 55.067279,
+    "lon": -1.591638,
+    "osm_way": 23411641,
+    "route_km_from_start": 31.47
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.995,
+    "similarity": 0.965,
+    "valhalla_time_ratio_of_our_route": 0.999
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 3.56
+    "ok": true,
+    "expanded": 2396,
+    "elapsed_seconds": 0.45,
+    "km": 85.468,
+    "seconds": 3054.29,
+    "coverage": 0.969
    },
    "valhalla": {
     "ok": true,
     "km": 85.921,
-    "seconds": 3103.107
+    "seconds": 3103.107,
+    "coverage": 0.965,
+    "seconds_for_our_route": 3098.9
    }
   },
   {
@@ -2105,18 +2314,32 @@
     -1.677197
    ],
    "straight_km": 97.2,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 54.514383,
+    "lon": -1.798772,
+    "osm_way": 198094824,
+    "route_km_from_start": 2.13
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.02,
+    "similarity": 0.951,
+    "valhalla_time_ratio_of_our_route": 1.034
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.95
+    "ok": true,
+    "expanded": 4003,
+    "elapsed_seconds": 1.52,
+    "km": 126.325,
+    "seconds": 4857.28,
+    "coverage": 0.951
    },
    "valhalla": {
     "ok": true,
     "km": 123.822,
-    "seconds": 4825.821
+    "seconds": 4825.821,
+    "coverage": 0.971,
+    "seconds_for_our_route": 4987.6
    }
   },
   {
@@ -2136,7 +2359,7 @@
     "ok": false,
     "reason": "Disconnected or resource bound",
     "expanded": 188,
-    "elapsed_seconds": 0.32
+    "elapsed_seconds": 0.2
    },
    "valhalla": {
     "ok": true,
@@ -2155,18 +2378,32 @@
     -1.588498
    ],
    "straight_km": 99.0,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 55.005594,
+    "lon": -1.667845,
+    "osm_way": 4662064,
+    "route_km_from_start": 53.51
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.998,
+    "similarity": 0.989,
+    "valhalla_time_ratio_of_our_route": 0.84
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 6.33
+    "ok": true,
+    "expanded": 8913,
+    "elapsed_seconds": 1.78,
+    "km": 117.657,
+    "seconds": 4411.5,
+    "coverage": 0.99
    },
    "valhalla": {
     "ok": true,
     "km": 117.911,
-    "seconds": 4461.235
+    "seconds": 4461.235,
+    "coverage": 0.989,
+    "seconds_for_our_route": 3748.3
    }
   },
   {
@@ -2180,18 +2417,32 @@
     -1.58352
    ],
    "straight_km": 99.56,
-   "verdict": "ours_failed",
-   "facts": {},
+   "split": {
+    "lat": 55.005594,
+    "lon": -1.667845,
+    "osm_way": 4662064,
+    "route_km_from_start": 96.38
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 0.998,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
    "ours": {
-    "ok": false,
-    "reason": "Disconnected or resource bound",
-    "expanded": 350000,
-    "elapsed_seconds": 5.67
+    "ok": true,
+    "expanded": 12962,
+    "elapsed_seconds": 1.44,
+    "km": 113.822,
+    "seconds": 4174.15,
+    "coverage": 0.999
    },
    "valhalla": {
     "ok": true,
     "km": 113.937,
-    "seconds": 4180.437
+    "seconds": 4180.437,
+    "coverage": 0.998,
+    "seconds_for_our_route": 4181.1
    }
   }
  ],
