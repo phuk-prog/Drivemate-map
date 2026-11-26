@@ -200,7 +200,7 @@ def builder_fingerprint():
     """Rebuild our graph whenever DriveMate's importer or compiler changes."""
     here = Path(__file__).resolve().parent
     h = hashlib.sha256()
-    for name in ("build_uk_roads.py", "compile_dmtiles_uk.py", "compile_dmtiles.py"):
+    for name in ("build_uk_roads.py", "compile_dmtiles_uk.py", "compile_dmtiles.py", "dm_overlay.py"):
         h.update((here / name).read_bytes())
     return h.hexdigest()
 
@@ -224,6 +224,8 @@ def build_drivemate(pbf, work, source_sha):
     for part in (out / "pack").glob("*.part-*"):
         part.unlink()
     compile_graph(db, manifest, out / "tiles", pilot=True)
+    from dm_overlay import build_overlay
+    build_overlay(out / "tiles")  # road hierarchy: the engine under test uses it
     stamp.write_text(json.dumps(want))
     return out
 
@@ -436,7 +438,7 @@ def main(argv=None):
             print(f"{rec['verdict']:>16}  {rec['name']}", flush=True)
     counts, pct = score(records)
     report = {"source_sha256": source_sha, "drivemate_builder_sha256": builder_fingerprint(),
-              "engine": "DriveMate Python mirror of DmTileEngine (not the Android build)",
+              "engine": "DriveMate Python mirror of DmTileEngine with road hierarchy (not the Android build)",
               "settings": {"expansions": a.expansions, "seconds": a.seconds, "seed": a.seed, "near_m": NEAR_M},
               "summary": {"journeys": len(records), "counts": counts, "score": pct},
               "journeys": records, "road_validated": False}

@@ -19,6 +19,7 @@ on:
       - tools/compile_dmtiles_uk.py
       - tools/benchmark_dmtiles_uk.py
       - tools/compare_with_valhalla.py
+      - tools/dm_overlay.py
       - reports/valhalla-compare/**
 permissions:
   contents: read
