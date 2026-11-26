@@ -1,0 +1,66 @@
+name: Build UK map intelligence candidate
+on:
+  push:
+    branches: ['feat/uk-map-intelligence-20261124']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tools -p 'test_map_intelligence.py' -v
+      - run: python3 -m pip install --quiet osmium
+      - name: Build checksum-pinned actual Wells pilot
+        run: |
+          python3 tools/build_map_intelligence.py --source osm/wells-places-2026-11-19.osm --source-sha256 8cde16000a69096b62f7a75598fb892c2d8eea34b8f2237278a785ddf125ce26 --source-tag wells-2026-11-19 --scope pilot --out intelligence-pilot
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wells-map-intelligence-pilot
+          path: intelligence-pilot/
+          if-no-files-found: error
+  uk:
+    needs: pilot
+    if: github.ref == 'refs/heads/feat/uk-map-intelligence-20261124'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+          python3 -m pip install --quiet osmium
+      - name: Restore checksum verified UK source
+        run: python3 tools/uk_restore_for_tiles.py --dest cache
+      - name: Index national data and measure coverage
+        run: |
+          tag=$(python3 -c 'import json;print(json.load(open("cache/source-release.json"))["source_release"])')
+          sha=$(python3 -c 'import json;print(json.load(open("cache/source-release.json"))["source_sha256"])')
+          python3 tools/build_map_intelligence.py --source cache/united-kingdom.osm.pbf --source-tag "$tag" --source-sha256 "$sha" --scope uk --out intelligence
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UK-map-intelligence-coverage
+          path: intelligence/coverage.json
+          if-no-files-found: error
+      - name: Compress and checksum immutable index
+        run: |
+          mkdir -p pack
+          gzip -n -c intelligence/map-intelligence.sqlite | split -b 850000000 -d -a 3 - pack/map-intelligence.sqlite.gz.part-
+          cp intelligence/coverage.json pack/
+          (cd pack && sha256sum map-intelligence.sqlite.gz.part-* > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UK-map-intelligence-candidate-NOT-ROAD-VALIDATED
+          path: pack/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

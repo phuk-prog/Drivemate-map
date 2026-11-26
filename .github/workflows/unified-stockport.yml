@@ -1,0 +1,22 @@
+name: Stockport unified road geometry proof
+on:
+  push:
+    branches: ['feat/unified-geometry-stockport-20261125']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unified:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tools -p 'test_dmtiles*.py' -v
+      - run: sudo apt-get update -qq && sudo apt-get install -y osmium-tool
+      - run: python3 tools/prepare_stockport_unified.py --out stockport-unified
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stockport-unified-geometry
+          path: stockport-unified/
+          if-no-files-found: error
+          retention-days: 14
