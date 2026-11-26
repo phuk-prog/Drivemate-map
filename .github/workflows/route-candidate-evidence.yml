@@ -1,0 +1,57 @@
+name: Read-only national route candidate evidence
+on:
+  pull_request:
+    paths: ['tools/verify_uk_graph.py', 'tools/test_verify_uk_graph.py', '.github/workflows/route-candidate-evidence.yml']
+  workflow_dispatch:
+    inputs:
+      routing_tag:
+        description: Exact dated routing release (blank resolves the current candidate manifest)
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: route-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REQUESTED_TAG: ${{ inputs.routing_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tools -p 'test_verify_uk_graph.py' -v
+      - name: Resolve immutable routing release
+        run: |
+          set -euo pipefail
+          mkdir -p routing
+          if [[ -n "$REQUESTED_TAG" ]]; then
+            [[ "$REQUESTED_TAG" =~ ^routes-[0-9][A-Za-z0-9-]+$ ]]
+            tag="$REQUESTED_TAG"
+          else
+            gh release download routes-candidate-latest --repo "$GH_REPO" --pattern uk-routing-manifest.json --dir routing
+            tag=$(python3 -c 'import json; m=json.load(open("routing/uk-routing-manifest.json")); print("routes-"+m["source_tag"].removeprefix("uk-map-")+"-b"+m["builder_sha256"][:12])')
+            mv routing/uk-routing-manifest.json routing/candidate-manifest.json
+          fi
+          gh release download "$tag" --repo "$GH_REPO" --pattern uk-routing-manifest.json --dir routing
+          if [[ -f routing/candidate-manifest.json ]]; then
+            cmp routing/candidate-manifest.json routing/uk-routing-manifest.json
+          fi
+          echo "ROUTING_TAG=$tag" >> "$GITHUB_ENV"
+      - name: Restore verified graph for diagnostic only
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          gh release download "$ROUTING_TAG" --repo "$GH_REPO" --pattern 'uk-routing.sqlite.gz.part-*' --dir routing
+          python3 tools/verify_uk_graph.py --manifest routing/uk-routing-manifest.json --parts routing --db cache/uk-routing.sqlite --report routing/uk-routing-evidence.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: national-routing-candidate-evidence
+          path: |
+            routing/uk-routing-manifest.json
+            routing/uk-routing-evidence.json
+          if-no-files-found: warn
+          retention-days: 30

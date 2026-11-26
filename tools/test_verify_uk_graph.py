@@ -116,6 +116,20 @@ class VerifyUkGraphTests(unittest.TestCase):
             finally:
                 roads.close()
 
+    def test_anchor_diagnostics_do_not_claim_access(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"source.db"
+            self.fixture(db)
+            roads=v.OfflineRoads(db)
+            try:
+                evidence=roads.anchor_diagnostics((54.990,-2),(55.010,-1.999))
+                self.assertEqual(evidence["origin"]["nearest_node"],1)
+                self.assertEqual(evidence["destination"]["nearest_node"],4)
+                self.assertFalse(evidence["access_verified"])
+                self.assertEqual(evidence["destination"]["candidates"][0]["usable_departures"],0)
+            finally:
+                roads.close()
+
     def test_full_gzip_part_and_sqlite_hashes_and_no_partial_replacement(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp)

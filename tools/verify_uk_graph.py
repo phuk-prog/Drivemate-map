@@ -20,6 +20,7 @@ import time
 
 FORMAT = "drivemate-uk-routing-v1"
 MAX_EXPANSIONS = 350_000
+ANDROID_MAX_EXPANSIONS = 80_000  # production preview pilot's actual work bound
 SNAP_METRES = 350.0
 SEARCH_WEIGHT = 2.2  # bounded approximate travel-time search, not a fastest-route proof
 ATTRIBUTION = "© OpenStreetMap contributors, ODbL 1.0"
@@ -184,6 +185,8 @@ class OfflineRoads:
         self.source=meta["source_tag"]
 
     def close(self):
+        self.outgoing.cache_clear()
+        self.rules.cache_clear()
         self.db.close()
 
     def nearest(self,point, require_departure=False):
@@ -270,6 +273,8 @@ class OfflineRoads:
             turn_rules=self.rules(node,from_way) if edge_id else ()
             for eid,to,way,seconds,lat,lon,length in self.outgoing(node):
                 if edge_id and not self.turn_allowed(prev_node,to,way,turn_rules):
+                    continue
+                if not math.isfinite(seconds) or seconds<=0 or not math.isfinite(length) or length<=0:
                     continue
                 cost=g+seconds
                 if cost+1e-7>=best.get(eid,math.inf):
@@ -361,6 +366,19 @@ class OfflineRoads:
                 else "Disconnected/restricted road network after anchor fallback",
                 "expanded":expanded,"nearest_failure":first["reason"]}
 
+    def anchor_diagnostics(self,start,end):
+        """Read-only engineering evidence; never infer access or promote an alternate."""
+        def describe(point,departure):
+            nearest=self.nearest(point,require_departure=departure)
+            alternatives=self.anchor_candidates(point,departure)
+            return {"nearest_node": nearest[0] if nearest else None,
+                    "nearest_gap_m": round(metres(point,nearest[1]),1) if nearest else None,
+                    "candidates":[{"node":nid,"gap_m":round(d,1),
+                                   "usable_departures":len(self.outgoing(nid))}
+                                  for d,nid,_ in alternatives]}
+        return {"origin":describe(start,True),"destination":describe(end,False),
+                "access_verified":False}
+
     def named_places(self,names):
         out={}
         for name in names:
@@ -391,11 +409,17 @@ def verify(dbpath,manifest,samples=SAMPLES):
         for name,start,end in samples:
             result=roads.route(start,end)
             result["name"]=name
+            # A successful desktop diagnostic must not be treated as Android parity.
+            result["android_work_bound_passed"] = bool(result["ok"] and result.get("anchor_mode")=="nearest" and result["expanded"]<=ANDROID_MAX_EXPANSIONS)
+            if not result["ok"] or result.get("anchor_mode")!="nearest":
+                result["anchor_diagnostics"] = roads.anchor_diagnostics(start,end)
             data["samples"].append(result)
             if not result["ok"]:
                 failures.append(name+": "+result["reason"])
             elif result.get("anchor_mode")=="alternative-road-nodes":
                 failures.append(name+": connected alternative road nodes; endpoint access and Android parity unverified")
+            elif not result["android_work_bound_passed"]:
+                failures.append(name+": desktop route exceeds Android expansion bound")
     finally:
         roads.close()
     data["failures"]=failures

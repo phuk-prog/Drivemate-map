@@ -8,3 +8,13 @@ Next: validate current candidate on actual national graph, on-device performance
 
 ## Follow-up: exact anchor failures remain
 The 23:51 UTC national recheck (run 45724137205) reduced the first three searches to 37,402, 16,469 and 21,197 expansions, but Edinburgh still exhausted the budget and Belfast reached only two states. Alternative bounded road-anchor search now reports connected-road candidates and explicit unverified access gaps for diagnosis. A fallback result still fails release acceptance pending endpoint access review and equivalent Android implementation/device evidence. The fixed budget is shared; no restriction is removed. Existing approved pointers stay unchanged.
+
+## Stability review
+
+PR #21 runs read-only national routing candidate evidence on the exact dated
+graph before merge. The diagnostic captures nearby road anchors and usable
+departures without treating them as verified access. Successful desktop
+journeys exceeding Android's 80,000 expansion ceiling cannot be promoted.
+Device time and memory parity still require Android replay. Retain all
+current app pins; do not raise resource bounds or weaken turn restrictions
+to achieve a green check. Coordinate the matching app PR #36.
