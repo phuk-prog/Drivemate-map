@@ -11,7 +11,7 @@ BBOX="-2.190,53.390,-2.135,53.425"
 def open_asset(name):
     return urllib.request.urlopen(urllib.request.Request(URL+name,headers={"User-Agent":"DriveMate-unified-map-QA/1.0","Accept-Encoding":"identity"}),timeout=120)
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--out",required=True);p.add_argument("--signals-out",type=Path);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("--out",required=True);p.add_argument("--signals-out",type=Path);p.add_argument("--roadside-out",type=Path);a=p.parse_args()
     out=Path(a.out).resolve();out.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dm-stockport-") as work:
         w=Path(work);pbf=w/"uk.osm.pbf"
@@ -40,6 +40,9 @@ def main():
         if a.signals_out:
             from build_traffic_signals import extract
             extract(pbf,m["sha256"],a.signals_out)
+        if a.roadside_out:
+            from build_roadside_points import extract as extract_roadside
+            extract_roadside(pbf,m["sha256"],a.roadside_out)
         pbf.unlink()
         subprocess.run(["osmium","tags-filter",str(clip),"w/highway","w/building","w/waterway","w/natural=water","w/landuse","w/leisure","w/route=ferry","n/amenity","n/tourism","n/highway=motorway_junction","r/type=restriction","-o",str(filtered)],check=True)
         subprocess.run(["osmium","cat",str(filtered),"-o",str(xml)],check=True)
