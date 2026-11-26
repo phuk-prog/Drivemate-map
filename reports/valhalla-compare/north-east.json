@@ -1,0 +1,2199 @@
+{
+ "source_sha256": "26c36f8b531c9747ffc22302d8e2d2e17e8c9df08e453cc79f8cec8809d55ff6",
+ "drivemate_builder_sha256": "a88478ce810488a708345a88e82dec5033be816b2eba2d30f5ac93cd49585418",
+ "engine": "DriveMate Python mirror of DmTileEngine (not the Android build)",
+ "settings": {
+  "expansions": 350000,
+  "seconds": 90,
+  "seed": 1,
+  "near_m": 30
+ },
+ "summary": {
+  "journeys": 66,
+  "counts": {
+   "ours_slower": 4,
+   "ours_failed": 23,
+   "match": 23,
+   "equivalent": 16
+  },
+  "score": 59.1
+ },
+ "journeys": [
+  {
+   "name": "Newcastle to Durham",
+   "start": [
+    54.9738,
+    -1.6131
+   ],
+   "end": [
+    54.7761,
+    -1.5733
+   ],
+   "straight_km": 22.13,
+   "split": {
+    "lat": 54.788552,
+    "lon": -1.546637,
+    "osm_way": 4811073,
+    "route_km_from_start": 26.92
+   },
+   "verdict": "ours_slower",
+   "facts": {
+    "distance_ratio": 1.179,
+    "similarity": 0.776,
+    "valhalla_time_ratio_of_our_route": 1.26
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 284495,
+    "elapsed_seconds": 4.36,
+    "km": 35.061,
+    "seconds": 1493.21,
+    "coverage": 0.776
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 29.739,
+    "seconds": 1237.672,
+    "coverage": 0.918,
+    "seconds_for_our_route": 1558.9
+   }
+  },
+  {
+   "name": "Sunderland to Hexham",
+   "start": [
+    54.9069,
+    -1.3838
+   ],
+   "end": [
+    54.9718,
+    -2.1013
+   ],
+   "straight_km": 46.39,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.34
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 57.889,
+    "seconds": 2344.792
+   }
+  },
+  {
+   "name": "Middlesbrough to Berwick",
+   "start": [
+    54.5742,
+    -1.235
+   ],
+   "end": [
+    55.7704,
+    -2.0054
+   ],
+   "straight_km": 141.72,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 6.18
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 161.112,
+    "seconds": 5885.636
+   }
+  },
+  {
+   "name": "Darlington to Alnwick",
+   "start": [
+    54.5236,
+    -1.5595
+   ],
+   "end": [
+    55.413,
+    -1.7066
+   ],
+   "straight_km": 99.34,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.72
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 114.773,
+    "seconds": 4236.656
+   }
+  },
+  {
+   "name": "Gateshead to Newcastle Airport",
+   "start": [
+    54.9527,
+    -1.6034
+   ],
+   "end": [
+    55.0375,
+    -1.6917
+   ],
+   "straight_km": 10.98,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "No nearby eligible directed road node"
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 19.3,
+    "seconds": 1492.339
+   }
+  },
+  {
+   "name": "Hartlepool to Consett",
+   "start": [
+    54.6863,
+    -1.2129
+   ],
+   "end": [
+    54.854,
+    -1.8316
+   ],
+   "straight_km": 43.85,
+   "split": {
+    "lat": 54.686477,
+    "lon": -1.21336,
+    "osm_way": 106675513,
+    "route_km_from_start": 0.05
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.98,
+    "similarity": 0.952,
+    "valhalla_time_ratio_of_our_route": 0.976
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 220168,
+    "elapsed_seconds": 3.52,
+    "km": 49.847,
+    "seconds": 2197.39,
+    "coverage": 0.97
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 50.851,
+    "seconds": 2302.045,
+    "coverage": 0.952,
+    "seconds_for_our_route": 2246.3
+   }
+  },
+  {
+   "name": "random 1-5 km #1",
+   "start": [
+    55.027983,
+    -1.659032
+   ],
+   "end": [
+    55.039397,
+    -1.590221
+   ],
+   "straight_km": 4.56,
+   "split": {
+    "lat": 55.027948,
+    "lon": -1.658307,
+    "osm_way": 549575973,
+    "route_km_from_start": 0.05
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.768,
+    "similarity": 0.61,
+    "valhalla_time_ratio_of_our_route": 0.913
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 7067,
+    "elapsed_seconds": 0.28,
+    "km": 5.806,
+    "seconds": 356.62,
+    "coverage": 0.786
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 7.564,
+    "seconds": 460.408,
+    "coverage": 0.61,
+    "seconds_for_our_route": 420.4
+   }
+  },
+  {
+   "name": "random 1-5 km #2",
+   "start": [
+    54.713822,
+    -1.596584
+   ],
+   "end": [
+    54.699151,
+    -1.62129
+   ],
+   "straight_km": 2.28,
+   "split": {
+    "lat": 54.707202,
+    "lon": -1.590501,
+    "osm_way": 198707341,
+    "route_km_from_start": 0.91
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.81,
+    "similarity": 0.51,
+    "valhalla_time_ratio_of_our_route": 0.953
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 5343,
+    "elapsed_seconds": 0.3,
+    "km": 4.095,
+    "seconds": 300.17,
+    "coverage": 0.631
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 5.058,
+    "seconds": 349.661,
+    "coverage": 0.51,
+    "seconds_for_our_route": 333.3
+   }
+  },
+  {
+   "name": "random 1-5 km #3",
+   "start": [
+    55.012399,
+    -1.591081
+   ],
+   "end": [
+    54.97195,
+    -1.587549
+   ],
+   "straight_km": 4.5,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.0,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 29521,
+    "elapsed_seconds": 1.56,
+    "km": 6.206,
+    "seconds": 464.28,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 6.203,
+    "seconds": 494.395,
+    "coverage": 1.0,
+    "seconds_for_our_route": 494.4
+   }
+  },
+  {
+   "name": "random 1-5 km #4",
+   "start": [
+    54.540478,
+    -1.514619
+   ],
+   "end": [
+    54.527261,
+    -1.557286
+   ],
+   "straight_km": 3.12,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.998,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 4111,
+    "elapsed_seconds": 1.26,
+    "km": 3.745,
+    "seconds": 249.96,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 3.752,
+    "seconds": 312.666,
+    "coverage": 1.0,
+    "seconds_for_our_route": 312.7
+   }
+  },
+  {
+   "name": "random 1-5 km #5",
+   "start": [
+    54.519623,
+    -1.258581
+   ],
+   "end": [
+    54.538995,
+    -1.295835
+   ],
+   "straight_km": 3.23,
+   "split": {
+    "lat": 54.519729,
+    "lon": -1.259097,
+    "osm_way": 39822614,
+    "route_km_from_start": 0.04
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.958,
+    "similarity": 0.787,
+    "valhalla_time_ratio_of_our_route": 0.924
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 9078,
+    "elapsed_seconds": 0.23,
+    "km": 5.905,
+    "seconds": 327.27,
+    "coverage": 0.815
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 6.163,
+    "seconds": 383.534,
+    "coverage": 0.787,
+    "seconds_for_our_route": 354.3
+   }
+  },
+  {
+   "name": "random 1-5 km #6",
+   "start": [
+    54.995906,
+    -1.616455
+   ],
+   "end": [
+    55.025985,
+    -1.625932
+   ],
+   "straight_km": 3.4,
+   "split": {
+    "lat": 54.995634,
+    "lon": -1.615825,
+    "osm_way": 1323958590,
+    "route_km_from_start": 0.06
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.989,
+    "similarity": 0.993,
+    "valhalla_time_ratio_of_our_route": 0.99
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 7856,
+    "elapsed_seconds": 0.4,
+    "km": 3.706,
+    "seconds": 284.89,
+    "coverage": 0.993
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 3.746,
+    "seconds": 339.239,
+    "coverage": 1.0,
+    "seconds_for_our_route": 335.9
+   }
+  },
+  {
+   "name": "random 1-5 km #7",
+   "start": [
+    54.952694,
+    -1.464418
+   ],
+   "end": [
+    54.978172,
+    -1.462205
+   ],
+   "straight_km": 2.84,
+   "split": {
+    "lat": 54.965082,
+    "lon": -1.474243,
+    "osm_way": 1349333170,
+    "route_km_from_start": 2.14
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.814,
+    "similarity": 0.432,
+    "valhalla_time_ratio_of_our_route": 1.047
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 6742,
+    "elapsed_seconds": 0.33,
+    "km": 4.351,
+    "seconds": 277.37,
+    "coverage": 0.536
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 5.342,
+    "seconds": 329.663,
+    "coverage": 0.432,
+    "seconds_for_our_route": 345.1
+   }
+  },
+  {
+   "name": "random 1-5 km #8",
+   "start": [
+    55.011075,
+    -1.563766
+   ],
+   "end": [
+    54.992338,
+    -1.579557
+   ],
+   "straight_km": 2.31,
+   "split": {
+    "lat": 55.009626,
+    "lon": -1.573427,
+    "osm_way": 860298938,
+    "route_km_from_start": 0.76
+   },
+   "verdict": "ours_slower",
+   "facts": {
+    "distance_ratio": 1.315,
+    "similarity": 0.201,
+    "valhalla_time_ratio_of_our_route": 1.459
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 8972,
+    "elapsed_seconds": 1.33,
+    "km": 3.963,
+    "seconds": 278.07,
+    "coverage": 0.201
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 3.013,
+    "seconds": 237.727,
+    "coverage": 0.264,
+    "seconds_for_our_route": 346.8
+   }
+  },
+  {
+   "name": "random 1-5 km #9",
+   "start": [
+    54.945182,
+    -1.511696
+   ],
+   "end": [
+    54.951077,
+    -1.479133
+   ],
+   "straight_km": 2.18,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 3916,
+    "elapsed_seconds": 0.24,
+    "km": 5.177,
+    "seconds": 240.3,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 5.184,
+    "seconds": 259.743,
+    "coverage": 1.0,
+    "seconds_for_our_route": 259.7
+   }
+  },
+  {
+   "name": "random 1-5 km #10",
+   "start": [
+    55.169999,
+    -1.54897
+   ],
+   "end": [
+    55.173132,
+    -1.594826
+   ],
+   "straight_km": 2.93,
+   "split": {
+    "lat": 55.168802,
+    "lon": -1.56505,
+    "osm_way": 161216509,
+    "route_km_from_start": 1.11
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.948,
+    "similarity": 0.444,
+    "valhalla_time_ratio_of_our_route": 0.9
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 9405,
+    "elapsed_seconds": 0.31,
+    "km": 3.747,
+    "seconds": 314.42,
+    "coverage": 0.465
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 3.954,
+    "seconds": 351.833,
+    "coverage": 0.444,
+    "seconds_for_our_route": 316.7
+   }
+  },
+  {
+   "name": "random 1-5 km #11",
+   "start": [
+    54.687692,
+    -1.233969
+   ],
+   "end": [
+    54.66268,
+    -1.196534
+   ],
+   "straight_km": 3.68,
+   "split": {
+    "lat": 54.685778,
+    "lon": -1.207446,
+    "osm_way": 106446879,
+    "route_km_from_start": 2.12
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.993,
+    "similarity": 0.902,
+    "valhalla_time_ratio_of_our_route": 1.092
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 17743,
+    "elapsed_seconds": 0.39,
+    "km": 5.729,
+    "seconds": 427.93,
+    "coverage": 0.907
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 5.768,
+    "seconds": 481.776,
+    "coverage": 0.902,
+    "seconds_for_our_route": 525.9
+   }
+  },
+  {
+   "name": "random 1-5 km #12",
+   "start": [
+    54.882304,
+    -1.608446
+   ],
+   "end": [
+    54.847,
+    -1.594936
+   ],
+   "straight_km": 4.02,
+   "split": {
+    "lat": 54.859773,
+    "lon": -1.574986,
+    "osm_way": 899326162,
+    "route_km_from_start": 4.37
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.994,
+    "similarity": 0.978,
+    "valhalla_time_ratio_of_our_route": 1.013
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 17198,
+    "elapsed_seconds": 0.2,
+    "km": 7.055,
+    "seconds": 460.47,
+    "coverage": 0.988
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 7.101,
+    "seconds": 501.106,
+    "coverage": 0.978,
+    "seconds_for_our_route": 507.4
+   }
+  },
+  {
+   "name": "random 1-5 km #13",
+   "start": [
+    54.685815,
+    -1.288683
+   ],
+   "end": [
+    54.661958,
+    -1.24286
+   ],
+   "straight_km": 3.96,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 11732,
+    "elapsed_seconds": 0.38,
+    "km": 7.132,
+    "seconds": 460.99,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 7.137,
+    "seconds": 513.742,
+    "coverage": 1.0,
+    "seconds_for_our_route": 513.7
+   }
+  },
+  {
+   "name": "random 1-5 km #14",
+   "start": [
+    54.511718,
+    -1.57691
+   ],
+   "end": [
+    54.545314,
+    -1.533184
+   ],
+   "straight_km": 4.68,
+   "split": {
+    "lat": 54.511118,
+    "lon": -1.575547,
+    "osm_way": 993007673,
+    "route_km_from_start": 0.0
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.577,
+    "similarity": 0.022,
+    "valhalla_time_ratio_of_our_route": 0.953
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 23409,
+    "elapsed_seconds": 0.18,
+    "km": 6.735,
+    "seconds": 475.45,
+    "coverage": 0.041
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 11.67,
+    "seconds": 551.079,
+    "coverage": 0.022,
+    "seconds_for_our_route": 525.2
+   }
+  },
+  {
+   "name": "random 1-5 km #15",
+   "start": [
+    54.885549,
+    -1.683285
+   ],
+   "end": [
+    54.917585,
+    -1.680414
+   ],
+   "straight_km": 3.57,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 2574,
+    "elapsed_seconds": 0.13,
+    "km": 5.028,
+    "seconds": 304.29,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 5.031,
+    "seconds": 353.643,
+    "coverage": 1.0,
+    "seconds_for_our_route": 353.6
+   }
+  },
+  {
+   "name": "random 5-20 km #1",
+   "start": [
+    54.52073,
+    -1.261808
+   ],
+   "end": [
+    54.614132,
+    -1.060329
+   ],
+   "straight_km": 16.63,
+   "split": {
+    "lat": 54.526929,
+    "lon": -1.259051,
+    "osm_way": 23798391,
+    "route_km_from_start": 1.04
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.876,
+    "similarity": 0.78,
+    "valhalla_time_ratio_of_our_route": 0.993
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 42715,
+    "elapsed_seconds": 1.02,
+    "km": 19.493,
+    "seconds": 864.82,
+    "coverage": 0.889
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 22.261,
+    "seconds": 896.118,
+    "coverage": 0.78,
+    "seconds_for_our_route": 889.9
+   }
+  },
+  {
+   "name": "random 5-20 km #2",
+   "start": [
+    54.920027,
+    -1.386725
+   ],
+   "end": [
+    54.824502,
+    -1.570515
+   ],
+   "straight_km": 15.85,
+   "split": {
+    "lat": 54.918711,
+    "lon": -1.385667,
+    "osm_way": 33923592,
+    "route_km_from_start": 0.17
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.888,
+    "similarity": 0.309,
+    "valhalla_time_ratio_of_our_route": 0.967
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 101253,
+    "elapsed_seconds": 1.03,
+    "km": 22.746,
+    "seconds": 1009.5,
+    "coverage": 0.348
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 25.628,
+    "seconds": 1132.925,
+    "coverage": 0.309,
+    "seconds_for_our_route": 1095.8
+   }
+  },
+  {
+   "name": "random 5-20 km #3",
+   "start": [
+    55.003197,
+    -1.529956
+   ],
+   "end": [
+    54.894101,
+    -1.567331
+   ],
+   "straight_km": 12.36,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 101699,
+    "elapsed_seconds": 2.09,
+    "km": 18.852,
+    "seconds": 846.39,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 18.873,
+    "seconds": 889.583,
+    "coverage": 1.0,
+    "seconds_for_our_route": 889.6
+   }
+  },
+  {
+   "name": "random 5-20 km #4",
+   "start": [
+    55.137256,
+    -1.573491
+   ],
+   "end": [
+    54.979781,
+    -1.594545
+   ],
+   "straight_km": 17.56,
+   "split": {
+    "lat": 55.137149,
+    "lon": -1.571077,
+    "osm_way": 45039472,
+    "route_km_from_start": 0.24
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.839,
+    "similarity": 0.354,
+    "valhalla_time_ratio_of_our_route": 1.006
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 115905,
+    "elapsed_seconds": 1.3,
+    "km": 22.561,
+    "seconds": 1037.2,
+    "coverage": 0.42
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 26.878,
+    "seconds": 1094.015,
+    "coverage": 0.354,
+    "seconds_for_our_route": 1100.2
+   }
+  },
+  {
+   "name": "random 5-20 km #5",
+   "start": [
+    54.983896,
+    -1.429824
+   ],
+   "end": [
+    55.03508,
+    -1.530879
+   ],
+   "straight_km": 8.6,
+   "split": {
+    "lat": 54.975235,
+    "lon": -1.453032,
+    "osm_way": 1253345287,
+    "route_km_from_start": 2.24
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.929,
+    "similarity": 0.766,
+    "valhalla_time_ratio_of_our_route": 0.986
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 49128,
+    "elapsed_seconds": 0.49,
+    "km": 13.38,
+    "seconds": 786.77,
+    "coverage": 0.828
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 14.407,
+    "seconds": 860.716,
+    "coverage": 0.766,
+    "seconds_for_our_route": 848.7
+   }
+  },
+  {
+   "name": "random 5-20 km #6",
+   "start": [
+    54.614159,
+    -1.067897
+   ],
+   "end": [
+    54.567621,
+    -1.312917
+   ],
+   "straight_km": 16.61,
+   "split": {
+    "lat": 54.569577,
+    "lon": -1.300788,
+    "osm_way": 4485845,
+    "route_km_from_start": 18.87
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.981,
+    "similarity": 0.956,
+    "valhalla_time_ratio_of_our_route": 0.978
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 63138,
+    "elapsed_seconds": 2.08,
+    "km": 20.11,
+    "seconds": 1001.66,
+    "coverage": 0.974
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 20.505,
+    "seconds": 1085.078,
+    "coverage": 0.956,
+    "seconds_for_our_route": 1061.4
+   }
+  },
+  {
+   "name": "random 5-20 km #7",
+   "start": [
+    54.581261,
+    -1.431032
+   ],
+   "end": [
+    54.755017,
+    -1.388153
+   ],
+   "straight_km": 19.52,
+   "split": {
+    "lat": 54.60433,
+    "lon": -1.380841,
+    "osm_way": 56734747,
+    "route_km_from_start": 4.97
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.941,
+    "similarity": 0.228,
+    "valhalla_time_ratio_of_our_route": 0.897
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 41336,
+    "elapsed_seconds": 0.31,
+    "km": 29.097,
+    "seconds": 1202.26,
+    "coverage": 0.241
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 30.918,
+    "seconds": 1361.025,
+    "coverage": 0.228,
+    "seconds_for_our_route": 1220.3
+   }
+  },
+  {
+   "name": "random 5-20 km #8",
+   "start": [
+    54.783244,
+    -1.780858
+   ],
+   "end": [
+    54.744372,
+    -2.017566
+   ],
+   "straight_km": 15.79,
+   "split": {
+    "lat": 54.731589,
+    "lon": -1.883148,
+    "osm_way": 60809843,
+    "route_km_from_start": 9.28
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.995,
+    "similarity": 0.977,
+    "valhalla_time_ratio_of_our_route": 0.997
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 19118,
+    "elapsed_seconds": 0.22,
+    "km": 20.658,
+    "seconds": 1111.26,
+    "coverage": 0.98
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 20.758,
+    "seconds": 1188.389,
+    "coverage": 0.977,
+    "seconds_for_our_route": 1184.9
+   }
+  },
+  {
+   "name": "random 5-20 km #9",
+   "start": [
+    55.182319,
+    -1.710527
+   ],
+   "end": [
+    55.16737,
+    -1.587213
+   ],
+   "straight_km": 8.01,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 16712,
+    "elapsed_seconds": 1.72,
+    "km": 11.692,
+    "seconds": 571.85,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 11.707,
+    "seconds": 590.294,
+    "coverage": 1.0,
+    "seconds_for_our_route": 590.3
+   }
+  },
+  {
+   "name": "random 5-20 km #10",
+   "start": [
+    54.628081,
+    -1.579972
+   ],
+   "end": [
+    54.580637,
+    -1.444417
+   ],
+   "straight_km": 10.2,
+   "split": {
+    "lat": 54.627937,
+    "lon": -1.579454,
+    "osm_way": 1549570214,
+    "route_km_from_start": 0.09
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.688,
+    "similarity": 0.238,
+    "valhalla_time_ratio_of_our_route": 1.032
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 39108,
+    "elapsed_seconds": 0.59,
+    "km": 15.446,
+    "seconds": 868.84,
+    "coverage": 0.346
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 22.452,
+    "seconds": 918.065,
+    "coverage": 0.238,
+    "seconds_for_our_route": 947.5
+   }
+  },
+  {
+   "name": "random 5-20 km #11",
+   "start": [
+    55.036899,
+    -1.715612
+   ],
+   "end": [
+    55.036077,
+    -1.571104
+   ],
+   "straight_km": 9.21,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 35245,
+    "elapsed_seconds": 0.34,
+    "km": 14.558,
+    "seconds": 626.36,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 14.574,
+    "seconds": 652.882,
+    "coverage": 1.0,
+    "seconds_for_our_route": 652.9
+   }
+  },
+  {
+   "name": "random 5-20 km #12",
+   "start": [
+    54.627813,
+    -1.291728
+   ],
+   "end": [
+    54.698776,
+    -1.514454
+   ],
+   "straight_km": 16.35,
+   "split": {
+    "lat": 54.658014,
+    "lon": -1.396685,
+    "osm_way": 54264378,
+    "route_km_from_start": 7.98
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.866,
+    "similarity": 0.479,
+    "valhalla_time_ratio_of_our_route": 0.927
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 20655,
+    "elapsed_seconds": 0.2,
+    "km": 18.26,
+    "seconds": 789.46,
+    "coverage": 0.553
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 21.091,
+    "seconds": 895.478,
+    "coverage": 0.479,
+    "seconds_for_our_route": 830.1
+   }
+  },
+  {
+   "name": "random 5-20 km #13",
+   "start": [
+    54.951412,
+    -1.631627
+   ],
+   "end": [
+    54.868155,
+    -1.705435
+   ],
+   "straight_km": 10.39,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.998,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 92752,
+    "elapsed_seconds": 0.62,
+    "km": 13.85,
+    "seconds": 841.28,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 13.871,
+    "seconds": 883.406,
+    "coverage": 1.0,
+    "seconds_for_our_route": 883.4
+   }
+  },
+  {
+   "name": "random 5-20 km #14",
+   "start": [
+    54.849766,
+    -1.581854
+   ],
+   "end": [
+    54.935945,
+    -1.556712
+   ],
+   "straight_km": 9.72,
+   "split": {
+    "lat": 54.852355,
+    "lon": -1.578992,
+    "osm_way": 57389008,
+    "route_km_from_start": 0.47
+   },
+   "verdict": "ours_slower",
+   "facts": {
+    "distance_ratio": 1.168,
+    "similarity": 0.454,
+    "valhalla_time_ratio_of_our_route": 1.311
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 48565,
+    "elapsed_seconds": 0.73,
+    "km": 14.462,
+    "seconds": 708.57,
+    "coverage": 0.454
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 12.383,
+    "seconds": 646.546,
+    "coverage": 0.532,
+    "seconds_for_our_route": 847.3
+   }
+  },
+  {
+   "name": "random 5-20 km #15",
+   "start": [
+    54.581718,
+    -1.3164
+   ],
+   "end": [
+    54.514439,
+    -1.35935
+   ],
+   "straight_km": 7.98,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 173,
+    "elapsed_seconds": 0.14
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 10.433,
+    "seconds": 856.315
+   }
+  },
+  {
+   "name": "random 20-60 km #1",
+   "start": [
+    55.168867,
+    -1.861925
+   ],
+   "end": [
+    55.291236,
+    -2.261229
+   ],
+   "straight_km": 28.75,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 16343,
+    "elapsed_seconds": 0.19,
+    "km": 37.781,
+    "seconds": 1647.81,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 37.821,
+    "seconds": 1863.632,
+    "coverage": 1.0,
+    "seconds_for_our_route": 1863.6
+   }
+  },
+  {
+   "name": "random 20-60 km #2",
+   "start": [
+    54.771368,
+    -1.501753
+   ],
+   "end": [
+    54.469798,
+    -1.490194
+   ],
+   "straight_km": 33.54,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 0.267
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 283372,
+    "elapsed_seconds": 2.64,
+    "km": 44.254,
+    "seconds": 1926.24,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 44.309,
+    "seconds": 2029.239,
+    "coverage": 1.0,
+    "seconds_for_our_route": 541.5
+   }
+  },
+  {
+   "name": "random 20-60 km #3",
+   "start": [
+    54.92266,
+    -2.309515
+   ],
+   "end": [
+    54.959168,
+    -1.726506
+   ],
+   "straight_km": 37.46,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 72289,
+    "elapsed_seconds": 0.66,
+    "km": 52.339,
+    "seconds": 1882.31,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 52.398,
+    "seconds": 1920.315,
+    "coverage": 1.0,
+    "seconds_for_our_route": 1920.3
+   }
+  },
+  {
+   "name": "random 20-60 km #4",
+   "start": [
+    54.604747,
+    -1.286115
+   ],
+   "end": [
+    54.488834,
+    -1.530112
+   ],
+   "straight_km": 20.34,
+   "split": {
+    "lat": 54.57818,
+    "lon": -1.276712,
+    "osm_way": 4687380,
+    "route_km_from_start": 4.98
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.0,
+    "similarity": 0.99,
+    "valhalla_time_ratio_of_our_route": 0.996
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 109601,
+    "elapsed_seconds": 0.77,
+    "km": 30.889,
+    "seconds": 1280.99,
+    "coverage": 0.99
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 30.876,
+    "seconds": 1335.213,
+    "coverage": 0.991,
+    "seconds_for_our_route": 1329.4
+   }
+  },
+  {
+   "name": "random 20-60 km #5",
+   "start": [
+    54.969822,
+    -1.692113
+   ],
+   "end": [
+    55.16688,
+    -1.68729
+   ],
+   "straight_km": 21.91,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 66565,
+    "elapsed_seconds": 0.74,
+    "km": 24.821,
+    "seconds": 978.96,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 24.849,
+    "seconds": 986.798,
+    "coverage": 1.0,
+    "seconds_for_our_route": 986.8
+   }
+  },
+  {
+   "name": "random 20-60 km #6",
+   "start": [
+    54.579989,
+    -1.446197
+   ],
+   "end": [
+    54.827983,
+    -1.477213
+   ],
+   "straight_km": 27.65,
+   "split": {
+    "lat": 54.580197,
+    "lon": -1.445373,
+    "osm_way": 318747541,
+    "route_km_from_start": 0.06
+   },
+   "verdict": "ours_slower",
+   "facts": {
+    "distance_ratio": 0.944,
+    "similarity": 0.726,
+    "valhalla_time_ratio_of_our_route": 1.118
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 60026,
+    "elapsed_seconds": 1.64,
+    "km": 35.397,
+    "seconds": 1514.14,
+    "coverage": 0.769
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 37.493,
+    "seconds": 1466.803,
+    "coverage": 0.726,
+    "seconds_for_our_route": 1639.7
+   }
+  },
+  {
+   "name": "random 20-60 km #7",
+   "start": [
+    54.97111,
+    -1.708325
+   ],
+   "end": [
+    55.174233,
+    -1.674437
+   ],
+   "straight_km": 22.69,
+   "split": {
+    "lat": 55.136507,
+    "lon": -1.68132,
+    "osm_way": 5950664,
+    "route_km_from_start": 21.87
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.846,
+    "similarity": 0.684,
+    "valhalla_time_ratio_of_our_route": 1.009
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 87777,
+    "elapsed_seconds": 0.6,
+    "km": 27.06,
+    "seconds": 1097.86,
+    "coverage": 0.808
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 31.974,
+    "seconds": 1115.592,
+    "coverage": 0.684,
+    "seconds_for_our_route": 1125.6
+   }
+  },
+  {
+   "name": "random 20-60 km #8",
+   "start": [
+    54.761201,
+    -1.588395
+   ],
+   "end": [
+    54.972482,
+    -1.580505
+   ],
+   "straight_km": 23.5,
+   "split": {
+    "lat": 54.76096,
+    "lon": -1.581835,
+    "osm_way": 1350041789,
+    "route_km_from_start": 0.54
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.984,
+    "similarity": 0.492,
+    "valhalla_time_ratio_of_our_route": 1.099
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 245848,
+    "elapsed_seconds": 3.84,
+    "km": 33.902,
+    "seconds": 1578.34,
+    "coverage": 0.5
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 34.462,
+    "seconds": 1531.495,
+    "coverage": 0.492,
+    "seconds_for_our_route": 1682.6
+   }
+  },
+  {
+   "name": "random 20-60 km #9",
+   "start": [
+    54.872052,
+    -1.489105
+   ],
+   "end": [
+    55.130502,
+    -1.534522
+   ],
+   "straight_km": 28.88,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 236790,
+    "elapsed_seconds": 2.31,
+    "km": 34.956,
+    "seconds": 1429.04,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 34.997,
+    "seconds": 1464.805,
+    "coverage": 1.0,
+    "seconds_for_our_route": 1464.5
+   }
+  },
+  {
+   "name": "random 20-60 km #10",
+   "start": [
+    54.730743,
+    -1.887447
+   ],
+   "end": [
+    54.875015,
+    -1.361122
+   ],
+   "straight_km": 37.35,
+   "split": {
+    "lat": 54.737696,
+    "lon": -1.858406,
+    "osm_way": 4693515,
+    "route_km_from_start": 2.34
+   },
+   "verdict": "equivalent",
+   "facts": {
+    "distance_ratio": 0.907,
+    "similarity": 0.234,
+    "valhalla_time_ratio_of_our_route": 1.033
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 278525,
+    "elapsed_seconds": 3.95,
+    "km": 46.79,
+    "seconds": 2205.89,
+    "coverage": 0.258
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 51.606,
+    "seconds": 2248.525,
+    "coverage": 0.234,
+    "seconds_for_our_route": 2323.8
+   }
+  },
+  {
+   "name": "random 20-60 km #11",
+   "start": [
+    54.497489,
+    -1.364709
+   ],
+   "end": [
+    54.84895,
+    -1.860414
+   ],
+   "straight_km": 50.43,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 2.62
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 65.921,
+    "seconds": 3094.433
+   }
+  },
+  {
+   "name": "random 20-60 km #12",
+   "start": [
+    54.971309,
+    -1.604995
+   ],
+   "end": [
+    55.1829,
+    -1.582452
+   ],
+   "straight_km": 23.57,
+   "split": {
+    "lat": 54.991801,
+    "lon": -1.614804,
+    "osm_way": 1301130065,
+    "route_km_from_start": 3.16
+   },
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 1.01,
+    "similarity": 0.969,
+    "valhalla_time_ratio_of_our_route": 1.079
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 237608,
+    "elapsed_seconds": 1.74,
+    "km": 30.479,
+    "seconds": 1377.93,
+    "coverage": 0.969
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 30.183,
+    "seconds": 1343.634,
+    "coverage": 0.977,
+    "seconds_for_our_route": 1450.4
+   }
+  },
+  {
+   "name": "random 20-60 km #13",
+   "start": [
+    55.151657,
+    -1.802254
+   ],
+   "end": [
+    54.908478,
+    -1.38267
+   ],
+   "straight_km": 38.03,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 4.58
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 53.784,
+    "seconds": 2202.775
+   }
+  },
+  {
+   "name": "random 20-60 km #14",
+   "start": [
+    54.838682,
+    -2.258043
+   ],
+   "end": [
+    54.978331,
+    -1.413029
+   ],
+   "straight_km": 56.2,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 6.17
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 85.583,
+    "seconds": 3474.745
+   }
+  },
+  {
+   "name": "random 20-60 km #15",
+   "start": [
+    55.035256,
+    -1.513542
+   ],
+   "end": [
+    54.560659,
+    -1.358827
+   ],
+   "straight_km": 53.7,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 4.63
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 62.436,
+    "seconds": 2452.068
+   }
+  },
+  {
+   "name": "random 60-160 km #1",
+   "start": [
+    55.551051,
+    -1.656335
+   ],
+   "end": [
+    54.751952,
+    -1.539406
+   ],
+   "straight_km": 89.17,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.54
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 110.329,
+    "seconds": 3942.802
+   }
+  },
+  {
+   "name": "random 60-160 km #2",
+   "start": [
+    54.65682,
+    -1.190814
+   ],
+   "end": [
+    55.152476,
+    -1.672307
+   ],
+   "straight_km": 63.13,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 4.21
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 83.365,
+    "seconds": 3334.631
+   }
+  },
+  {
+   "name": "random 60-160 km #3",
+   "start": [
+    55.617875,
+    -2.350912
+   ],
+   "end": [
+    55.072904,
+    -1.691292
+   ],
+   "straight_km": 73.56,
+   "split": null,
+   "verdict": "match",
+   "facts": {
+    "distance_ratio": 0.999,
+    "similarity": 1.0,
+    "valhalla_time_ratio_of_our_route": 1.0
+   },
+   "ours": {
+    "ok": true,
+    "expanded": 62737,
+    "elapsed_seconds": 1.3,
+    "km": 89.179,
+    "seconds": 3477.77,
+    "coverage": 1.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 89.283,
+    "seconds": 3538.249,
+    "coverage": 1.0,
+    "seconds_for_our_route": 3538.2
+   }
+  },
+  {
+   "name": "random 60-160 km #4",
+   "start": [
+    54.538588,
+    -1.561938
+   ],
+   "end": [
+    54.929461,
+    -2.488981
+   ],
+   "straight_km": 73.7,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.29
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 102.989,
+    "seconds": 4333.351
+   }
+  },
+  {
+   "name": "random 60-160 km #5",
+   "start": [
+    55.327547,
+    -1.948235
+   ],
+   "end": [
+    54.597629,
+    -1.064511
+   ],
+   "straight_km": 98.84,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.33
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 132.195,
+    "seconds": 4833.293
+   }
+  },
+  {
+   "name": "random 60-160 km #6",
+   "start": [
+    55.032634,
+    -1.656317
+   ],
+   "end": [
+    54.536042,
+    -1.091922
+   ],
+   "straight_km": 66.02,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 4.27
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 89.452,
+    "seconds": 3439.712
+   }
+  },
+  {
+   "name": "random 60-160 km #7",
+   "start": [
+    54.980706,
+    -1.511603
+   ],
+   "end": [
+    55.672365,
+    -2.162287
+   ],
+   "straight_km": 87.23,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 3.0
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 101.465,
+    "seconds": 4346.02
+   }
+  },
+  {
+   "name": "random 60-160 km #8",
+   "start": [
+    55.187529,
+    -1.550803
+   ],
+   "end": [
+    54.564079,
+    -1.308027
+   ],
+   "straight_km": 71.04,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 3.01
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 82.423,
+    "seconds": 2930.01
+   }
+  },
+  {
+   "name": "random 60-160 km #9",
+   "start": [
+    55.654333,
+    -2.213934
+   ],
+   "end": [
+    54.545323,
+    -1.46355
+   ],
+   "straight_km": 132.23,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.95
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 154.794,
+    "seconds": 5853.625
+   }
+  },
+  {
+   "name": "random 60-160 km #10",
+   "start": [
+    54.615121,
+    -1.056145
+   ],
+   "end": [
+    55.240502,
+    -1.764013
+   ],
+   "straight_km": 82.95,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 6.01
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 109.511,
+    "seconds": 4108.453
+   }
+  },
+  {
+   "name": "random 60-160 km #11",
+   "start": [
+    55.28651,
+    -1.775637
+   ],
+   "end": [
+    54.679964,
+    -1.274235
+   ],
+   "straight_km": 74.65,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 3.56
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 85.921,
+    "seconds": 3103.107
+   }
+  },
+  {
+   "name": "random 60-160 km #12",
+   "start": [
+    54.499663,
+    -1.807183
+   ],
+   "end": [
+    55.370589,
+    -1.677197
+   ],
+   "straight_km": 97.2,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.95
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 123.822,
+    "seconds": 4825.821
+   }
+  },
+  {
+   "name": "random 60-160 km #13",
+   "start": [
+    54.584504,
+    -1.320928
+   ],
+   "end": [
+    55.122424,
+    -1.515173
+   ],
+   "straight_km": 61.09,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 188,
+    "elapsed_seconds": 0.32
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 74.649,
+    "seconds": 2873.217
+   }
+  },
+  {
+   "name": "random 60-160 km #14",
+   "start": [
+    55.400027,
+    -1.909404
+   ],
+   "end": [
+    54.528932,
+    -1.588498
+   ],
+   "straight_km": 99.0,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 6.33
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 117.911,
+    "seconds": 4461.235
+   }
+  },
+  {
+   "name": "random 60-160 km #15",
+   "start": [
+    55.75906,
+    -2.028514
+   ],
+   "end": [
+    54.900197,
+    -1.58352
+   ],
+   "straight_km": 99.56,
+   "verdict": "ours_failed",
+   "facts": {},
+   "ours": {
+    "ok": false,
+    "reason": "Disconnected or resource bound",
+    "expanded": 350000,
+    "elapsed_seconds": 5.67
+   },
+   "valhalla": {
+    "ok": true,
+    "km": 113.937,
+    "seconds": 4180.437
+   }
+  }
+ ],
+ "road_validated": false
+}
