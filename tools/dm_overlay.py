@@ -31,6 +31,13 @@ FORMAT = "drivemate-overlay-v1"
 turn_allowed = OfflineRoads.turn_allowed
 
 
+def canon(node):
+    """The node a record stands for: a copy made for a via-way restriction carries
+    its original's id in field 6. The search remembers this as the previous node,
+    so "no U-turn back to where you came from" also holds across copies."""
+    return node[6] if len(node) > 6 else node[0]
+
+
 def state_rules(global_rules, node, way):
     """Turn rules that apply when standing on `node` having arrived on `way`.
     Identical to the live search (benchmark_dmtiles_uk / DmTileEngine)."""
@@ -61,7 +68,7 @@ def cell_search(nodes, cell, entry, global_rules):
             best[edge] = cost
             parent[edge] = (e, (edge, to, dest, new_way, mm, ms, nid))
             if dest == cell:
-                heapq.heappush(queue, (cost, edge, to, nid, new_way))
+                heapq.heappush(queue, (cost, edge, to, canon(node), new_way))
             else:
                 exits[edge] = cost
     return exits, parent
@@ -135,7 +142,7 @@ def build_overlay(tiles_dir, workers=None):
                     if dest != k:
                         if dest not in doc["tiles"]:
                             raise ValueError("Crossing into unknown cell " + dest)
-                        rec = [edge, n[0], to, dest, way, None, None]
+                        rec = [edge, canon(n), to, dest, way, None, None]
                         exits[k].append(rec)
                         entries[dest].append(rec)
         # Pass 2, in parallel: per cell, coordinates of entering roads and the

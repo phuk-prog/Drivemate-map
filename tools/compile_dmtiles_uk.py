@@ -76,7 +76,13 @@ def snappable_nodes(db):
         JOIN cell_nodes s ON s.id=e.src JOIN cell_nodes d ON d.id=e.dst
         WHERE NOT EXISTS(SELECT 1 FROM blocked_ways b WHERE b.id=e.way)"""):
         src.append(a);dst.append(b)
-    return snap_flags(n,src,dst)
+    flags=snap_flags(n,src,dst)
+    # Copies made for via-way restrictions (build_uk_roads.expand_via_ways) sit on
+    # top of real roads and are never a journey's start or end.
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='copy_nodes'").fetchone():
+        for (row,) in db.execute("SELECT c.rowid FROM cell_nodes c JOIN copy_nodes k ON k.id=c.id"):
+            flags[row-1]=SNAP_NONE
+    return flags
 def compile_graph(dbpath, manifest, out, pilot=False):
     check_manifest(manifest)
     if sha_file(dbpath)!=manifest["database_sha256"]:raise ValueError("Unverified graph")
@@ -94,6 +100,7 @@ def compile_graph(dbpath, manifest, out, pilot=False):
     """)
     cells=[r[0] for r in db.execute("SELECT k FROM cell_nodes UNION SELECT k FROM cell_places ORDER BY k")]
     snap=snappable_nodes(db)
+    has_copies=db.execute("SELECT 1 FROM sqlite_master WHERE name='copy_nodes'").fetchone() is not None
     catalog={};global_rules={};counts={"nodes":0,"edges":0,"cross_cell_edges":0,"places":0,"unsnappable_nodes":snap.count(SNAP_NONE),"start_only_nodes":snap.count(SNAP_START_ONLY),"end_only_nodes":snap.count(SNAP_END_ONLY)}
     for frm,to,policy in db.execute("SELECT from_way,to_way,policy FROM restrictions WHERE via=0"):
         global_rules.setdefault(str(frm),[]).append([to,policy])
@@ -102,6 +109,10 @@ def compile_graph(dbpath, manifest, out, pilot=False):
         for i,k in enumerate(cells):
             # Field 5: which journey ends may snap here (snap_flags: 1 both, 0 neither, 2 end only, 3 start only).
             records={nid:[nid,round(lat*1e6),round(lon*1e6),[],[],snap[row-1]] for nid,lat,lon,row in db.execute("SELECT id,lat,lon,rowid FROM cell_nodes WHERE k=? ORDER BY id",(k,))}
+            # Field 6, copies only (via-way restrictions): the original node's id.
+            if has_copies:
+                for cid,orig in db.execute("SELECT k2.id,k2.original FROM copy_nodes k2 JOIN cell_nodes c ON c.id=k2.id WHERE c.k=?",(k,)):
+                    records[cid].append(orig)
             if len(records)>80000:raise ValueError("Cell exceeds Android node bound; subdivide "+k)
             neighbors=set();edge_count=0;street={}
             for eid,src,dst,other,way,m,s,name in db.execute("""
@@ -129,7 +140,11 @@ def compile_graph(dbpath, manifest, out, pilot=False):
     # Fastest edge in the graph (rounded up): A* divides straight-line distance by
     # this, so it must never be below any real edge speed or routes stop being optimal.
     fastest=db.execute("SELECT MAX(metres/seconds) FROM edges WHERE seconds>0").fetchone()[0] or 0
-    doc={"format":"drivemate-tiles-v1","max_speed_kph":int(fastest*3.6)+1,"scope":"pilot" if pilot else "uk-routing-only","source_sha256":manifest["source_sha256"],"source_tag":manifest["source_tag"],"license":"ODbL-1.0","attribution":"© OpenStreetMap contributors","cell_microdegrees":CELL,"global_rules":global_rules,"tiles":catalog,"archive":{"name":arc.name,"bytes":offset,"sha256":sha_file(arc)},"road_validated":False,"stats":counts}
+    # Copied ways (via-way restrictions) -> original OSM way, for names and reports.
+    alias={}
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='way_alias'").fetchone():
+        alias={str(a):o for a,o in db.execute("SELECT id,original FROM way_alias")}
+    doc={"format":"drivemate-tiles-v1","max_speed_kph":int(fastest*3.6)+1,"way_alias":alias,"scope":"pilot" if pilot else "uk-routing-only","source_sha256":manifest["source_sha256"],"source_tag":manifest["source_tag"],"license":"ODbL-1.0","attribution":"© OpenStreetMap contributors","cell_microdegrees":CELL,"global_rules":global_rules,"tiles":catalog,"archive":{"name":arc.name,"bytes":offset,"sha256":sha_file(arc)},"road_validated":False,"stats":counts}
     (out/"manifest.json").write_bytes(packed(doc));db.close()
     print(json.dumps({"cells":len(catalog),"archive_bytes":offset,"manifest_bytes":(out/"manifest.json").stat().st_size,"stats":counts}),flush=True)
     return doc

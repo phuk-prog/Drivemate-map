@@ -5,6 +5,7 @@ import argparse,gzip,heapq,json,math,time,resource
 from collections import OrderedDict
 from pathlib import Path
 from verify_uk_graph import sha_file,metres,OfflineRoads
+from dm_overlay import canon
 from compile_dmtiles import key,digest
 SAMPLES=[
  ("Sheffield to Leeds",(53.381,-1.470),(53.800,-1.549)),
@@ -45,6 +46,10 @@ class Archive:
         if len(raw)!=m["bytes"] or digest(raw)!=m["sha256"]:raise ValueError("Corrupt level 2 "+b)
         d=json.loads(gzip.decompress(raw));d["row"]={e[0]:i for i,e in enumerate(d["entries"])}
         self.ov2_cache[b]=d;return d
+    def original_ways(self,ways):
+        """Map ways copied for via-way restrictions back to their OSM way."""
+        alias=self.doc.get("way_alias") or {}
+        return [alias.get(str(w),w) for w in ways]
     def load_overlay(self,k):
         if k in self.ov_cache:return self.ov_cache[k]
         m=self.overlay["cells"][k];self.ov_file.seek(m["offset"]);raw=self.ov_file.read(m["bytes"])
@@ -151,7 +156,7 @@ class Archive:
                     else:
                         ov=self.load_overlay(dest);e=ov["entries"][ov["row"][edge]];lat,lon=e[4],e[5]
                     best[edge]=cost;parent[edge]=eid;kind[edge]=("d",k,nid,newway,mm)
-                    heapq.heappush(q,(cost+h(lat/1e6,lon/1e6),cost,edge,dest,to,nid,newway))
+                    heapq.heappush(q,(cost+h(lat/1e6,lon/1e6),cost,edge,dest,to,canon(n),newway))
             else:
                 ov=self.load_overlay(k);row=ov["cost"][ov["row"][eid]];expanded+=1
                 for j,c in enumerate(row):
@@ -188,7 +193,7 @@ class Archive:
                         _,to,dest,way,mm,_,_=r;t=self.load(dest)[to]
                         path.append((dest,t[1]/1e6,t[2]/1e6));ways.append(way);dist+=mm
             prev_edge=edge
-        return {"ok":True,"distance_km":round(dist/1e6,3),"seconds":round(g,2),"expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"path":path,"ways":ways,"cells_read":len(self.touched),"read_bytes":self.read_bytes,"rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}
+        return {"ok":True,"distance_km":round(dist/1e6,3),"seconds":round(g,2),"expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"path":path,"ways":self.original_ways(ways),"cells_read":len(self.touched),"read_bytes":self.read_bytes,"rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}
     def route_flat(self,start,finish,max_expansions,max_seconds):
         began=time.monotonic();self.touched=set();self.read_bytes=0
         a=self.near(start,True);b=self.near(finish,False)
@@ -221,7 +226,7 @@ class Archive:
                 while current:
                     path.append(points[current]);ways.append(wayof[current]);current=parent[current]
                 path.append(points[0]);path.reverse();ways.reverse()
-                return {"ok":True,"distance_km":round(dist/1000,3),"seconds":round(g,2),"expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"path":path,"ways":ways,"cells_read":len(self.touched),"read_bytes":self.read_bytes,"rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}
+                return {"ok":True,"distance_km":round(dist/1000,3),"seconds":round(g,2),"expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"path":path,"ways":self.original_ways(ways),"cells_read":len(self.touched),"read_bytes":self.read_bytes,"rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}
             expanded+=1
             rules=global_rules.get(str(way),[])+[[r[1],r[2]] for r in n[4] if r[0]==way]
             for edge,to,dest,newway,mm,ms in n[3]:
@@ -233,7 +238,7 @@ class Archive:
                 if t is None:raise ValueError("Broken edge")
                 h=max(metres((t[1]/1e6,t[2]/1e6),goal)*3.6/vmax,lower.get(dest,0)/1000)
                 best[edge]=cost;parent[edge]=eid;points[edge]=(dest,t[1]/1e6,t[2]/1e6);wayof[edge]=newway
-                heapq.heappush(q,(cost+h,cost,edge,dest,to,nid,newway,dist+mm/1000))
+                heapq.heappush(q,(cost+h,cost,edge,dest,to,canon(n),newway,dist+mm/1000))
             if len(best)>max_expansions*3:break
         return {"ok":False,"reason":"Disconnected or resource bound","expanded":expanded,"elapsed_seconds":round(time.monotonic()-began,2),"cells_read":len(self.touched),"read_bytes":self.read_bytes}
 def coverage(tiles,path,radius,budget):

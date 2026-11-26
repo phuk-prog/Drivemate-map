@@ -47,7 +47,9 @@ class UkGraphTests(unittest.TestCase):
             self.assertEqual(stats["edges"],5)
             with sqlite3.connect(db) as conn:
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM restrictions").fetchone()[0],1)
-                self.assertEqual(conn.execute("SELECT COUNT(*) FROM blocked_ways").fetchone()[0],1)
+                # An unknown restriction type is ignored and counted, not road-closing.
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM blocked_ways").fetchone()[0],0)
+                self.assertEqual(stats["ignored_incomplete_or_unknown_restriction"],1)
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM places").fetchone()[0],1)
                 self.assertEqual(conn.execute("SELECT name FROM places").fetchone()[0],"Testville")
                 names={row[0] for row in conn.execute("SELECT DISTINCT name FROM edges")}

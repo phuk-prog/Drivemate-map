@@ -115,6 +115,19 @@ def kph(tags):
     return default
 
 
+CAR_HEIGHT_M = 2.0
+
+
+def car_fits(tags):
+    """A height restrictor stops cars only when its signed limit is below a car's
+    height; most (e.g. 4.4 m tunnel portals) only stop lorries and buses."""
+    raw = (tags.get("maxheight") or tags.get("maxheight:physical") or "").replace("m", "").strip()
+    try:
+        return float(raw) >= CAR_HEIGHT_M
+    except ValueError:
+        return not raw  # no limit given: assume it is for tall vehicles
+
+
 def distance(a, b):
     a1, a2 = map(math.radians, a)
     b1, b2 = map(math.radians, b)
@@ -154,11 +167,14 @@ class Builder:
         self.signals = set()  # traffic-signal nodes
         self.road_m = Counter()  # road metres per URBAN_GRID square, for built-up detection
         self.unsigned = []  # (way, highway, speed, grid y, grid x) for roads with no signed limit
+        self.via_way_rules = []  # (from, (via ways...), to, policy), expanded in finish()
 
     def node(self, node_id, lat, lon, tags):
         if tags.get("highway") == "traffic_signals":
             self.signals.add(node_id)
         barrier = tags.get("barrier")
+        if barrier == "height_restrictor" and car_fits(tags):
+            barrier = None
         if barrier and barrier not in PASSABLE:
             if barrier in GATES and access(tags) is True:
                 self.gates.add(node_id)
@@ -246,28 +262,163 @@ class Builder:
         to = [int(v) for r, t, v in members if r == "to" and t == "w"]
         via_nodes = [int(v) for r, t, v in members if r == "via" and t == "n"]
         via_ways = [int(v) for r, t, v in members if r == "via" and t == "w"]
-        if len(frm) != 1 or len(to) != 1 or kind not in TURN_TYPES:
-            uncertain = frm or to
-            if uncertain:
-                self.db.execute("INSERT OR IGNORE INTO blocked_ways VALUES (?)", (uncertain[0],))
-            self.stats["conservatively_blocked_incomplete_turn"] += 1
-            return
-        if len(via_nodes) == 1 and not via_ways:
-            via = via_nodes[0]
-        elif len(via_ways) == 1 and not via_nodes:
-            via, to = 0, via_ways
-            self.stats["conservatively_blocked_via_way"] += 1
-        else:
-            self.db.execute("INSERT OR IGNORE INTO blocked_ways VALUES (?)", (frm[0],))
-            self.stats["conservatively_blocked_incomplete_turn"] += 1
+        if kind not in TURN_TYPES or not frm or not to or bool(via_nodes) == bool(via_ways) \
+                or len(via_nodes) > 1:
+            # Broken or unknown relation: ignored, as other routers do. (Blocking the
+            # whole "from" road closed main roads such as Stratford Broadway.)
+            self.stats["ignored_incomplete_or_unknown_restriction"] += 1
             return
         # Conditional turns deliberately enforce the restrictive policy all week,
         # until a time-aware on-road matcher is independently validated.
         policy = 4 if kind == "only_u_turn" else 3 if kind == "no_u_turn" \
             else 2 if kind.startswith("only_") else 1
-        self.db.execute("INSERT INTO restrictions VALUES (?,?,?,?)",
-                        (via, frm[0], to[0], policy))
-        self.stats["turns"] += 1
+        # Several from/to roads (allowed for no_entry / no_exit): every pair; for a
+        # U-turn ban only same-road pairs.
+        pairs = [(f, t) for f in frm for t in to if policy not in (3, 4) or f == t]
+        if via_ways:
+            for f, t in pairs:
+                self.via_way_rules.append((f, tuple(via_ways), t, policy))
+            self.stats["via_way_restrictions"] += len(pairs)
+            return
+        for f, t in pairs:
+            self.db.execute("INSERT INTO restrictions VALUES (?,?,?,?)", (via_nodes[0], f, t, policy))
+            self.stats["turns"] += 1
+
+    def expand_via_ways(self):
+        """Exact via-way restrictions ("from A, via B1..Bk, to C") by graph copy.
+
+        The via chain is copied with new node and way ids. Only traffic arriving
+        on A may enter the copy, A may no longer enter the original chain, and at
+        the end of the copy the exit onto C is removed (no_*) or is the only one
+        kept (only_*). Side roads along the chain are copied too, so turning off
+        early stays possible. Routing engines need no change. Copy nodes are
+        never journey ends (copy_nodes); copied ways map to the original
+        (way_alias). A chain that cannot be followed falls back to a local ban
+        at its final junction, never to closing a whole road."""
+        if not self.via_way_rules:
+            return
+        db = self.db
+        db.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(src);
+            CREATE INDEX IF NOT EXISTS idx_edges_way ON edges(way);
+            CREATE TABLE copy_nodes(id INTEGER PRIMARY KEY, original INTEGER NOT NULL);
+            CREATE TABLE way_alias(id INTEGER PRIMARY KEY, original INTEGER NOT NULL);
+        """)
+        blocked = {r[0] for r in db.execute("SELECT id FROM blocked")}
+        def out_edges(n):
+            return db.execute("SELECT id,src,dst,way,metres,seconds,name,flags FROM edges WHERE src=?",
+                              (n,)).fetchall()
+        def touches(n, way):
+            return db.execute("SELECT 1 FROM edges WHERE src=? AND way=? LIMIT 1", (n, way)).fetchone()
+        def chain_from(start, ways, target):
+            """Node path from start along ways[0], ways[1], ... to a node with an exit
+            onto target; follows each way without branching."""
+            path, prev = [start], None
+            for i, way in enumerate(ways):
+                nxt = ways[i + 1] if i + 1 < len(ways) else target
+                options = [e for e in out_edges(path[-1]) if e[3] == way and e[2] != prev]
+                found = None
+                for first in options:
+                    seg, p, cur = [first[2]], path[-1], first[2]
+                    for _ in range(400):
+                        if touches(cur, nxt) and (nxt != way):
+                            found = seg
+                            break
+                        step = [e for e in out_edges(cur) if e[3] == way and e[2] != p]
+                        if len(step) != 1:
+                            break
+                        p, cur = cur, step[0][2]
+                        seg.append(cur)
+                    if found:
+                        break
+                if not found:
+                    return None
+                prev = path[-1] if len(found) == 1 else found[-2]
+                path.extend(found)
+            return path
+        # Group restrictions sharing (from, via chain): one copy carries all of them.
+        groups = {}
+        for f, via, t, policy in self.via_way_rules:
+            groups.setdefault((f, via), []).append((t, policy))
+        firsts = Counter((f, via[0]) for f, via in groups)
+        node_id = max(db.execute("SELECT MAX(id) FROM nodes").fetchone()[0], 0) + 10**12
+        way_id = max(db.execute("SELECT MAX(way) FROM edges").fetchone()[0], 0) + 10**12
+        edge_id = self.next_edge
+        def fallback(f, via, rules):
+            # Local ban where the chain ends, applied to anyone arriving on the last via way.
+            ends = db.execute("""SELECT DISTINCT e.src FROM edges e WHERE e.way=? AND EXISTS
+                (SELECT 1 FROM edges c WHERE c.src=e.src AND c.way IN (%s))""" % ",".join(
+                    str(t) for t, _ in rules), (via[-1],)).fetchall()
+            for (n,) in ends:
+                for t, policy in rules:
+                    db.execute("INSERT INTO restrictions VALUES (?,?,?,?)", (n, via[-1], t, 1 if policy in (1, 3) else 2))
+            self.stats["via_way_local_fallback"] += 1
+        for (f, via), rules in groups.items():
+            targets = {t for t, _ in rules}
+            only = any(p in (2, 4) for _, p in rules)
+            if firsts[(f, via[0])] > 1:
+                fallback(f, via, rules)  # overlapping chains from the same road
+                continue
+            starts = [r[0] for r in db.execute("""SELECT DISTINCT a.dst FROM edges a WHERE a.way=?
+                AND EXISTS (SELECT 1 FROM edges b WHERE b.src=a.dst AND b.way=?)""", (f, via[0]))]
+            path = None
+            for j0 in starts:
+                path = chain_from(j0, list(via), next(iter(targets)))
+                if path:
+                    break
+            if not path or any(n in blocked for n in path[1:]):
+                fallback(f, via, rules)
+                continue
+            j0 = path[0]
+            fake = {}
+            for w in via:
+                way_id += 1
+                fake[w] = way_id
+                db.execute("INSERT INTO way_alias VALUES (?,?)", (way_id, w))
+            copies = {}
+            for n in path[1:]:
+                node_id += 1
+                copies[n] = node_id
+                db.execute("INSERT INTO nodes SELECT ?,lat,lon FROM nodes WHERE id=?", (node_id, n))
+                db.execute("INSERT INTO copy_nodes VALUES (?,?)", (node_id, n))
+            new_edges = []
+            # J0 -> first copy, on the copied first via way.
+            for e in out_edges(j0):
+                if e[2] == path[1] and e[3] == via[0]:
+                    edge_id += 1
+                    new_edges.append((edge_id, j0, copies[path[1]], fake[via[0]]) + tuple(e[4:]))
+                    break
+            last = len(path) - 1
+            for i in range(1, len(path)):
+                n, c = path[i], copies[path[i]]
+                for e in out_edges(n):
+                    _, _, dst, way, metres, seconds, name, flags = e
+                    if dst == path[i - 1]:
+                        continue  # no U-turn back along the chain inside the copy
+                    if i < last and dst == path[i + 1] and way in fake:
+                        dst, way = copies[dst], fake[way]
+                    elif i == last:
+                        if (way in targets) == (not only):
+                            continue  # the restricted exit (no_*) / every other exit (only_*)
+                    edge_id += 1
+                    new_edges.append((edge_id, c, dst, way, metres, seconds, name, flags))
+                # Turn rules at the original node also apply at its copy.
+                for frm_w, to_w, policy in db.execute(
+                        "SELECT from_way,to_way,policy FROM restrictions WHERE via=?", (n,)).fetchall():
+                    if frm_w in fake:
+                        db.execute("INSERT INTO restrictions VALUES (?,?,?,?)",
+                                   (c, fake[frm_w], fake.get(to_w, to_w), policy))
+            db.executemany("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?)", new_edges)
+            # At J0: A may not enter the original chain; only A may enter the copy.
+            db.execute("INSERT INTO restrictions VALUES (?,?,?,?)", (j0, f, via[0], 1))
+            for (x,) in db.execute("SELECT DISTINCT way FROM edges WHERE dst=? AND way<>?", (j0, f)).fetchall():
+                db.execute("INSERT INTO restrictions VALUES (?,?,?,?)", (j0, x, fake[via[0]], 1))
+            for (policy,) in db.execute("SELECT policy FROM restrictions WHERE via=? AND from_way=? AND to_way=? AND policy IN (2,4)",
+                                        (j0, f, via[0])).fetchall():
+                db.execute("INSERT INTO restrictions VALUES (?,?,?,?)", (j0, f, fake[via[0]], policy))
+            self.stats["via_way_exact"] += 1
+        self.next_edge = edge_id
+        db.execute("DROP INDEX idx_edges_way")
 
     def flush(self):
         if self.node_buffer:
@@ -301,13 +452,14 @@ class Builder:
     def finish(self, tag, source_sha, min_edges=1):
         self.flush()
         self.urban_speeds()
+        self.expand_via_ways()
         self.stats["edges"] = self.next_edge
         self.stats["nodes"] = self.db.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
         self.stats["places"] = self.db.execute("SELECT COUNT(*) FROM places").fetchone()[0]
         if self.next_edge < min_edges or self.stats["nodes"] < 2:
             raise ValueError("Routable graph empty/incomplete")
         self.db.executescript("""
-            CREATE INDEX idx_edges_from ON edges(src);
+            CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(src);
             CREATE INDEX idx_turn_via_from ON restrictions(via,from_way);
             CREATE INDEX idx_nodes_lat ON nodes(lat,lon);
             CREATE INDEX idx_places_name ON places(name);

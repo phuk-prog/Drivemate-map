@@ -25,10 +25,50 @@ from dm_overlay import build_level2, build_overlay
 from test_dm_overlay import grid_network
 
 
+def write_fixture(tiles, doc, out, expected):
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    shutil.copy(tiles / "manifest.json", out / "manifest.json")
+    for archive, key in (("routing.dma", None), ("overlay.dmo", "overlay"), ("overlay2.dmo", "overlay2")):
+        cells = doc["tiles"] if key is None else doc[key]["cells" if key == "overlay" else "blocks"]
+        raw = (tiles / archive).read_bytes()
+        for meta in cells.values():
+            (out / meta["name"]).write_bytes(raw[meta["offset"]:meta["offset"] + meta["bytes"]])
+    (out / "expected.json").write_text(json.dumps(expected, indent=0) + "\n")
+
+
+def via_way_fixture(out):
+    """The via-way network from test_via_way.py: restricted, allowed and
+    side-road journeys, with this repository's results."""
+    import compile_dmtiles_uk
+    import test_via_way as tv
+    old = compile_dmtiles_uk.MIN_SNAP_COMPONENT
+    compile_dmtiles_uk.MIN_SNAP_COMPONENT = 1
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            _, ar = tv.build(d, "no_right_turn")
+            ar.use_overlay = False
+            expected = []
+            for a, b in itertools.permutations(tv.P, 2):
+                r = ar.route(tv.P[a], tv.P[b], 10**6, 30)
+                expected.append({"start": tv.P[a], "end": tv.P[b], "ok": r["ok"],
+                                 "seconds": r.get("seconds"), "km": r.get("distance_km"),
+                                 "ways": r.get("ways")})
+            tiles = Path(d) / "tiles"
+            write_fixture(tiles, json.loads((tiles / "manifest.json").read_text()), out, expected)
+    finally:
+        compile_dmtiles_uk.MIN_SNAP_COMPONENT = old
+    print(len(expected), "via-way journeys;", sum(1 for x in expected if x["ok"]), "routable")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--via-way-out", type=Path, help="also write the via-way restriction fixture here")
     a = p.parse_args(argv)
+    if a.via_way_out:
+        via_way_fixture(a.via_way_out)
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
         b, points = grid_network(d / "roads.sqlite")
