@@ -60,6 +60,23 @@ class SnapComponents(unittest.TestCase):
         self.assertEqual(comp[4], comp[5])
         self.assertEqual(sorted(sizes), [1, 2, 3])
 
+    def test_snap_flags_start_and_end_separately(self):
+        import compile_dmtiles_uk as c
+        src, dst = [], []
+        for i in range(60):  # two-way ring: a real road network
+            j = (i + 1) % 60
+            src += [i, j]
+            dst += [j, i]
+        src += [5, 60]; dst += [60, 61]    # one-way spur leaving the ring: can only end there
+        src += [62, 63]; dst += [63, 7]    # one-way spur joining the ring: can only start there
+        src += [64, 65]; dst += [65, 64]   # isolated two-node island
+        f = c.snap_flags(66, src, dst)
+        self.assertEqual(f[0], c.SNAP_BOTH)
+        self.assertEqual(f[61], c.SNAP_END_ONLY)
+        self.assertEqual(f[62], c.SNAP_START_ONLY)
+        self.assertEqual(f[64], c.SNAP_NONE)
+        self.assertEqual((c.SNAP_BOTH, c.SNAP_NONE), (1, 0))  # older tiles keep their meaning
+
 
 class Classify(unittest.TestCase):
     def test_failures(self):

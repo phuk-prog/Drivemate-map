@@ -2,7 +2,7 @@
 """Stream a verified UK OSM PBF into a DriveMate-owned, offline car road graph.
 
 The routing graph is a separate deliverable from PMTiles display data.
-Conservative exclusions for unknown access and conditional OSM tags. No traffic.
+Conservative exclusions for unknown access and car-relevant conditional OSM tags. No traffic.
 """
 import argparse
 from collections import Counter
@@ -30,6 +30,21 @@ DENY = set("no private agricultural forestry delivery customers permit emergency
 ALLOW = set("yes permissive destination designated".split())
 PASSABLE = set("cattle_grid toll_booth border_control entrance".split())
 GATES = set("gate lift_gate swing_gate sliding_gate".split())
+# A gate cars may use (no access tags, or a permissive one) is passable but may
+# need opening or be closed briefly, so crossing it costs extra time.
+GATE_PENALTY_S = 30
+# Average delay for driving through a traffic-signal node (red/amber share of
+# the cycle). Calibrated against Valhalla's timing on North East England.
+SIGNAL_PENALTY_S = 10
+# UK "restricted road": a lit road with no signed limit is 30 mph by law
+# (Road Traffic Regulation Act 1984 s.81-82). Not applied to motorways.
+RESTRICTED_ROAD_KPH = 30 * 1.609344
+# Only these conditional tags change whether, or which way, a car may use a
+# road. Until time-aware rules are modelled such roads are excluded; others
+# (lorry weight limits, bus or bicycle lanes, parking) do not affect cars.
+CAR_CONDITIONAL = set(k + ":conditional" for k in (
+    "access", "vehicle", "motor_vehicle", "motorcar",
+    "oneway", "oneway:vehicle", "oneway:motor_vehicle", "oneway:motorcar"))
 TURN_TYPES = set(("no_left_turn no_right_turn no_straight_on no_u_turn no_entry no_exit "
                   "only_left_turn only_right_turn only_straight_on only_u_turn").split())
 PLACES = set("city town village hamlet suburb neighbourhood locality".split())
@@ -79,7 +94,10 @@ def kph(tags):
             return speed
         except ValueError:
             pass  # Unknown designation: estimated travel time, never a displayed legal speed.
-    return SPEED.get(tags.get("highway"), 10)
+    default = SPEED.get(tags.get("highway"), 10)
+    if tags.get("lit") == "yes" and tags.get("highway") not in ("motorway", "motorway_link"):
+        return min(default, RESTRICTED_ROAD_KPH)
+    return default
 
 
 def distance(a, b):
@@ -117,12 +135,18 @@ class Builder:
         self.stats = Counter()
         self.node_buffer, self.edge_buffer = [], []
         self.next_edge = 0
+        self.gates = set()  # passable gate nodes; nodes are read before ways
+        self.signals = set()  # traffic-signal nodes
 
     def node(self, node_id, lat, lon, tags):
+        if tags.get("highway") == "traffic_signals":
+            self.signals.add(node_id)
         barrier = tags.get("barrier")
         if barrier and barrier not in PASSABLE:
-            if barrier not in GATES or not any(k in tags for k in (
-                    "access", "vehicle", "motor_vehicle", "motorcar")) or access(tags) is not True:
+            if barrier in GATES and access(tags) is True:
+                self.gates.add(node_id)
+                self.stats["gates_passable_with_penalty"] += 1
+            else:
                 self.db.execute("INSERT OR IGNORE INTO blocked VALUES (?)", (node_id,))
         if tags.get("place") in PLACES and tags.get("name"):
             self.db.execute("INSERT INTO places VALUES (?,?,?,?)",
@@ -139,7 +163,7 @@ class Builder:
         if tags.get("area") == "yes" or access(tags) is not True or direction(tags) is None:
             self.stats["excluded_access_or_direction"] += 1
             return
-        if any(key.endswith(":conditional") and not key.startswith("maxspeed") for key in tags):
+        if any(key in CAR_CONDITIONAL for key in tags):
             self.stats["excluded_conditional_access_or_direction"] += 1
             return
         speed = 10 if ferry else kph(tags)
@@ -171,8 +195,10 @@ class Builder:
                 if not permitted:
                     continue
                 self.next_edge += 1
+                seconds = meters/(speed/3.6) + (GATE_PENALTY_S if dst in self.gates else 0) + (
+                    SIGNAL_PENALTY_S if dst in self.signals and not ferry else 0)
                 self.edge_buffer.append((self.next_edge, src, dst, way_id,
-                                         meters, meters/(speed/3.6), name, flags))
+                                         meters, seconds, name, flags))
         self.stats["ways"] += 1
         if len(self.edge_buffer) >= 12000:
             self.flush()
@@ -258,7 +284,7 @@ def load_osm(source, builder):
 
     class OSM(osmium.SimpleHandler):
         def node(self, n):
-            if n.tags.get("barrier") or n.tags.get("place"):
+            if n.tags.get("barrier") or n.tags.get("place") or n.tags.get("highway") == "traffic_signals":
                 builder.node(n.id, n.location.lat, n.location.lon, dict(n.tags))
         def way(self, w):
             if w.tags.get("highway") not in DRIVABLE and w.tags.get("route") != "ferry":

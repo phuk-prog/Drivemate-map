@@ -89,9 +89,35 @@ def read_tile(stream, entry):
     return {n[0]: n for n in json.loads(gzip.decompress(raw))["nodes"]}
 
 
-def build_overlay(tiles_dir):
+_W = {}
+
+
+def _cell_worker_init(archive, rules):
+    _W.update(stream=open(archive, "rb"), rules=rules)
+
+
+def _cell_job(job):
+    """One cell of the level-1 build: entry coordinates and cost matrix."""
+    k, meta, entries, exit_ids = job
+    nodes = read_tile(_W["stream"], meta)
+    coords = [(nodes[dst][1], nodes[dst][2]) for _, _, dst, _ in entries]
+    index = {edge: j for j, edge in enumerate(exit_ids)}
+    cost = []
+    for entry in entries:
+        found, _ = cell_search(nodes, k, entry, _W["rules"])
+        row = [-1] * len(exit_ids)
+        for edge, ms in found.items():
+            row[index[edge]] = ms
+        cost.append(row)
+    return coords, cost
+
+
+def build_overlay(tiles_dir, workers=None):
     """Add the overlay archive to a compiled tiles folder (manifest.json +
-    routing.dma) and record it, with checksums, in the manifest."""
+    routing.dma) and record it, with checksums, in the manifest. Cells are
+    computed in parallel on `workers` processes (default: all CPUs)."""
+    import os
+    workers = workers or os.cpu_count() or 1
     tiles_dir = Path(tiles_dir)
     doc = json.loads((tiles_dir / "manifest.json").read_text())
     arc = tiles_dir / doc["archive"]["name"]
@@ -112,23 +138,25 @@ def build_overlay(tiles_dir):
                         rec = [edge, n[0], to, dest, way, None, None]
                         exits[k].append(rec)
                         entries[dest].append(rec)
-        # Pass 2: coordinates for crossing destinations, then the cost matrix.
+        # Pass 2, in parallel: per cell, coordinates of entering roads and the
+        # cost matrix. Results are combined in catalog order, so the output is
+        # identical whatever the number of workers.
         catalog = {}
         stats = {"cells": 0, "entries": 0, "exits": 0, "arcs": 0}
-        for k, meta in doc["tiles"].items():
-            nodes = read_tile(stream, meta)
-            for rec in entries[k]:
-                node = nodes[rec[2]]
-                rec[5], rec[6] = node[1], node[2]
-            index = {rec[0]: j for j, rec in enumerate(exits[k])}
-            cost = []
-            for rec in entries[k]:
-                found, _ = cell_search(nodes, k, (rec[0], rec[1], rec[2], rec[4]), rules)
-                row = [-1] * len(exits[k])
-                for edge, ms in found.items():
-                    row[index[edge]] = ms
-                stats["arcs"] += sum(1 for v in row if v >= 0)
-                cost.append(row)
+        jobs = [(k, meta, [(r[0], r[1], r[2], r[4]) for r in entries[k]], [r[0] for r in exits[k]])
+                for k, meta in doc["tiles"].items()]
+        init = (str(arc), rules)
+        if workers > 1:
+            from concurrent.futures import ProcessPoolExecutor
+            with ProcessPoolExecutor(workers, initializer=_cell_worker_init, initargs=init) as pool:
+                results = list(pool.map(_cell_job, jobs, chunksize=8))
+        else:
+            _cell_worker_init(*init)
+            results = [_cell_job(j) for j in jobs]
+        for (k, _, _, _), (coords, cost) in zip(jobs, results):
+            for rec, (lat, lon) in zip(entries[k], coords):
+                rec[5], rec[6] = lat, lon
+            stats["arcs"] += sum(1 for row in cost for v in row if v >= 0)
             catalog[k] = {"entries": entries[k], "exits": exits[k], "cost": cost}
             stats["cells"] += 1
             stats["entries"] += len(entries[k])

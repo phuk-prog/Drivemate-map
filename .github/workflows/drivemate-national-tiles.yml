@@ -2,7 +2,7 @@ name: Compile nationwide DriveMate range-addressable routing tiles
 on:
   push:
     branches: ['feat/drivemate-native-stack-20261124']
-    paths: ['tools/compile_dmtiles_uk.py','tools/test_dmtiles_uk.py','.github/workflows/drivemate-national-tiles.yml']
+    paths: ['tools/compile_dmtiles_uk.py','tools/test_dmtiles_uk.py','tools/dm_overlay.py','tools/test_dm_overlay.py','.github/workflows/drivemate-national-tiles.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m unittest discover -s tools -p test_dmtiles_uk.py -v
+      - run: python3 -m unittest discover -s tools -p test_dm_overlay.py -v
   national:
     needs: tests
     runs-on: ubuntu-24.04
@@ -35,8 +36,8 @@ jobs:
           echo '19e668dc43d0abdc09e22af2a09672ac0d5dc6b8b12dd39b2b1c74d3a97f5b51  graph/uk-routing-manifest.json' | sha256sum -c -
           PYTHONPATH=tools python3 -c 'import json; from verify_uk_graph import restore; print(restore(json.load(open("graph/uk-routing-manifest.json")),"graph","graph/roads.sqlite"))'
           rm graph/uk-routing.sqlite.gz.part-*
-      - name: Compile independently addressable UK routing cells
-        run: python3 tools/compile_dmtiles_uk.py --db graph/roads.sqlite --manifest graph/uk-routing-manifest.json --out uk-dmtiles
+      - name: Compile independently addressable UK routing cells and road hierarchy (levels 1 and 2)
+        run: python3 tools/compile_dmtiles_uk.py --db graph/roads.sqlite --manifest graph/uk-routing-manifest.json --out uk-dmtiles --overlay
       - name: Preserve candidate metadata
         uses: actions/upload-artifact@v4
         with:

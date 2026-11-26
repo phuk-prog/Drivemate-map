@@ -64,6 +64,53 @@ class UkGraphTests(unittest.TestCase):
                              manifest["database_sha256"])
             self.assertFalse((output/"uk-routing.sqlite.gz").exists())
 
+    def test_only_car_conditional_tags_exclude_a_road(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=uk.Builder(Path(tmp)/"graph.db")
+            refs=[(1,53,-2),(2,53.001,-2)]
+            # Lorry weight limit, bus lane and parking rules do not affect cars.
+            b.way(1,{"highway":"tertiary","maxweightrating:hgv:conditional":"none @ destination"},refs)
+            b.way(2,{"highway":"residential","maxweight:conditional":"7.5 @ (06:00-18:00)"},refs)
+            b.way(3,{"highway":"primary","lanes:psv:forward:conditional":"1 @ (Mo-Fr 07:00-10:00)"},refs)
+            for i,k in enumerate(("access","motor_vehicle","vehicle","motorcar","oneway"),start=10):
+                b.way(i,{"highway":"residential",k+":conditional":"no @ (Mo-Fr 08:00-09:00)"},refs)
+            self.assertEqual(b.stats["ways"],3)
+            self.assertEqual(b.stats["excluded_conditional_access_or_direction"],5)
+            b.db.close()
+
+    def test_unmarked_gate_passable_with_penalty_private_gate_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"graph.db";b=uk.Builder(db)
+            b.node(2,53.001,-2,{"barrier":"gate"})
+            b.node(4,53.003,-2,{"barrier":"gate","access":"private"})
+            b.node(5,53.004,-2,{"barrier":"lift_gate","motor_vehicle":"yes"})
+            b.way(1,{"highway":"residential"},[(1,53,-2),(2,53.001,-2),(3,53.002,-2),(4,53.003,-2),(5,53.004,-2)])
+            b.finish("uk-map-20261122T084645Z-9013a4487fa6","0"*64,min_edges=1)
+            with sqlite3.connect(db) as conn:
+                self.assertEqual({r[0] for r in conn.execute("SELECT id FROM blocked")},{4})
+                plain=conn.execute("SELECT seconds FROM edges WHERE src=2 AND dst=3").fetchone()[0]
+                into_gate=conn.execute("SELECT seconds FROM edges WHERE src=1 AND dst=2").fetchone()[0]
+                self.assertAlmostEqual(into_gate-plain,uk.GATE_PENALTY_S,delta=0.5)
+                self.assertGreater(conn.execute("SELECT seconds FROM edges WHERE src=4 AND dst=5").fetchone()[0],uk.GATE_PENALTY_S)
+
+    def test_lit_unsigned_road_is_30_mph_restricted_road(self):
+        self.assertAlmostEqual(uk.kph({"highway":"tertiary","lit":"yes"}),48.28,places=1)
+        self.assertEqual(uk.kph({"highway":"tertiary"}),56)
+        self.assertEqual(uk.kph({"highway":"residential","lit":"yes"}),32)  # already slower
+        self.assertAlmostEqual(uk.kph({"highway":"primary","lit":"yes","maxspeed":"40 mph"}),64.37,places=1)
+        self.assertEqual(uk.kph({"highway":"motorway","lit":"yes"}),112)
+
+    def test_traffic_signal_adds_delay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"graph.db";b=uk.Builder(db)
+            b.node(2,53.001,-2,{"highway":"traffic_signals"})
+            b.way(1,{"highway":"primary"},[(1,53,-2),(2,53.001,-2),(3,53.002,-2)])
+            b.finish("uk-map-20261122T084645Z-9013a4487fa6","0"*64,min_edges=1)
+            with sqlite3.connect(db) as conn:
+                into=conn.execute("SELECT seconds FROM edges WHERE src=1 AND dst=2").fetchone()[0]
+                out=conn.execute("SELECT seconds FROM edges WHERE src=2 AND dst=3").fetchone()[0]
+                self.assertAlmostEqual(into-out,uk.SIGNAL_PENALTY_S,delta=0.5)
+
     def test_unknown_road_access_refuses_routing(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=uk.Builder(Path(tmp)/"graph.db")

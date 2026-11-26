@@ -12,17 +12,20 @@ CELL=50000
 # snap a journey's start or end: a car park or a road fragment cut off by a
 # barrier or a data gap would otherwise make the whole journey fail.
 MIN_SNAP_COMPONENT=50
+# Field 5 of a node record says which journey ends may snap to it. 1 and 0 keep
+# their original meaning (both / neither), so older tiles read the same.
+SNAP_BOTH,SNAP_NONE,SNAP_END_ONLY,SNAP_START_ONLY=1,0,2,3
+def _csr(n, a, b):
+    start=array("q",[0])*(n+1)
+    for x in a:start[x+1]+=1
+    for i in range(n):start[i+1]+=start[i]
+    adj=array("q",[0])*len(a);pos=array("q",start)
+    for x,y in zip(a,b):adj[pos[x]]=y;pos[x]+=1
+    return start,adj
 def strong_components(n, src, dst):
     """Kosaraju strongly connected components over 0..n-1, iterative, using
     compact arrays so it scales to the UK graph. Returns (component, sizes)."""
-    def csr(a, b):
-        start=array("q",[0])*(n+1)
-        for x in a:start[x+1]+=1
-        for i in range(n):start[i+1]+=start[i]
-        adj=array("q",[0])*len(a);pos=array("q",start)
-        for x,y in zip(a,b):adj[pos[x]]=y;pos[x]+=1
-        return start,adj
-    fs,fa=csr(src,dst);rs,ra=csr(dst,src)
+    fs,fa=_csr(n,src,dst);rs,ra=_csr(n,dst,src)
     seen=bytearray(n);order=array("q");nxt=array("q",fs[:n])
     for root in range(n):
         if seen[root]:continue
@@ -45,17 +48,35 @@ def strong_components(n, src, dst):
                 if comp[w]==-1:comp[w]=c;stack.append(w)
         sizes.append(size)
     return comp,sizes
+def _reach(start, adj, seeds):
+    seen=bytearray(len(start)-1);stack=[v for v in seeds]
+    for v in stack:seen[v]=1
+    while stack:
+        v=stack.pop()
+        for i in range(start[v],start[v+1]):
+            w=adj[i]
+            if not seen[w]:seen[w]=1;stack.append(w)
+    return seen
+def snap_flags(n, src, dst):
+    """Per node: may a journey START here (it can drive into a road network of at
+    least MIN_SNAP_COMPONENT mutually reachable nodes) and may one END here (it
+    can be reached from one)? A one-way slip road off a main road is a fine
+    destination; a car park you can leave but not re-enter is a fine start."""
+    comp,sizes=strong_components(n,src,dst)
+    seeds=[v for v in range(n) if sizes[comp[v]]>=MIN_SNAP_COMPONENT]
+    fs,fa=_csr(n,src,dst);rs,ra=_csr(n,dst,src)
+    can_end=_reach(fs,fa,seeds);can_start=_reach(rs,ra,seeds)
+    return bytearray(SNAP_BOTH if s and e else SNAP_START_ONLY if s else SNAP_END_ONLY if e else SNAP_NONE
+                     for s,e in zip(can_start,can_end))
 def snappable_nodes(db):
-    """bytearray indexed by cell_nodes.rowid-1: 1 if the node is in a network of
-    at least MIN_SNAP_COMPONENT mutually reachable nodes."""
+    """bytearray indexed by cell_nodes.rowid-1 of snap flags (snap_flags)."""
     n=db.execute("SELECT MAX(rowid) FROM cell_nodes").fetchone()[0] or 0
     src=array("q");dst=array("q")
     for a,b in db.execute("""SELECT s.rowid-1,d.rowid-1 FROM edges e
         JOIN cell_nodes s ON s.id=e.src JOIN cell_nodes d ON d.id=e.dst
         WHERE NOT EXISTS(SELECT 1 FROM blocked_ways b WHERE b.id=e.way)"""):
         src.append(a);dst.append(b)
-    comp,sizes=strong_components(n,src,dst)
-    return bytearray(1 if sizes[c]>=MIN_SNAP_COMPONENT else 0 for c in comp)
+    return snap_flags(n,src,dst)
 def compile_graph(dbpath, manifest, out, pilot=False):
     check_manifest(manifest)
     if sha_file(dbpath)!=manifest["database_sha256"]:raise ValueError("Unverified graph")
@@ -73,13 +94,13 @@ def compile_graph(dbpath, manifest, out, pilot=False):
     """)
     cells=[r[0] for r in db.execute("SELECT k FROM cell_nodes UNION SELECT k FROM cell_places ORDER BY k")]
     snap=snappable_nodes(db)
-    catalog={};global_rules={};counts={"nodes":0,"edges":0,"cross_cell_edges":0,"places":0,"unsnappable_nodes":snap.count(0)}
+    catalog={};global_rules={};counts={"nodes":0,"edges":0,"cross_cell_edges":0,"places":0,"unsnappable_nodes":snap.count(SNAP_NONE),"start_only_nodes":snap.count(SNAP_START_ONLY),"end_only_nodes":snap.count(SNAP_END_ONLY)}
     for frm,to,policy in db.execute("SELECT from_way,to_way,policy FROM restrictions WHERE via=0"):
         global_rules.setdefault(str(frm),[]).append([to,policy])
     arc=out/"routing.dma";offset=0;started=time.monotonic()
     with arc.open("wb") as output:
         for i,k in enumerate(cells):
-            # Field 5: 1 = may snap a journey start/end here (see MIN_SNAP_COMPONENT).
+            # Field 5: which journey ends may snap here (snap_flags: 1 both, 0 neither, 2 end only, 3 start only).
             records={nid:[nid,round(lat*1e6),round(lon*1e6),[],[],snap[row-1]] for nid,lat,lon,row in db.execute("SELECT id,lat,lon,rowid FROM cell_nodes WHERE k=? ORDER BY id",(k,))}
             if len(records)>80000:raise ValueError("Cell exceeds Android node bound; subdivide "+k)
             neighbors=set();edge_count=0;street={}

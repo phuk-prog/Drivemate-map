@@ -15,6 +15,9 @@ SAMPLES=[
 ]
 # About 30 miles away from Sheffield; actual off-route distance measured.
 DIVERSION=(53.96,-1.08)
+# Nearest eligible road node is used; usually within metres, but a destination
+# surrounded by private roads (an airport, an estate) may be further away.
+SNAP_MAX_M=2000
 class MissingCoverage(Exception):pass
 class Archive:
     def __init__(self,manifest,archive):
@@ -62,7 +65,7 @@ class Archive:
     def clear(self):
         self.cache.clear();self.cache_nodes=0
     def near(self,p,origin):
-        lat,lon=map(int,key(*p).split("_"));best=None;dist=350
+        lat,lon=map(int,key(*p).split("_"));best=None;dist=SNAP_MAX_M
         if key(*p) not in self.tiles or self.allowed is not None and key(*p) not in self.allowed:return None
         nearby={}
         for y in range(lat-1,lat+2):
@@ -78,7 +81,8 @@ class Archive:
                         if e[2] in nearby:incoming.add(e[1])
         for k,nodes in nearby.items():
             for n in nodes.values():
-                if len(n)>5 and not n[5]:continue  # tiny isolated road network
+                # Field 5 (compile_dmtiles_uk.snap_flags): 1 both, 0 neither, 2 end only, 3 start only.
+                if len(n)>5 and n[5] not in ((1,3) if origin else (1,2)):continue
                 if origin and not any(self.allowed is None or e[2] in self.allowed for e in n[3]):continue
                 if not origin and n[0] not in incoming:continue
                 d=metres(p,(n[1]/1e6,n[2]/1e6))
