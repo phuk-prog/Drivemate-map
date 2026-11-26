@@ -36,6 +36,10 @@ URBAN_SPEED = {"trunk": 64, "primary": 48, "secondary": 45, "tertiary": 40,
 # square (North East England: towns 10-21, countryside under 2).
 URBAN_ROAD_KM_PER_KM2 = 7.0
 URBAN_GRID = 0.01
+# Ferries: the crossing takes its published duration (OSM duration tag) or, if
+# none, length at FERRY_KPH; boarding a car ferry adds an average wait.
+FERRY_KPH = 10
+FERRY_WAIT_S = 600
 # Typical speed driving round a roundabout, whatever its signed limit.
 ROUNDABOUT_KPH = 25
 DENY = set("no private agricultural forestry delivery customers permit emergency military discouraged".split())
@@ -96,6 +100,21 @@ def direction(tags):
     return ("F" if value in ("yes", "true", "1") else
             "R" if value in ("-1", "reverse") else
             "B" if value in ("no", "false", "0") else None)
+
+
+def ferry_seconds(tags):
+    """Published crossing time in seconds from an OSM duration (HH:MM[:SS] or
+    minutes), or None."""
+    raw = (tags.get("duration") or "").strip()
+    try:
+        if ":" in raw:
+            parts = [float(x) for x in raw.split(":")]
+            while len(parts) < 3:
+                parts.append(0.0)
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        return float(raw) * 60 if raw else None
+    except ValueError:
+        return None
 
 
 def kph(tags):
@@ -199,7 +218,7 @@ class Builder:
         if any(key in CAR_CONDITIONAL for key in tags):
             self.stats["excluded_conditional_access_or_direction"] += 1
             return
-        speed = 10 if ferry else kph(tags)
+        speed = FERRY_KPH if ferry else kph(tags)
         if speed is not None and not ferry and tags.get("junction") in ("roundabout", "circular"):
             speed = min(speed, ROUNDABOUT_KPH)
         if speed is None or len(refs) < 2:
@@ -228,13 +247,22 @@ class Builder:
         name = road_name(tags.get("name") or tags.get("ref"))
         d = "B" if ferry else direction(tags)
         self.node_buffer.extend(refs)
+        crossing = ferry_seconds(tags) if ferry else None
+        total = sum(m for _, _, m in segs)
+        ends = (refs[0][0], refs[-1][0])
         for a, b, meters in segs:
             for src, dst, permitted in ((a,b,d in ("F","B")), (b,a,d in ("R","B"))):
                 if not permitted:
                     continue
                 self.next_edge += 1
-                seconds = meters/(speed/3.6) + (GATE_PENALTY_S if dst in self.gates else 0) + (
-                    SIGNAL_PENALTY_S if dst in self.signals and not ferry else 0)
+                if ferry:
+                    # Published crossing time shared over the route; the wait is
+                    # paid once, on the segment leaving the terminal.
+                    seconds = (crossing * meters / total if crossing else meters/(speed/3.6)) + (
+                        FERRY_WAIT_S if src in ends else 0)
+                else:
+                    seconds = meters/(speed/3.6) + (GATE_PENALTY_S if dst in self.gates else 0) + (
+                        SIGNAL_PENALTY_S if dst in self.signals else 0)
                 self.edge_buffer.append((self.next_edge, src, dst, way_id,
                                          meters, seconds, name, flags))
         if unsigned:

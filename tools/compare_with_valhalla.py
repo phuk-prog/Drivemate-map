@@ -324,14 +324,19 @@ def route_valhalla(actor, start, end):
 
 
 def valhalla_time_of(actor, points):
-    """Valhalla's travel time for OUR route, by map-matching our geometry."""
-    pts = points[::max(1, len(points) // 4000)] + [points[-1]]
-    req = {"shape": [{"lat": p[0], "lon": p[1]} for p in pts], "costing": "auto",
-           "shape_match": "map_snap", "directions_type": "none"}
-    try:
-        return json.loads(actor.trace_route(json.dumps(req)))["trip"]["summary"]["time"]
-    except Exception:
-        return None
+    """Valhalla's travel time for OUR route. Both engines use the same OSM
+    nodes, so first follow our geometry edge by edge (exact); fall back to
+    map-matching when that fails."""
+    for match, pts in (("edge_walk", points), ("map_snap", points[::max(1, len(points) // 4000)] + [points[-1]])):
+        if len(pts) > 15000:
+            continue
+        req = {"shape": [{"lat": p[0], "lon": p[1]} for p in pts], "costing": "auto",
+               "shape_match": match, "directions_type": "none"}
+        try:
+            return json.loads(actor.trace_route(json.dumps(req)))["trip"]["summary"]["time"]
+        except Exception:
+            continue
+    return None
 
 
 def run_journey(j):

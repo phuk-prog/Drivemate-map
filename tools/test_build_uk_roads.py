@@ -124,6 +124,19 @@ class UkGraphTests(unittest.TestCase):
                 self.assertAlmostEqual(kph(3),uk.SPEED["tertiary"],places=3)
                 self.assertAlmostEqual(kph(4),uk.ROUNDABOUT_KPH,places=3)
 
+    def test_ferry_uses_published_duration_and_boarding_wait(self):
+        self.assertEqual(uk.ferry_seconds({"duration":"00:10"}),600)
+        self.assertEqual(uk.ferry_seconds({"duration":"1:30:15"}),5415)
+        self.assertEqual(uk.ferry_seconds({"duration":"25"}),1500)
+        self.assertIsNone(uk.ferry_seconds({}))
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"graph.db";b=uk.Builder(db)
+            b.way(9,{"route":"ferry","motorcar":"yes","duration":"00:10"},[(1,51.50,0.06),(2,51.505,0.06),(3,51.51,0.06)])
+            b.finish("uk-map-20261122T084645Z-9013a4487fa6","0"*64,min_edges=1)
+            with sqlite3.connect(db) as conn:
+                one_way=conn.execute("SELECT SUM(seconds) FROM edges WHERE (src,dst) IN ((1,2),(2,3))").fetchone()[0]
+                self.assertAlmostEqual(one_way,600+uk.FERRY_WAIT_S,delta=1)
+
     def test_traffic_signal_adds_delay(self):
         old=uk.SIGNAL_PENALTY_S;uk.SIGNAL_PENALTY_S=10;self.addCleanup(setattr,uk,"SIGNAL_PENALTY_S",old)
         with tempfile.TemporaryDirectory() as tmp:
