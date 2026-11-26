@@ -37,3 +37,9 @@ python3 tools/independent_gateway.py \
   --geometry-manifest matched-v2/geometry/manifest.json
 ```
 All three datasets must share one immutable source. Gateway exposes /v2/roads alongside /v1 and routing, still on loopback only. Configure authenticated private TLS/VPN access with no request/location logs; use the configured HTTPS /route URL in the app. No public anonymous gateway, no unapproved hosting expenditure. Run the existing UK route smoke probes and the detailed geometry smoke command before any device acceptance. A missing or mismatched database fails closed. Retain the previous immutable deployment for rollback.
+
+Verify the live local gateway after start:
+```sh
+python3 tools/smoke_map_v2_http.py --root http://127.0.0.1:8011
+```
+The six-city probe checks source identity, exact way node arrays, and presence of buildings and roads; it does not prove navigational safety. New geometry builds retain raw mapped enforcement relation anchors. Old verified databases return no enforcement relations; rebuild from the matching source to enable this data. No mobile-camera, operation-status or comprehensive enforcement coverage is implied.
