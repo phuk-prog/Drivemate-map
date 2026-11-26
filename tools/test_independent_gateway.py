@@ -1,5 +1,6 @@
 import unittest
-from independent_gateway import request_allowed,load_pair
+from independent_gateway import request_allowed,load_pair,proxy_token_valid,proxy_authorized,serve
+from email.message import Message
 from unittest.mock import patch,Mock
 import tempfile
 from pathlib import Path
@@ -10,6 +11,20 @@ class GatewayTest(unittest.TestCase):
             self.assertTrue(request_allowed(method,path))
         for method,path in [("GET","http://example.org/route"),("GET","//example.org/v1/meta"),("POST","/v1/ways"),("POST","/route?x=1"),("GET","/admin"),("DELETE","/v1/feature")]:
             self.assertFalse(request_allowed(method,path))
+    def test_proxy_auth_fails_closed(self):
+        token="a"*32
+        headers=Message()
+        self.assertTrue(proxy_token_valid(token))
+        self.assertFalse(proxy_token_valid("short"))
+        self.assertFalse(proxy_authorized(headers,token))
+        headers["X-DriveMate-Proxy-Token"]="b"*32
+        self.assertFalse(proxy_authorized(headers,token))
+        headers.replace_header("X-DriveMate-Proxy-Token",token)
+        self.assertTrue(proxy_authorized(headers,token))
+        headers["X-DriveMate-Proxy-Token"]=token
+        self.assertFalse(proxy_authorized(headers,token))
+        with self.assertRaisesRegex(ValueError,"private DRIVEMATE_PROXY_TOKEN"):
+            serve(None,None,8011,8002)
     def test_pair_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d);archive=p/"tiles.tar";archive.write_bytes(b"abc");manifest=p/"manifest.json"
