@@ -95,10 +95,32 @@ class UkGraphTests(unittest.TestCase):
 
     def test_lit_unsigned_road_is_30_mph_restricted_road(self):
         self.assertAlmostEqual(uk.kph({"highway":"tertiary","lit":"yes"}),48.28,places=1)
-        self.assertEqual(uk.kph({"highway":"tertiary"}),56)
+        self.assertEqual(uk.kph({"highway":"tertiary"}),uk.SPEED["tertiary"])
         self.assertEqual(uk.kph({"highway":"residential","lit":"yes"}),32)  # already slower
         self.assertAlmostEqual(uk.kph({"highway":"primary","lit":"yes","maxspeed":"40 mph"}),64.37,places=1)
         self.assertEqual(uk.kph({"highway":"motorway","lit":"yes"}),112)
+
+    def test_unsigned_roads_slower_in_built_up_areas_and_roundabouts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Path(tmp)/"graph.db";b=uk.Builder(db)
+            # Dense grid of streets around 53.0,-2.0 makes that square built up.
+            nid=100
+            for i in range(12):
+                row=[(nid+j,53.0+0.0008*i,-2.0+0.0009*j) for j in range(12)];nid+=12
+                b.way(1000+i,{"highway":"residential"},row)
+            for j in range(12):
+                b.way(2000+j,{"highway":"residential"},[(100+i*12+j,53.0+0.0008*i,-2.0+0.0009*j) for i in range(12)])
+            b.way(1,{"highway":"tertiary"},[(1,53.004,-1.9995),(2,53.0045,-1.9995)])            # built up, unsigned
+            b.way(2,{"highway":"tertiary","maxspeed":"40 mph"},[(3,53.004,-1.999),(4,53.0045,-1.999)])  # signed: kept
+            b.way(3,{"highway":"tertiary"},[(5,53.5,-2.5),(6,53.5005,-2.5)])                   # countryside
+            b.way(4,{"highway":"primary","junction":"roundabout","maxspeed":"30 mph"},[(7,53.6,-2.5),(8,53.6005,-2.5)])
+            b.finish("uk-map-20261122T084645Z-9013a4487fa6","0"*64,min_edges=1)
+            with sqlite3.connect(db) as conn:
+                kph=lambda w:conn.execute("SELECT metres/seconds*3.6 FROM edges WHERE way=? LIMIT 1",(w,)).fetchone()[0]
+                self.assertAlmostEqual(kph(1),uk.URBAN_SPEED["tertiary"],places=3)
+                self.assertAlmostEqual(kph(2),64.37,places=1)
+                self.assertAlmostEqual(kph(3),uk.SPEED["tertiary"],places=3)
+                self.assertAlmostEqual(kph(4),uk.ROUNDABOUT_KPH,places=3)
 
     def test_traffic_signal_adds_delay(self):
         old=uk.SIGNAL_PENALTY_S;uk.SIGNAL_PENALTY_S=10;self.addCleanup(setattr,uk,"SIGNAL_PENALTY_S",old)

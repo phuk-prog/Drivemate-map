@@ -21,11 +21,23 @@ PART_BYTES = 850_000_000
 DRIVABLE = set(("motorway trunk primary secondary tertiary unclassified residential "
                 "living_street service motorway_link trunk_link primary_link "
                 "secondary_link tertiary_link").split())
+# Average driving speed (km/h) for a road with no signed limit, outside built-up
+# areas. These are typical travel speeds, never shown as legal limits.
 SPEED = {"motorway": 112, "trunk": 96, "primary": 80, "secondary": 64,
-         "tertiary": 56, "unclassified": 48, "residential": 32,
+         "tertiary": 50, "unclassified": 42, "residential": 32,
          "living_street": 16, "service": 16, "motorway_link": 64,
          "trunk_link": 56, "primary_link": 48, "secondary_link": 40,
          "tertiary_link": 40}
+# The same inside built-up areas, where junctions, parking and crossings slow
+# traffic. Roads not listed keep SPEED.
+URBAN_SPEED = {"trunk": 64, "primary": 48, "secondary": 45, "tertiary": 40,
+               "unclassified": 35, "residential": 30}
+# Built-up area: at least this many km of road per km2 in the 0.01-degree grid
+# square (North East England: towns 10-21, countryside under 2).
+URBAN_ROAD_KM_PER_KM2 = 7.0
+URBAN_GRID = 0.01
+# Typical speed driving round a roundabout, whatever its signed limit.
+ROUNDABOUT_KPH = 25
 DENY = set("no private agricultural forestry delivery customers permit emergency military discouraged".split())
 ALLOW = set("yes permissive destination designated".split())
 PASSABLE = set("cattle_grid toll_booth border_control entrance".split())
@@ -140,6 +152,8 @@ class Builder:
         self.next_edge = 0
         self.gates = set()  # passable gate nodes; nodes are read before ways
         self.signals = set()  # traffic-signal nodes
+        self.road_m = Counter()  # road metres per URBAN_GRID square, for built-up detection
+        self.unsigned = []  # (way, highway, speed, grid y, grid x) for roads with no signed limit
 
     def node(self, node_id, lat, lon, tags):
         if tags.get("highway") == "traffic_signals":
@@ -170,6 +184,8 @@ class Builder:
             self.stats["excluded_conditional_access_or_direction"] += 1
             return
         speed = 10 if ferry else kph(tags)
+        if speed is not None and not ferry and tags.get("junction") in ("roundabout", "circular"):
+            speed = min(speed, ROUNDABOUT_KPH)
         if speed is None or len(refs) < 2:
             self.stats["excluded_speed_or_short_way"] += 1
             return
@@ -178,12 +194,15 @@ class Builder:
             self.stats["excluded_missing_locations"] += 1
             return
         segs = []
+        unsigned = not ferry and not tags.get("maxspeed") and tags.get("highway") in URBAN_SPEED
         for (a, alat, alon), (b, blat, blon) in zip(refs, refs[1:]):
             meters = distance((alat, alon), (blat, blon))
             if a == b or not math.isfinite(meters) or meters <= 0.05:
                 self.stats["excluded_invalid_segment"] += 1
                 return
             segs.append((a, b, meters))
+            g = (math.floor(alat / URBAN_GRID), math.floor(alon / URBAN_GRID))
+            self.road_m[g] += meters
         if any(tags.get(k) not in (None, "yes", "no") for k in ("toll", "toll:motorcar")):
             self.stats["excluded_unknown_toll"] += 1
             return
@@ -202,6 +221,10 @@ class Builder:
                     SIGNAL_PENALTY_S if dst in self.signals and not ferry else 0)
                 self.edge_buffer.append((self.next_edge, src, dst, way_id,
                                          meters, seconds, name, flags))
+        if unsigned:
+            mid = refs[len(refs) // 2]
+            self.unsigned.append((way_id, tags["highway"], speed,
+                                  math.floor(mid[1] / URBAN_GRID), math.floor(mid[2] / URBAN_GRID)))
         self.stats["ways"] += 1
         if len(self.edge_buffer) >= 12000:
             self.flush()
@@ -254,8 +277,30 @@ class Builder:
             self.db.executemany("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?)", self.edge_buffer)
             self.edge_buffer.clear()
 
+    def urban_speeds(self):
+        """Slow roads with no signed limit in built-up areas to URBAN_SPEED.
+        Density is only known once every road is read, so edges are adjusted
+        here: seconds += metres * (1/new - 1/old), keeping gate penalties."""
+        factors = []
+        for way, highway, old, gy, gx in self.unsigned:
+            area = (URBAN_GRID * 111.195) ** 2 * math.cos(math.radians((gy + .5) * URBAN_GRID))
+            if self.road_m[(gy, gx)] / 1000 / area < URBAN_ROAD_KM_PER_KM2:
+                continue
+            new = min(old, URBAN_SPEED[highway])
+            if new < old:
+                factors.append((way, 3.6 / new - 3.6 / old))
+        self.stats["urban_unsigned_roads"] = len(factors)
+        if factors:
+            self.db.execute("CREATE TEMP TABLE urban(way INTEGER PRIMARY KEY, f REAL NOT NULL)")
+            self.db.executemany("INSERT OR REPLACE INTO urban VALUES (?,?)", factors)
+            self.db.execute("""UPDATE edges SET seconds = seconds + metres *
+                (SELECT f FROM urban WHERE urban.way = edges.way)
+                WHERE way IN (SELECT way FROM urban)""")
+            self.db.execute("DROP TABLE urban")
+
     def finish(self, tag, source_sha, min_edges=1):
         self.flush()
+        self.urban_speeds()
         self.stats["edges"] = self.next_edge
         self.stats["nodes"] = self.db.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
         self.stats["places"] = self.db.execute("SELECT COUNT(*) FROM places").fetchone()[0]
@@ -294,7 +339,9 @@ def load_osm(source, builder):
                 return
             try:
                 refs = [(n.ref, n.location.lat, n.location.lon) for n in w.nodes]
-            except (ValueError, RuntimeError):
+            except (ValueError, RuntimeError, getattr(osmium, "InvalidLocationError", ValueError)):
+                # A way reaching outside the extract (regional files) has no location for
+                # some nodes; newer pyosmium raises InvalidLocationError for that.
                 builder.stats["excluded_missing_location"] += 1
                 return
             builder.way(w.id, dict(w.tags), refs)

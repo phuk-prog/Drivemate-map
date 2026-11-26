@@ -100,8 +100,13 @@ class Classify(unittest.TestCase):
         self.assertEqual(verdict, "ours_slower")
         self.assertEqual(facts["valhalla_time_ratio_of_our_route"], 1.2)
 
+    def test_two_percent_bands(self):
+        self.assertEqual(cmp.classify(ok(10.2, 600, 0.5), ok(10, 600, 0.5), ours_vh_seconds=630)[0], "valhalla_better")
+        self.assertEqual(cmp.classify(ok(10.2, 600, 0.5), ok(10, 600, 0.5), ours_vh_seconds=580)[0], "ours_better")
+        self.assertEqual(cmp.classify(ok(10.2, 600, 0.5), ok(10, 600, 0.5), ours_vh_seconds=605)[0], "equivalent")
+
     def test_equivalent_alternative(self):
-        self.assertEqual(cmp.classify(ok(10.2, 610, 0.5), ok(10, 600, 0.5), ours_vh_seconds=615)[0],
+        self.assertEqual(cmp.classify(ok(10.2, 610, 0.5), ok(10, 600, 0.5), ours_vh_seconds=608)[0],
                          "equivalent")
 
 

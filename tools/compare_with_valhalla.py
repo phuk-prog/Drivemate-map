@@ -49,7 +49,9 @@ NAMED = (
 
 VERDICT_HELP = {
     "match": "Same route (within tolerance).",
-    "equivalent": "Different roads, but similar length and Valhalla rates our route about as fast.",
+    "equivalent": "Different roads; Valhalla rates our route within 2% of its own.",
+    "ours_better": "Different roads; Valhalla rates our route more than 2% faster than its own.",
+    "valhalla_better": "Valhalla rates its own route 2-10% faster than ours. Check speeds and turns on both routes.",
     "ours_failed": "Valhalla found a route; DriveMate did not. Check snapping, search limits and roads the importer dropped.",
     "valhalla_failed": "DriveMate found a route Valhalla refused. Check access/legality on our route: we may use a road cars cannot.",
     "ours_slower": "Valhalla rates our route clearly slower than its own. Check our speed model and missed faster roads.",
@@ -169,6 +171,10 @@ def classify(ours, vh, ours_vh_seconds=None):
         # (Valhalla also adds turn/road-class penalties, so its pick can be longer.)
         if slower > 1.10:
             return "ours_slower", facts
+        if slower > 1.02:
+            return "valhalla_better", facts
+        if slower < 0.98:
+            return "ours_better", facts
         return "equivalent", facts
     # Valhalla could not map-match our route: treat a much shorter route as suspect.
     if ratio < 0.93:
@@ -178,12 +184,16 @@ def classify(ours, vh, ours_vh_seconds=None):
     return "equivalent", facts
 
 
+# Journeys where DriveMate matches or beats Valhalla.
+GOOD = ("match", "equivalent", "ours_better")
+
+
 def score(records):
     counts = {}
     for r in records:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     judged = len(records) - counts.get("both_failed", 0)
-    good = counts.get("match", 0) + counts.get("equivalent", 0)
+    good = sum(counts.get(v, 0) for v in GOOD)
     return counts, (round(100 * good / judged, 1) if judged else 0.0)
 
 
@@ -359,14 +369,15 @@ def markdown(report, baseline=None):
     s = report["summary"]
     lines = ["# DriveMate vs Valhalla", "",
              f"Source: `{report['source_sha256'][:12]}`, {s['journeys']} journeys, "
-             f"agreement score **{s['score']}%** (match + equivalent, excluding journeys neither engine could route).", ""]
+             f"match-or-beat score **{s['score']}%** (same route, within 2%, or ours faster by Valhalla's own timing; "
+             "journeys neither engine could route excluded).", ""]
     if baseline:
         b = baseline["summary"]
         lines += [f"Baseline score {b['score']}% -> now {s['score']}% ({s['score'] - b['score']:+.1f}).", ""]
     lines += ["| Verdict | Count | What to check |", "|---|---|---|"]
     for v, help_text in VERDICT_HELP.items():
         lines.append(f"| {v} | {s['counts'].get(v, 0)} | {help_text} |")
-    bad = [r for r in report["journeys"] if r["verdict"] not in ("match", "equivalent", "both_failed")]
+    bad = [r for r in report["journeys"] if r["verdict"] not in GOOD + ("both_failed",)]
     if bad:
         lines += ["", "## Disagreements to investigate", "",
                   "| Journey | Verdict | Ours | Valhalla | Where routes split |", "|---|---|---|---|---|"]
@@ -392,7 +403,7 @@ def markdown(report, baseline=None):
 
 
 def regressions(report, baseline):
-    good = ("match", "equivalent")
+    good = GOOD
     before = {r["name"]: r["verdict"] for r in baseline["journeys"]}
     return [r["name"] for r in report["journeys"]
             if before.get(r["name"]) in good and r["verdict"] not in good]
