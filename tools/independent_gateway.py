@@ -11,10 +11,12 @@ import re
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import BoundedSemaphore
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
 from map_intelligence_service import verify_pack, dispatch
+from map_v2_service import verify as verify_geometry, roads
+import sqlite3
 from restore_uk_valhalla import inspect_manifest, sha_file
 
 MAX_BODY=2_000_000
@@ -34,8 +36,23 @@ def request_allowed(method,path):
     u=urlsplit(path)
     if u.scheme or u.netloc or u.fragment or len(path)>2048:return False
     if method=="POST":return u.path in ("/route","/trace_attributes") and not u.query
-    return method=="GET" and u.path in ("/v1/meta","/v1/graph-source","/v1/feature","/v1/ways","/v1/nearby","/v1/search")
-def serve(store,source,port,route_port):
+    return method=="GET" and u.path in ("/v1/meta","/v1/graph-source","/v1/feature","/v1/ways","/v1/nearby","/v1/search","/v2/roads")
+def load_geometry(db,manifest,source):
+    if db is None and manifest is None:return None
+    if db is None or manifest is None:raise ValueError("Both geometry inputs required")
+    verified=verify_geometry(db,manifest)
+    if verified.get("source_sha256")!=source["source_sha256"] or verified.get("source_tag")!=source["source_tag"]:
+        raise ValueError("Geometry and routing source mismatch")
+    return db
+def geometry_query(db,source,path):
+    if db is None:return 503,{"error":"Detailed geometry unavailable"}
+    q=parse_qs(urlsplit(path).query,strict_parsing=True)
+    if set(q)!={"bbox","source"} or any(len(v)!=1 for v in q.values()) or q["source"][0]!=source["source_sha256"]:
+        raise ValueError("Invalid geometry query or source")
+    bounds=list(map(float,q["bbox"][0].split(",")))
+    if len(bounds)!=4:raise ValueError("Invalid bounds")
+    return 200,roads(db,bounds,source["source_sha256"])
+def serve(store,source,port,route_port,geometry_db=None):
     slots=BoundedSemaphore(8);opener=build_opener(NoRedirect())
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):pass
@@ -53,7 +70,7 @@ def serve(store,source,port,route_port):
             try:
                 if method=="GET":
                     if self.path=="/v1/graph-source":self.send_json(200,source);return
-                    status,body=dispatch(store,self.path)
+                    status,body=geometry_query(geometry_db,source,self.path) if urlsplit(self.path).path=="/v2/roads" else dispatch(store,self.path)
                     raw=json.dumps(body,ensure_ascii=False,separators=(",",":")).encode()
                     if len(raw)>MAX_RESPONSE:self.send_json(413,{"error":"Response too large"})
                     else:self.response(status,raw)
@@ -75,7 +92,7 @@ def serve(store,source,port,route_port):
                     self.response(200,payload)
             except HTTPError as e:self.send_json(422 if 400<=e.code<500 else 503,{"error":"Routing request unavailable"})
             except (ValueError,TypeError,OverflowError):self.send_json(400,{"error":"Invalid query"})
-            except (OSError,URLError):self.send_json(503,{"error":"Routing unavailable"})
+            except (OSError,URLError,sqlite3.Error):self.send_json(503,{"error":"Routing unavailable"})
             finally:slots.release()
         def do_GET(self):self.handle_api("GET")
         def do_POST(self):self.handle_api("POST")
@@ -83,9 +100,11 @@ def serve(store,source,port,route_port):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     for k in ("graph-manifest","graph-archive","db","report"):p.add_argument("--"+k,required=True,type=Path)
+    p.add_argument("--geometry-db",type=Path);p.add_argument("--geometry-manifest",type=Path)
     p.add_argument("--port",type=int,default=8011);p.add_argument("--route-port",type=int,default=8002)
     a=p.parse_args()
     store,source=load_pair(a.graph_manifest,a.graph_archive,a.db,a.report)
     print("Verified graph/index source:",source["source_tag"],"; loopback only; NOT ROAD VALIDATED",flush=True)
-    serve(store,source,a.port,a.route_port)
+    geometry=load_geometry(a.geometry_db,a.geometry_manifest,source)
+    serve(store,source,a.port,a.route_port,geometry)
 if __name__=="__main__":main()
