@@ -8,6 +8,8 @@ class MapV2(unittest.TestCase):
             p=Path(folder)/"map.sqlite";b=Unified(p)
             b.way(12,{"highway":"residential","name":"Bend","lanes":"2","maxspeed":"30 mph"},[(1,53.049,-2.6),(2,53.051,-2.601),(3,53.052,-2.6)])
             b.node(8,53.05,-2.6,{"addr:housenumber":"4","addr:street":"Bend","addr:postcode":"AB1 2CD"})
+            b.enforcement(99,{"type":"enforcement","enforcement":"maxspeed"},[("from","n",1),("device","n",8),("to","n",3)])
+            b.enforcement(100,{"type":"enforcement","enforcement":"average_speed"},[("from","n",9999),("device","n",8),("to","n",3)])
             s=b.finish_v2("fixture","a"*64,1)
             self.assertEqual(s["verified_directed_edges"],4)
             self.assertEqual(s["mapped_points"],1)
@@ -16,6 +18,7 @@ class MapV2(unittest.TestCase):
             self.assertEqual(r["features"][0][1]["maxspeed"],"30 mph")
             self.assertEqual(r["points"][0][0],8)
             self.assertEqual(r["points"][0][3]["addr:housenumber"],"4")
+            self.assertEqual(r["enforcement"],[[99,{"type":"enforcement","enforcement":"maxspeed"},[["from","n",1],["device","n",8],["to","n",3]]]])
             with self.assertRaises(ValueError):roads(p,[-2.61,53.04,-2.59,53.06],"b"*64)
     def test_graph_without_matching_geometry_fails(self):
         with tempfile.TemporaryDirectory() as folder:
