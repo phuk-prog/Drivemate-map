@@ -1,0 +1,79 @@
+name: Review and publish native regional preview data
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful native regional pack candidate run ID
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact reviewed candidate commit SHA
+        required: true
+        type: string
+      publish_preview:
+        description: Explicitly publish unvalidated preview map data (not driving approval)
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: native-regional-preview-publication
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && inputs.publish_preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ inputs.candidate_run_id }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify reviewed run identity and success
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ && "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > run.json
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open("run.json"))
+          assert r["name"]=="Native regional download pack candidates"
+          assert r["conclusion"]=="success" and r["head_sha"]==os.environ["CANDIDATE_SHA"]
+          assert r["head_repository"]["full_name"]==os.environ["GH_REPO"]
+          PY
+          git fetch --no-tags origin "$CANDIDATE_SHA"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" HEAD
+          gh run download "$RUN_ID" --pattern 'native-region-*-UNVALIDATED' --dir candidates
+          python3 tools/verify_native_region_release.py candidates --tag "dmregion-20261125-$RUN_ID" --out verified
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-native-regional-preview
+          path: verified/
+          if-no-files-found: error
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ inputs.candidate_run_id }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-native-regional-preview
+          path: verified
+      - name: Publish new preview release; never overwrite an existing release
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          tag="dmregion-20261125-$RUN_ID"
+          if gh release view "$tag" >/dev/null 2>&1; then echo "Release already exists; refusing overwrite"; exit 1; fi
+          gh release create "$tag" verified/*.zip verified/native-region-catalog.json --target "$GITHUB_SHA" --title "DriveMate regional map previews $RUN_ID" --notes "Checksum and source-geometry verified preview data only. Not approved for driving. ODbL 1.0; © OpenStreetMap contributors. No hosted service." --prerelease
+          gh release view "$tag" --json tagName,isPrerelease,assets
