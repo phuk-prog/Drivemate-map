@@ -1,0 +1,53 @@
+name: Compile nationwide DriveMate range-addressable routing tiles
+on:
+  push:
+    branches: ['feat/drivemate-native-stack-20261124']
+    paths: ['tools/compile_dmtiles_uk.py','tools/test_dmtiles_uk.py','.github/workflows/drivemate-national-tiles.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: drivemate-national-tiles
+  cancel-in-progress: false
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tools -p test_dmtiles_uk.py -v
+  national:
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner storage
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+      - name: Restore exact published UK graph
+        run: |
+          mkdir -p graph
+          gh release download routes-20261124T044450Z-4f30f06120b2-ba57998035b63 --dir graph --pattern 'uk-routing*'
+          echo '19e668dc43d0abdc09e22af2a09672ac0d5dc6b8b12dd39b2b1c74d3a97f5b51  graph/uk-routing-manifest.json' | sha256sum -c -
+          PYTHONPATH=tools python3 -c 'import json; from verify_uk_graph import restore; print(restore(json.load(open("graph/uk-routing-manifest.json")),"graph","graph/roads.sqlite"))'
+          rm graph/uk-routing.sqlite.gz.part-*
+      - name: Compile independently addressable UK routing cells
+        run: python3 tools/compile_dmtiles_uk.py --db graph/roads.sqlite --manifest graph/uk-routing-manifest.json --out uk-dmtiles
+      - name: Preserve candidate metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: UK-DriveMate-tile-catalog
+          path: uk-dmtiles/manifest.json
+          if-no-files-found: error
+      - name: Preserve national candidate, not published
+        uses: actions/upload-artifact@v4
+        with:
+          name: UK-DriveMate-routing-tiles-NOT-ROAD-VALIDATED
+          path: uk-dmtiles/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
