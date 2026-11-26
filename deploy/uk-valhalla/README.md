@@ -54,3 +54,5 @@ public service, and paid hosting must be approved/provisioned separately.
 A Photon service and MapLibre style/tile server also need deployment or
 appropriately licensed managed endpoints. Full postcodes, traffic, lane
 instructions and device-driving acceptance remain separate integrations.
+
+For the independent gateway use the [private service access policy](../../docs/SERVICE-ACCESS.md). Authenticate individual users at a trusted HTTPS reverse proxy and inject the private gateway token only after authorisation. Raw localhost services must not be exposed. The app's account/entitlement system is not yet deployed.

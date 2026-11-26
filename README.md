@@ -8,6 +8,8 @@ obligation apply cleanly to the data alone. This repository is publicly
 readable; publication does not itself clear all source-data, attribution or
 redistribution obligations for a derived database.
 
+**Original tooling is proprietary and source-visible.** Map data remains under its applicable ODbL/DbCL terms; see [LICENCE](LICENSE.md) and [service access policy](docs/SERVICE-ACCESS.md).
+
 ## Contents
 
 | Path | What it is |

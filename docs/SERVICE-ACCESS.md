@@ -1,0 +1,6 @@
+# Private hosted services
+Original software and official hosted services are distinct from public ODbL datasets. Public data downloads remain licensed under their applicable terms. No public service is authorised merely by publication of source.
+
+The independent gateway requires a private server-to-proxy token unless explicitly started in local development mode. The token must be a random 32+ character URL-safe value, supplied via protected server environment variable DRIVEMATE_PROXY_TOKEN; never commit it or ship it in Android. A trusted HTTPS reverse proxy must authenticate and authorise individual users before injecting X-DriveMate-Proxy-Token. Strip any incoming client header of that name. Do not expose the raw gateway, map intelligence, geometry service or Valhalla ports. Rate limit and validate requests; minimise logs. Use a secret manager and rotate credentials. The token is a defence-in-depth proxy credential, not a per-user activation system.
+
+Identity provider, account issuance/revocation, TLS deployment, proxy configuration and official Android entitlement integration are still owner setup requirements. The app cannot securely enforce exclusive access from public source; enforce access on the server. No service is deployed by these changes. Keep data and software licensing distinct.
