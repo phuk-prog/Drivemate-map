@@ -38,7 +38,10 @@ def compile_tiles(source,out,expected_sha,max_source_bytes=30_000_000):
     with tempfile.TemporaryDirectory() as td:
         b=Builder(Path(td)/"roads.sqlite")
         for n in root.findall("node"):
-            i=int(n.attrib["id"]);b.node(*nodes[i],tags(n));address(tags(n),nodes[i][1],nodes[i][2])
+            i=int(n.attrib["id"]);t=tags(n);b.node(*nodes[i],t);address(t,nodes[i][1],nodes[i][2])
+            if t.get("highway") in ("traffic_signals","crossing","speed_camera") or t.get("traffic_calming"):
+                lat,lon=nodes[i][1:]
+                tile(key(lat,lon)).setdefault("roadside_nodes",[]).append([i,round(lat*SCALE),round(lon*SCALE),t])
         for w in root.findall("way"):
             refs=[int(n.attrib["ref"]) for n in w.findall("nd")]
             if all(i in nodes for i in refs):
@@ -57,7 +60,11 @@ def compile_tiles(source,out,expected_sha,max_source_bytes=30_000_000):
                         mid=refs[len(refs)//2];lat,lon=nodes[mid][1:]
                         tile(key(lat,lon))["places"].append([ways[i]["name"],round(lat*SCALE),round(lon*SCALE),"street"])
         for r in root.findall("relation"):
-            b.turn(tags(r),[(m.attrib["role"],m.attrib["type"][0],int(m.attrib["ref"])) for m in r.findall("member")])
+            t=tags(r);members=[(m.attrib["role"],m.attrib["type"][0],int(m.attrib["ref"])) for m in r.findall("member")]
+            b.turn(t,members)
+            if t.get("type")=="enforcement" and len(members)<=1000:
+                anchors={key(nodes[ref][1],nodes[ref][2]) for role,kind,ref in members if kind=="n" and ref in nodes}
+                for k in anchors:tile(k).setdefault("enforcement",[]).append([int(r.attrib["id"]),t,members])
         stats=b.finish("wells-dmtiles-pilot",expected_sha,min_edges=500)
         with sqlite3.connect(Path(td)/"roads.sqlite") as db:
             blocked={r[0] for r in db.execute("SELECT id FROM blocked")}

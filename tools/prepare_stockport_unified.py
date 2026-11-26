@@ -8,7 +8,7 @@ TAG="uk-map-20261125T034434Z-2c31f7d0c5c7"
 MANIFEST_SHA="76e19fd9e582b1a0f1dd8231378d41754493f508211ca9953940dea2a1111be0"
 URL="https://github.com/phuk-prog/Drivemate-map/releases/download/"+TAG+"/"
 BBOX="-2.245,53.365,-2.135,53.425"
-REGIONS={"stockport":BBOX,"south-manchester":"-2.335,53.380,-2.235,53.445"}
+REGIONS={"stockport":BBOX,"south-manchester":"-2.335,53.380,-2.235,53.445","south-manchester-stockport-corridor":"-2.295,53.380,-2.150,53.430"}
 def open_asset(name):
     return urllib.request.urlopen(urllib.request.Request(URL+name,headers={"User-Agent":"DriveMate-unified-map-QA/1.0","Accept-Encoding":"identity"}),timeout=120)
 def main():
@@ -45,7 +45,7 @@ def main():
             from build_roadside_points import extract as extract_roadside
             extract_roadside(pbf,m["sha256"],a.roadside_out)
         pbf.unlink()
-        subprocess.run(["osmium","tags-filter",str(clip),"w/highway","w/building","w/waterway","w/natural=water","w/landuse","w/leisure","w/route=ferry","n/amenity","n/tourism","n/highway=motorway_junction","r/type=restriction","-o",str(filtered)],check=True)
+        subprocess.run(["osmium","tags-filter",str(clip),"w/highway","w/building","w/waterway","w/natural=water","w/landuse","w/leisure","w/route=ferry","n/amenity","n/tourism","n/highway=motorway_junction,traffic_signals,crossing,speed_camera","n/traffic_calming","n/addr:postcode","r/type=restriction,enforcement","-o",str(filtered)],check=True)
         subprocess.run(["osmium","cat",str(filtered),"-o",str(xml)],check=True)
         print('Stockport XML bytes',xml.stat().st_size,flush=True)
         if xml.stat().st_size>160_000_000:raise ValueError("Stockport extract exceeds bounded XML pilot")
