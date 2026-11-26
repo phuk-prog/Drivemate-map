@@ -46,6 +46,21 @@ class Geometry(unittest.TestCase):
         self.assertIsNone(cmp.first_split(self.line, [1], cmp.PointIndex(self.line)))
 
 
+class SnapComponents(unittest.TestCase):
+    def test_strong_components_split_one_way_fragment(self):
+        from compile_dmtiles_uk import strong_components
+        # 0<->1<->2 is a two-way loop; 3 can only be entered (dead one-way spur);
+        # 4<->5 is a separate two-node island.
+        src = [0, 1, 1, 2, 2, 4, 5]
+        dst = [1, 0, 2, 1, 3, 5, 4]
+        comp, sizes = strong_components(6, src, dst)
+        self.assertEqual(comp[0], comp[1])
+        self.assertEqual(comp[1], comp[2])
+        self.assertNotEqual(comp[2], comp[3])
+        self.assertEqual(comp[4], comp[5])
+        self.assertEqual(sorted(sizes), [1, 2, 3])
+
+
 class Classify(unittest.TestCase):
     def test_failures(self):
         self.assertEqual(cmp.classify(FAIL, FAIL)[0], "both_failed")
@@ -56,7 +71,12 @@ class Classify(unittest.TestCase):
         self.assertEqual(cmp.classify(ok(10, 600, 0.95), ok(10.1, 590, 0.97))[0], "match")
 
     def test_shorter_flags_possible_missed_restriction(self):
+        # Valhalla could not time our route: a much shorter route is suspect.
         self.assertEqual(cmp.classify(ok(8, 500, 0.4), ok(10, 600, 0.3))[0], "ours_shorter")
+
+    def test_shorter_but_valhalla_times_it_equal_is_fine(self):
+        self.assertEqual(cmp.classify(ok(8, 500, 0.4), ok(10, 600, 0.3), ours_vh_seconds=590)[0],
+                         "equivalent")
 
     def test_slower_uses_valhalla_time_of_our_route(self):
         verdict, facts = cmp.classify(ok(10.5, 700, 0.5), ok(10, 600, 0.5), ours_vh_seconds=720)

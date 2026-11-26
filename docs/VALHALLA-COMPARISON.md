@@ -30,7 +30,7 @@ shipped in, or linked into, DriveMate.
 | `ours_failed` | Valhalla routed, we did not | snapping, search limits, roads the importer dropped |
 | `valhalla_failed` | We routed, Valhalla refused | access/legality on our route |
 | `ours_slower` | Valhalla rates our route >10% slower than its own | speed model, missed faster roads |
-| `ours_shorter` | Our route is >7% shorter | restrictions, access or one-ways we miss |
+| `ours_shorter` | Our route is >7% shorter and Valhalla could not match it to drivable roads | restrictions, access or one-ways we miss |
 | `both_failed` | Neither routed | usually the journey endpoints |
 
 A disagreement is not automatically our bug. Valhalla can be wrong, so check

@@ -52,6 +52,7 @@ class Archive:
                         if e[2] in nearby:incoming.add(e[1])
         for k,nodes in nearby.items():
             for n in nodes.values():
+                if len(n)>5 and not n[5]:continue  # tiny isolated road network
                 if origin and not any(self.allowed is None or e[2] in self.allowed for e in n[3]):continue
                 if not origin and n[0] not in incoming:continue
                 d=metres(p,(n[1]/1e6,n[2]/1e6))
@@ -67,6 +68,8 @@ class Archive:
         q=[(0.0,0.0,0,ak,an[0],0,0,0.0)]
         best={0:0.0};parent={};points={0:(ak,an[1]/1e6,an[2]/1e6)};wayof={};expanded=0
         goal=(bn[1]/1e6,bn[2]/1e6);global_rules=self.doc["global_rules"]
+        # Graph's own top speed keeps the estimate a true lower bound; 160 for older catalogs.
+        vmax=min(160,self.doc.get("max_speed_kph",160))
         reverse={}
         if all("crossing_ms" in t for t in self.tiles.values()):
             for k,t in self.tiles.items():
@@ -97,7 +100,7 @@ class Archive:
                 if cost+1e-7>=best.get(edge,math.inf):continue
                 t=self.load(dest).get(to)
                 if t is None:raise ValueError("Broken edge")
-                h=max(metres((t[1]/1e6,t[2]/1e6),goal)*3.6/160,lower.get(dest,0)/1000)
+                h=max(metres((t[1]/1e6,t[2]/1e6),goal)*3.6/vmax,lower.get(dest,0)/1000)
                 best[edge]=cost;parent[edge]=eid;points[edge]=(dest,t[1]/1e6,t[2]/1e6);wayof[edge]=newway
                 heapq.heappush(q,(cost+h,cost,edge,dest,to,nid,newway,dist+mm/1000))
             if len(best)>max_expansions*3:break

@@ -3,10 +3,59 @@
 Routing and named places only; no claim of full cartographic features.
 """
 import argparse, gzip, hashlib, json, sqlite3, time
+from array import array
 from pathlib import Path
 from compile_dmtiles import key,packed,digest
 from verify_uk_graph import check_manifest,sha_file
 CELL=50000
+# Road networks smaller than this (mutually reachable nodes) are not used to
+# snap a journey's start or end: a car park or a road fragment cut off by a
+# barrier or a data gap would otherwise make the whole journey fail.
+MIN_SNAP_COMPONENT=50
+def strong_components(n, src, dst):
+    """Kosaraju strongly connected components over 0..n-1, iterative, using
+    compact arrays so it scales to the UK graph. Returns (component, sizes)."""
+    def csr(a, b):
+        start=array("q",[0])*(n+1)
+        for x in a:start[x+1]+=1
+        for i in range(n):start[i+1]+=start[i]
+        adj=array("q",[0])*len(a);pos=array("q",start)
+        for x,y in zip(a,b):adj[pos[x]]=y;pos[x]+=1
+        return start,adj
+    fs,fa=csr(src,dst);rs,ra=csr(dst,src)
+    seen=bytearray(n);order=array("q");nxt=array("q",fs[:n])
+    for root in range(n):
+        if seen[root]:continue
+        seen[root]=1;stack=[root]
+        while stack:
+            v=stack[-1];i=nxt[v]
+            if i<fs[v+1]:
+                nxt[v]=i+1;w=fa[i]
+                if not seen[w]:seen[w]=1;stack.append(w)
+            else:
+                stack.pop();order.append(v)
+    comp=array("q",[-1])*n;sizes=[]
+    for root in reversed(order):
+        if comp[root]!=-1:continue
+        c=len(sizes);comp[root]=c;stack=[root];size=0
+        while stack:
+            v=stack.pop();size+=1
+            for i in range(rs[v],rs[v+1]):
+                w=ra[i]
+                if comp[w]==-1:comp[w]=c;stack.append(w)
+        sizes.append(size)
+    return comp,sizes
+def snappable_nodes(db):
+    """bytearray indexed by cell_nodes.rowid-1: 1 if the node is in a network of
+    at least MIN_SNAP_COMPONENT mutually reachable nodes."""
+    n=db.execute("SELECT MAX(rowid) FROM cell_nodes").fetchone()[0] or 0
+    src=array("q");dst=array("q")
+    for a,b in db.execute("""SELECT s.rowid-1,d.rowid-1 FROM edges e
+        JOIN cell_nodes s ON s.id=e.src JOIN cell_nodes d ON d.id=e.dst
+        WHERE NOT EXISTS(SELECT 1 FROM blocked_ways b WHERE b.id=e.way)"""):
+        src.append(a);dst.append(b)
+    comp,sizes=strong_components(n,src,dst)
+    return bytearray(1 if sizes[c]>=MIN_SNAP_COMPONENT else 0 for c in comp)
 def compile_graph(dbpath, manifest, out, pilot=False):
     check_manifest(manifest)
     if sha_file(dbpath)!=manifest["database_sha256"]:raise ValueError("Unverified graph")
@@ -23,13 +72,15 @@ def compile_graph(dbpath, manifest, out, pilot=False):
       CREATE INDEX temp.cp_cell ON cell_places(k);
     """)
     cells=[r[0] for r in db.execute("SELECT k FROM cell_nodes UNION SELECT k FROM cell_places ORDER BY k")]
-    catalog={};global_rules={};counts={"nodes":0,"edges":0,"cross_cell_edges":0,"places":0}
+    snap=snappable_nodes(db)
+    catalog={};global_rules={};counts={"nodes":0,"edges":0,"cross_cell_edges":0,"places":0,"unsnappable_nodes":snap.count(0)}
     for frm,to,policy in db.execute("SELECT from_way,to_way,policy FROM restrictions WHERE via=0"):
         global_rules.setdefault(str(frm),[]).append([to,policy])
     arc=out/"routing.dma";offset=0;started=time.monotonic()
     with arc.open("wb") as output:
         for i,k in enumerate(cells):
-            records={nid:[nid,round(lat*1e6),round(lon*1e6),[],[]] for nid,lat,lon in db.execute("SELECT id,lat,lon FROM cell_nodes WHERE k=? ORDER BY id",(k,))}
+            # Field 5: 1 = may snap a journey start/end here (see MIN_SNAP_COMPONENT).
+            records={nid:[nid,round(lat*1e6),round(lon*1e6),[],[],snap[row-1]] for nid,lat,lon,row in db.execute("SELECT id,lat,lon,rowid FROM cell_nodes WHERE k=? ORDER BY id",(k,))}
             if len(records)>80000:raise ValueError("Cell exceeds Android node bound; subdivide "+k)
             neighbors=set();edge_count=0;street={}
             for eid,src,dst,other,way,m,s,name in db.execute("""
@@ -54,7 +105,10 @@ def compile_graph(dbpath, manifest, out, pilot=False):
     if not pilot and (counts["nodes"]<1000000 or counts["edges"]<2000000):raise ValueError("Not UK scale")
     for k,info in catalog.items():
         if any(n not in catalog for n in info["neighbors"]):raise ValueError("Broken cell link "+k)
-    doc={"format":"drivemate-tiles-v1","scope":"pilot" if pilot else "uk-routing-only","source_sha256":manifest["source_sha256"],"source_tag":manifest["source_tag"],"license":"ODbL-1.0","attribution":"© OpenStreetMap contributors","cell_microdegrees":CELL,"global_rules":global_rules,"tiles":catalog,"archive":{"name":arc.name,"bytes":offset,"sha256":sha_file(arc)},"road_validated":False,"stats":counts}
+    # Fastest edge in the graph (rounded up): A* divides straight-line distance by
+    # this, so it must never be below any real edge speed or routes stop being optimal.
+    fastest=db.execute("SELECT MAX(metres/seconds) FROM edges WHERE seconds>0").fetchone()[0] or 0
+    doc={"format":"drivemate-tiles-v1","max_speed_kph":int(fastest*3.6)+1,"scope":"pilot" if pilot else "uk-routing-only","source_sha256":manifest["source_sha256"],"source_tag":manifest["source_tag"],"license":"ODbL-1.0","attribution":"© OpenStreetMap contributors","cell_microdegrees":CELL,"global_rules":global_rules,"tiles":catalog,"archive":{"name":arc.name,"bytes":offset,"sha256":sha_file(arc)},"road_validated":False,"stats":counts}
     (out/"manifest.json").write_bytes(packed(doc));db.close()
     print(json.dumps({"cells":len(catalog),"archive_bytes":offset,"manifest_bytes":(out/"manifest.json").stat().st_size,"stats":counts}),flush=True)
     return doc

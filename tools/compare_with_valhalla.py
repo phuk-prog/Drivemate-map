@@ -53,7 +53,7 @@ VERDICT_HELP = {
     "ours_failed": "Valhalla found a route; DriveMate did not. Check snapping, search limits and roads the importer dropped.",
     "valhalla_failed": "DriveMate found a route Valhalla refused. Check access/legality on our route: we may use a road cars cannot.",
     "ours_slower": "Valhalla rates our route clearly slower than its own. Check our speed model and missed faster roads.",
-    "ours_shorter": "Our route is much shorter than Valhalla's. Check for restrictions, access or one-ways we miss.",
+    "ours_shorter": "Our route is much shorter and Valhalla could not match it to drivable roads. Check restrictions, access or one-ways we miss.",
     "both_failed": "Neither engine routed. Usually bad journey endpoints, not an engine bug.",
 }
 
@@ -164,9 +164,16 @@ def classify(ours, vh, ours_vh_seconds=None):
         facts["valhalla_time_ratio_of_our_route"] = round(slower, 3)
     if sim >= 0.9 or (sim >= 0.75 and abs(ratio - 1) <= 0.03):
         return "match", facts
+    if slower is not None:
+        # Valhalla accepted our route as drivable and timed it: judge on time.
+        # (Valhalla also adds turn/road-class penalties, so its pick can be longer.)
+        if slower > 1.10:
+            return "ours_slower", facts
+        return "equivalent", facts
+    # Valhalla could not map-match our route: treat a much shorter route as suspect.
     if ratio < 0.93:
         return "ours_shorter", facts
-    if (slower is not None and slower > 1.10) or (slower is None and ratio > 1.10):
+    if ratio > 1.10:
         return "ours_slower", facts
     return "equivalent", facts
 
