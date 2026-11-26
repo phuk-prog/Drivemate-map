@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./overview/**)",
+      "Read(./pilot/*.pmtiles)",
+      "Read(./derived/*.dmap2)",
+      "Read(./osm/*.osm)",
+      "Read(**/__pycache__/**)"
+    ]
+  }
+}
