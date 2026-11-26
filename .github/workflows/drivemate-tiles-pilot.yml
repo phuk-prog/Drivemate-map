@@ -1,0 +1,21 @@
+name: DriveMate original tiled map compiler pilot
+on:
+  push:
+    branches: ['feat/drivemate-native-stack-20261124']
+  pull_request:
+    paths: ['tools/compile_dmtiles.py','tools/test_dmtiles.py','tools/test_dmtiles_search.py','.github/workflows/drivemate-tiles-pilot.yml']
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tools -p 'test_dmtiles*.py' -v
+      - run: python3 tools/compile_dmtiles.py --source osm/wells-places-2026-11-19.osm --sha256 8cde16000a69096b62f7a75598fb892c2d8eea34b8f2237278a785ddf125ce26 --out dmtiles-pilot
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveMate-original-map-tiles-Wells-PILOT
+          path: dmtiles-pilot/
+          if-no-files-found: error
