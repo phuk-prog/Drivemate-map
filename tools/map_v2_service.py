@@ -25,18 +25,27 @@ def roads(path,bounds,expected_sha):
         rows=c.execute("""SELECT w.id,w.tags,w.coords,w.refs FROM render_bounds b JOIN render_way w ON w.id=b.id
             WHERE b.min_lon<=? AND b.max_lon>=? AND b.min_lat<=? AND b.max_lat>=? ORDER BY w.id LIMIT 6001""",(east,west,north,south)).fetchall()
         if len(rows)>6000:raise ValueError("Region too dense; request smaller bounds")
-        features=[];count=0
+        features=[];count=0;node_ids=set()
         for oid,tags,coords,refs in rows:
             cs=json.loads(coords);count+=len(cs)
             if count>100000:raise ValueError("Region too large")
             # Keep E7 in API; client explicitly decodes scale.
-            features.append([oid,json.loads(tags),cs,json.loads(refs)])
+            members=json.loads(refs);node_ids.update(members)
+            features.append([oid,json.loads(tags),cs,members])
         # Return actual source nodes, not fabricated centroids. Bounded independently.
         points=c.execute("""SELECT id,lat,lon,tags FROM mapped_point
             WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? ORDER BY id LIMIT 6001""",
             (math.floor(south*SCALE),math.ceil(north*SCALE),math.floor(west*SCALE),math.ceil(east*SCALE))).fetchall()
         if len(points)>6000:raise ValueError("Point region too dense; request smaller bounds")
-        return {"format":FORMAT,"source_sha256":expected_sha,"coordinate_scale":SCALE,"features":features,"points":[[oid,y,x,json.loads(tags)] for oid,y,x,tags in points],"bounds":bounds}
+        enforcement=[]
+        # Older immutable indexes have no relation table. Return no camera claims.
+        if node_ids and c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='enforcement_anchor'").fetchone():
+            relations=c.execute("""SELECT DISTINCT e.id,e.tags,e.members FROM json_each(?) j
+                JOIN enforcement_anchor a ON a.node=j.value JOIN enforcement_relation e ON e.id=a.relation
+                ORDER BY e.id LIMIT 1001""",(json.dumps(sorted(node_ids)),)).fetchall()
+            if len(relations)>1000:raise ValueError("Enforcement region too dense")
+            enforcement=[[oid,json.loads(tags),json.loads(members)] for oid,tags,members in relations]
+        return {"format":FORMAT,"source_sha256":expected_sha,"coordinate_scale":SCALE,"features":features,"points":[[oid,y,x,json.loads(tags)] for oid,y,x,tags in points],"enforcement":enforcement,"bounds":bounds}
 def serve(path,manifest,port):
     verify(path,manifest)
     class Handler(BaseHTTPRequestHandler):
