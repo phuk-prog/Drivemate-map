@@ -1,0 +1,32 @@
+name: Native regional download pack candidates
+on:
+  pull_request:
+    paths:
+      - 'tools/prepare_stockport_unified.py'
+      - 'tools/package_native_region.py'
+      - '.github/workflows/native-regional-packs.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regional:
+    strategy:
+      fail-fast: false
+      matrix:
+        region: [stockport, south-manchester]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y osmium-tool
+      - run: python3 -m unittest discover -s tools -p 'test_dmtiles*.py' -v
+      - run: python3 tools/prepare_stockport_unified.py --region ${{ matrix.region }} --out region
+      - run: python3 tools/package_native_region.py region --out candidate --tag dmregion-20261125-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-region-${{ matrix.region }}-UNVALIDATED
+          path: |
+            candidate/
+            region/alignment-report.json
+          if-no-files-found: error
+          retention-days: 14
