@@ -100,6 +100,13 @@ class Classify(unittest.TestCase):
         self.assertEqual(verdict, "ours_slower")
         self.assertEqual(facts["valhalla_time_ratio_of_our_route"], 1.2)
 
+    def test_far_snap_and_unreliable_timing_are_not_wins(self):
+        far = dict(ok(14, 700, 0.3), snap_warning=True)
+        self.assertEqual(cmp.classify(far, ok(19, 1500, 0.3), ours_vh_seconds=780)[0], "ends_elsewhere")
+        self.assertEqual(cmp.classify(ok(10, 600, 0.3), ok(10, 600, 0.3), ours_vh_seconds=300)[0], "unclear")
+        self.assertNotIn("ends_elsewhere", cmp.GOOD)
+        self.assertNotIn("unclear", cmp.GOOD)
+
     def test_two_percent_bands(self):
         self.assertEqual(cmp.classify(ok(10.2, 600, 0.5), ok(10, 600, 0.5), ours_vh_seconds=630)[0], "valhalla_better")
         self.assertEqual(cmp.classify(ok(10.2, 600, 0.5), ok(10, 600, 0.5), ours_vh_seconds=580)[0], "ours_better")

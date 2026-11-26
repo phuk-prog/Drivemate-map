@@ -57,6 +57,8 @@ VERDICT_HELP = {
     "ours_slower": "Valhalla rates our route clearly slower than its own. Check our speed model and missed faster roads.",
     "ours_shorter": "Our route is much shorter and Valhalla could not match it to drivable roads. Check restrictions, access or one-ways we miss.",
     "both_failed": "Neither engine routed. Usually bad journey endpoints, not an engine bug.",
+    "ends_elsewhere": "Our route starts or ends over 150 m from the requested point (e.g. among private roads), so it cannot be compared.",
+    "unclear": "Valhalla could not time our whole route reliably (its time is under 70% of its own). Not counted as a win.",
 }
 
 
@@ -164,8 +166,12 @@ def classify(ours, vh, ours_vh_seconds=None):
     facts = {"distance_ratio": round(ratio, 3), "similarity": round(sim, 3)}
     if slower is not None:
         facts["valhalla_time_ratio_of_our_route"] = round(slower, 3)
+    if ours.get("snap_warning"):
+        return "ends_elsewhere", facts
     if sim >= 0.9 or (sim >= 0.75 and abs(ratio - 1) <= 0.03):
         return "match", facts
+    if slower is not None and slower < 0.7:
+        return "unclear", facts
     if slower is not None:
         # Valhalla accepted our route as drivable and timed it: judge on time.
         # (Valhalla also adds turn/road-class penalties, so its pick can be longer.)
