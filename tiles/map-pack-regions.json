@@ -1,0 +1,18 @@
+{
+  "comment": "Downloadable map area packs. Each is a PMTiles extract of the UK vector tiles for a bounding box. Boxes overlap on purpose so a drive across a border never leaves a gap. Keep every pack under 1.9 GB (GitHub's limit is 2 GiB per file).",
+  "regions": [
+    {"id": "uk-base", "name": "UK overview (zoom 0-10, built into the app)", "bbox": [-8.7, 49.8, 2.0, 60.95], "minzoom": 0, "maxzoom": 10, "bundled": true},
+    {"id": "north-west-england", "name": "North West England", "bbox": [-3.65, 52.95, -1.8, 55.2], "minzoom": 0, "maxzoom": 14},
+    {"id": "north-east-england", "name": "North East England", "bbox": [-2.7, 54.4, -0.7, 55.85], "minzoom": 0, "maxzoom": 14},
+    {"id": "yorkshire-humber", "name": "Yorkshire and the Humber", "bbox": [-2.6, 52.95, 0.2, 54.6], "minzoom": 0, "maxzoom": 14},
+    {"id": "east-midlands", "name": "East Midlands", "bbox": [-2.0, 52.4, 0.4, 53.6], "minzoom": 0, "maxzoom": 14},
+    {"id": "west-midlands", "name": "West Midlands", "bbox": [-3.25, 51.8, -1.2, 53.2], "minzoom": 0, "maxzoom": 14},
+    {"id": "east-of-england", "name": "East of England", "bbox": [-0.7, 51.3, 1.8, 53.1], "minzoom": 0, "maxzoom": 14},
+    {"id": "london", "name": "London", "bbox": [-0.6, 51.25, 0.35, 51.75], "minzoom": 0, "maxzoom": 14},
+    {"id": "south-east-england", "name": "South East England", "bbox": [-1.9, 50.7, 1.5, 51.8], "minzoom": 0, "maxzoom": 14},
+    {"id": "south-west-england", "name": "South West England", "bbox": [-6.5, 49.8, -1.3, 52.0], "minzoom": 0, "maxzoom": 14},
+    {"id": "wales", "name": "Wales", "bbox": [-5.4, 51.3, -2.6, 53.5], "minzoom": 0, "maxzoom": 14},
+    {"id": "scotland", "name": "Scotland", "bbox": [-8.7, 54.6, -0.7, 60.95], "minzoom": 0, "maxzoom": 14},
+    {"id": "northern-ireland", "name": "Northern Ireland", "bbox": [-8.3, 54.0, -5.3, 55.4], "minzoom": 0, "maxzoom": 14}
+  ]
+}

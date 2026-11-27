@@ -64,6 +64,32 @@ class UkGraphTests(unittest.TestCase):
                              manifest["database_sha256"])
             self.assertFalse((output/"uk-routing.sqlite.gz").exists())
 
+    def test_non_car_conditional_tags_do_not_remove_a_road(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=uk.Builder(Path(tmp)/"graph.sqlite")
+            p1=(20, 52.000,-1.00)
+            p2=(21, 52.001,-1.00)
+            p3=(22, 52.002,-1.00)
+            # A lorry-weight rule says nothing about cars: this road must stay routable.
+            b.way(200,{"highway":"residential","name":"Lorry Rule Road","maxweightrating:goods:conditional":"none @ destination"},[p1,p2])
+            # A car rule makes the road unroutable (kept conservative).
+            b.way(201,{"highway":"residential","name":"Car Rule Road","motor_vehicle:conditional":"no @ (Mo-Fr 07:00-09:00)"},[p2,p3])
+            stats=b.finish("uk-map-20261122T084645Z-9013a4487fa6","0"*64,min_edges=1)
+            self.assertEqual(stats["edges"],2)
+            self.assertEqual(stats["excluded_conditional_access_or_direction"],1)
+
+    def test_car_conditional_keys(self):
+        self.assertTrue(uk.car_conditional({"access:conditional":"no @ (Mo-Fr)"}))
+        self.assertTrue(uk.car_conditional({"motor_vehicle:forward:conditional":"no @ (Sa)"}))
+        self.assertTrue(uk.car_conditional({"oneway:conditional":"yes @ (07:00-09:00)"}))
+        self.assertTrue(uk.car_conditional({"motorcar:conditional":"no @ wet"}))
+        self.assertFalse(uk.car_conditional({"maxweightrating:goods:conditional":"none @ destination"}))
+        self.assertFalse(uk.car_conditional({"maxweightrating:hgv:conditional":"none @ destination"}))
+        self.assertFalse(uk.car_conditional({"maxweight:conditional":"7.5 @ (Mo-Su)"}))
+        self.assertFalse(uk.car_conditional({"bicycle:conditional":"no @ (Mo-Fr)"}))
+        self.assertFalse(uk.car_conditional({"maxspeed:conditional":"20 mph @ (school)"}))
+        self.assertFalse(uk.car_conditional({"highway":"residential"}))
+
     def test_unknown_road_access_refuses_routing(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=uk.Builder(Path(tmp)/"graph.db")

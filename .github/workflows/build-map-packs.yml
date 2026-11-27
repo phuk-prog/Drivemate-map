@@ -1,0 +1,100 @@
+name: Build map area packs
+
+# Cuts the UK vector tiles into downloadable area packs (map data (c) OpenStreetMap
+# contributors, ODbL 1.0) and publishes them with a manifest the DriveMate app reads.
+# The pack files are immutable releases named map-packs-YYYYMMDD. The manifest lives in the
+# `map-packs-latest` release so the app has one stable address to check for updates.
+# Runs monthly (a few days after the UK tiles are rebuilt) or on demand. Free on public repos.
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: Tiles release that holds united-kingdom.pmtiles
+        default: tiles-20261125T0353Z
+        required: true
+  schedule:
+    - cron: '23 5 4 * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: map-packs
+  cancel-in-progress: false
+
+jobs:
+  packs:
+    # Scheduled runs use the newest tiles-latest release unless a tag is given.
+    permissions:
+      contents: write          # create the pack release and update the manifest pointer
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PMTILES_VERSION: 1.31.2
+      PMTILES_SHA256: 3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests
+        run: python3 -m unittest tools.test_build_map_packs
+
+      - name: Resolve source tiles release
+        id: src
+        run: |
+          tag="${{ github.event.inputs.source_tag }}"
+          if [ -z "$tag" ]; then
+            tag=$(gh release view tiles-latest --json name,body -q '.name + " " + .body' | grep -o 'tiles-[0-9]\{8\}T[0-9]\{4\}Z' | head -1)
+          fi
+          [ -n "$tag" ] || { echo "::error::No source tiles release found"; exit 1; }
+          size=$(gh release view "$tag" --json assets -q '.assets[]|select(.name=="united-kingdom.pmtiles").size')
+          [ -n "$size" ] || { echo "::error::$tag has no united-kingdom.pmtiles"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+          echo "Source: $tag ($size bytes)"
+
+      - name: Fetch pinned pmtiles tool and the UK tiles
+        run: |
+          mkdir -p work/bin
+          curl -fsSL --retry 3 -o work/bin/pmtiles.tgz \
+            "https://github.com/protomaps/go-pmtiles/releases/download/v${PMTILES_VERSION}/go-pmtiles_${PMTILES_VERSION}_Linux_x86_64.tar.gz"
+          echo "${PMTILES_SHA256}  work/bin/pmtiles.tgz" | sha256sum -c -
+          tar -xzf work/bin/pmtiles.tgz -C work/bin pmtiles
+          gh release download "${{ steps.src.outputs.tag }}" --pattern united-kingdom.pmtiles --dir work
+          actual=$(stat -c %s work/united-kingdom.pmtiles)
+          [ "$actual" = "${{ steps.src.outputs.size }}" ] || { echo "::error::Downloaded $actual bytes, expected ${{ steps.src.outputs.size }}"; exit 1; }
+
+      - name: Build packs and manifest
+        run: |
+          version=$(date -u +%Y%m%d)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          python3 tools/build_map_packs.py \
+            --source work/united-kingdom.pmtiles \
+            --source-tag "${{ steps.src.outputs.tag }}" \
+            --pmtiles work/bin/pmtiles \
+            --out out \
+            --version "$version" \
+            --base-url "https://github.com/${GH_REPO}/releases/download/map-packs-${version}" \
+            --generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          ls -l out
+
+      - name: Publish pack release and update the manifest pointer
+        run: |
+          tag="map-packs-${VERSION}"
+          cat > notes.md <<EOF
+          DriveMate map area packs ${VERSION}, cut from ${{ steps.src.outputs.tag }}.
+          Map data (c) OpenStreetMap contributors, ODbL 1.0.
+          Each pack is a PMTiles v3 file; map-packs.json lists sizes and SHA-256 checksums.
+          EOF
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release delete "$tag" --yes --cleanup-tag
+          fi
+          gh release create "$tag" out/*.pmtiles out/map-packs.json \
+            --title "Map packs ${VERSION}" --notes-file notes.md --prerelease
+          if ! gh release view map-packs-latest >/dev/null 2>&1; then
+            gh release create map-packs-latest --title "Map packs (latest manifest)" \
+              --notes "Stable address for the current map-packs.json. Packs are in the dated map-packs-* releases." --prerelease
+          fi
+          gh release upload map-packs-latest out/map-packs.json --clobber
+          gh release edit map-packs-latest --title "Map packs (latest: ${VERSION})" --prerelease
