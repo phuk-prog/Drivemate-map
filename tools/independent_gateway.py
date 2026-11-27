@@ -12,10 +12,12 @@ import sqlite3
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import BoundedSemaphore
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
 from map_intelligence_service import verify_pack, dispatch
+from map_v2_service import verify as verify_geometry, roads
+import sqlite3
 from restore_uk_valhalla import inspect_manifest, sha_file
 from map_v2_service import verify as verify_geometry, query_region
 

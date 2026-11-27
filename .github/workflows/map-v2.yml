@@ -2,7 +2,13 @@ name: DriveMate Map V2 shared geometry build
 on:
   push:
     branches: ['feat/map-v2-unified-20261125']
+  pull_request:
+    branches: [main]
+    paths: ['tools/build_map_v2.py', 'tools/map_v2_service.py', 'tools/test_map_v2.py', '.github/workflows/map-v2.yml']
   workflow_dispatch:
+concurrency:
+  group: map-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -20,6 +26,7 @@ jobs:
           name: Map-V2-pilot
           path: pilot-v2/
   uk:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'dev/integrated-driver-awareness-20261126')
     needs: pilot
     runs-on: ubuntu-24.04
     timeout-minutes: 360
