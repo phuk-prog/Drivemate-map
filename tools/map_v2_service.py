@@ -37,7 +37,15 @@ def roads(path,bounds,expected_sha):
             WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? ORDER BY id LIMIT 6001""",
             (math.floor(south*SCALE),math.ceil(north*SCALE),math.floor(west*SCALE),math.ceil(east*SCALE))).fetchall()
         if len(points)>6000:raise ValueError("Point region too dense; request smaller bounds")
-        return {"format":FORMAT,"source_sha256":expected_sha,"coordinate_scale":SCALE,"features":features,"points":[[oid,y,x,json.loads(tags)] for oid,y,x,tags in points],"bounds":bounds}
+        enforcement=[]
+        # Older immutable indexes have no relation table. Return no camera claims.
+        if node_ids and c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='enforcement_anchor'").fetchone():
+            relations=c.execute("""SELECT DISTINCT e.id,e.tags,e.members FROM json_each(?) j
+                JOIN enforcement_anchor a ON a.node=j.value JOIN enforcement_relation e ON e.id=a.relation
+                ORDER BY e.id LIMIT 1001""",(json.dumps(sorted(node_ids)),)).fetchall()
+            if len(relations)>1000:raise ValueError("Enforcement region too dense")
+            enforcement=[[oid,json.loads(tags),json.loads(members)] for oid,tags,members in relations]
+        return {"format":FORMAT,"source_sha256":expected_sha,"coordinate_scale":SCALE,"features":features,"points":[[oid,y,x,json.loads(tags)] for oid,y,x,tags in points],"enforcement":enforcement,"bounds":bounds}
 def query_region(path,query,expected_sha=None):
     """Strictly parse the same bounded query for standalone and matched gateway."""
     q=parse_qs(query,strict_parsing=True)
