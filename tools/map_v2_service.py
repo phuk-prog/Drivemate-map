@@ -37,6 +37,17 @@ def roads(path,bounds,expected_sha):
             (math.floor(south*SCALE),math.ceil(north*SCALE),math.floor(west*SCALE),math.ceil(east*SCALE))).fetchall()
         if len(points)>6000:raise ValueError("Point region too dense; request smaller bounds")
         return {"format":FORMAT,"source_sha256":expected_sha,"coordinate_scale":SCALE,"features":features,"points":[[oid,y,x,json.loads(tags)] for oid,y,x,tags in points],"bounds":bounds}
+def query_region(path,query,expected_sha=None):
+    """Strictly parse the same bounded query for standalone and matched gateway."""
+    q=parse_qs(query,strict_parsing=True)
+    if set(q)!={"bbox","source"} or any(len(x)!=1 for x in q.values()):
+        raise ValueError("Invalid query")
+    source=q["source"][0]
+    if expected_sha is not None and source!=expected_sha:
+        raise ValueError("Graph source mismatch")
+    bounds=list(map(float,q["bbox"][0].split(",")))
+    if len(bounds)!=4:raise ValueError("Invalid bounds")
+    return roads(path,bounds,source)
 def serve(path,manifest,port):
     verify(path,manifest)
     class Handler(BaseHTTPRequestHandler):
@@ -45,11 +56,7 @@ def serve(path,manifest,port):
             try:
                 u=urlsplit(self.path)
                 if len(self.path)>2048 or u.path!="/v2/roads":raise ValueError("Unknown request")
-                q=parse_qs(u.query,strict_parsing=True)
-                if set(q)!={"bbox","source"} or any(len(v)!=1 for v in q.values()):raise ValueError("Invalid query")
-                bounds=list(map(float,q["bbox"][0].split(",")))
-                if len(bounds)!=4:raise ValueError("Invalid bounds")
-                result=roads(path,bounds,q["source"][0]);status=200
+                result=query_region(path,u.query);status=200
             except (ValueError,KeyError):result={"error":"Invalid bounds, size or source"};status=400
             except sqlite3.Error:result={"error":"Database unavailable"};status=503
             raw=json.dumps(result,separators=(",",":")).encode()
