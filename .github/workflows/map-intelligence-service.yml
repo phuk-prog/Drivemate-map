@@ -6,6 +6,10 @@ on:
     paths:
       - 'tools/map_intelligence_service.py'
       - 'tools/test_map_intelligence_service.py'
+      - 'tools/independent_gateway.py'
+      - 'tools/test_independent_gateway.py'
+      - 'tools/map_v2_service.py'
+      - 'tools/test_map_v2.py'
       - '.github/workflows/map-intelligence-service.yml'
 permissions:
   contents: read
@@ -21,6 +25,7 @@ jobs:
       - run: |
           python3 -m unittest discover -s tools -p 'test_map_intelligence*.py' -v
           python3 -m unittest discover -s tools -p 'test_independent_gateway.py' -v
+          python3 -m unittest discover -s tools -p 'test_map_v2.py' -v
       - run: python3 -m pip install --quiet osmium
       - name: Build actual Wells map and smoke-test HTTP
         run: |

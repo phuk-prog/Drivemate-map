@@ -21,25 +21,7 @@ python3 tools/independent_gateway.py --graph-manifest "$graph" --graph-archive d
 ```
 The gateway verifies both archives and identical immutable source provenance, exposes graph-source itself, bounds requests, and forwards only allowlisted car routing calls to localhost:8002. Keep the graph and index immutable for the service lifetime; stop gateway and routing service before changing the graph or index. Loopback port 8011 requires an external TLS/authenticated proxy or private VPN for Android access. No external host is created by this commit. Photon remains separately deployed.
 
-## Exact-detail deployment
+## Nationwide V2 display geometry (optional)
+The gateway accepts `--geometry-db /path/map-v2.sqlite --geometry-manifest /path/manifest.json`. It verifies the complete database digest and rejects startup unless source tag and source digest match the installed graph/index pair. Android requests `GET /v2/roads?bbox=west,south,east,north&source=<matching sha>` on the same configured HTTPS host. The endpoint returns actual E7 source geometry and mapped points within the existing size and density bounds. If no V2 database is installed the endpoint returns 503; it cannot invent data. Do not widen the bounds or silently truncate route ways to make a dense request succeed.
 
-On the approved host, use a fresh output directory and a verified published graph:
-```sh
-bash deploy/map-intelligence/prepare-matched.sh \
-  deploy/uk-valhalla/data/current/graph-manifest.json \
-  deploy/uk-valhalla/data/current/tiles.tar matched-v2
-python3 tools/independent_gateway.py \
-  --graph-manifest deploy/uk-valhalla/data/current/graph-manifest.json \
-  --graph-archive deploy/uk-valhalla/data/current/tiles.tar \
-  --db matched-v2/intelligence/map-intelligence.sqlite \
-  --report matched-v2/intelligence/coverage.json \
-  --geometry-db matched-v2/geometry/map-v2.sqlite \
-  --geometry-manifest matched-v2/geometry/manifest.json
-```
-All three datasets must share one immutable source. Gateway exposes /v2/roads alongside /v1 and routing, still on loopback only. Configure authenticated private TLS/VPN access with no request/location logs; use the configured HTTPS /route URL in the app. No public anonymous gateway, no unapproved hosting expenditure. Run the existing UK route smoke probes and the detailed geometry smoke command before any device acceptance. A missing or mismatched database fails closed. Retain the previous immutable deployment for rollback.
-
-Verify the live local gateway after start:
-```sh
-python3 tools/smoke_map_v2_http.py --root http://127.0.0.1:8011
-```
-The six-city probe checks source identity, exact way node arrays, and presence of buildings and roads; it does not prove navigational safety. New geometry builds retain raw mapped enforcement relation anchors. Old verified databases return no enforcement relations; rebuild from the matching source to enable this data. No mobile-camera, operation-status or comprehensive enforcement coverage is implied.
+The 25 November national V2 candidate artifact (Actions run 45788134657, artifact 15113702730) must be restored from its checksummed parts, fully verified and paired with a graph and intelligence database built from that exact source. The older 22 November Valhalla release is NOT a matching source. No production host is provisioned or verified here. An owner-approved Linux host, capacity measurement, matching graph/index, private HTTPS gateway, access and rate limits, full UK regional probes and Android end-to-end checks are deployment gates. Keep the current graph and offline fallback unchanged. Do not distribute this database as an APK asset.
