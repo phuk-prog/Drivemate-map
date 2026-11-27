@@ -58,6 +58,17 @@ def access(tags):
     return answer
 
 
+# Only conditions that can restrict an ordinary car make a way unroutable. Lorry weight limits
+# (maxweightrating:goods:conditional = none @ destination), HGV, cycle and pedestrian rules do not;
+# dropping those roads cut whole estates off the graph (Menai Grove, Cheadle, was an isolated pocket).
+CAR_CONDITIONAL_KEYS = ("access", "vehicle", "motor_vehicle", "motorcar", "oneway")
+
+
+def car_conditional(tags):
+    return any(key.endswith(":conditional") and key.split(":")[0] in CAR_CONDITIONAL_KEYS
+               for key in tags)
+
+
 def direction(tags):
     value = tags.get("oneway")
     if value is None:
@@ -139,7 +150,7 @@ class Builder:
         if tags.get("area") == "yes" or access(tags) is not True or direction(tags) is None:
             self.stats["excluded_access_or_direction"] += 1
             return
-        if any(key.endswith(":conditional") and not key.startswith("maxspeed") for key in tags):
+        if car_conditional(tags):
             self.stats["excluded_conditional_access_or_direction"] += 1
             return
         speed = 10 if ferry else kph(tags)
